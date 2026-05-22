@@ -1,0 +1,38 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+
+# production
+dist/
+build/
+
+# local env files
+.env
+.env.*
+!.env.example
+
+# local app data
+data/
+prisma/data/
+public/uploads/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# generated caches
+*.tsbuildinfo
+.eslintcache
+
+# electron packaging
+release/
