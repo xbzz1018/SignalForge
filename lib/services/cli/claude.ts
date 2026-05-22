@@ -14,6 +14,7 @@ import { CLAUDE_DEFAULT_MODEL, normalizeClaudeModelId, getClaudeModelDisplayName
 import path from 'path';
 import fs from 'fs/promises';
 import { randomUUID } from 'crypto';
+import { buildQuantPilotSystemPrompt, ensureClaudeSkillsForProject } from '@/lib/services/claude-skills';
 import {
   markUserRequestAsRunning,
   markUserRequestAsCompleted,
@@ -719,9 +720,12 @@ export async function executeClaude(
     // Send ready notification via SSE
     publishStatus('ready', 'Project verified. Starting AI...');
 
+    const availableSkills = await ensureClaudeSkillsForProject(absoluteProjectPath);
+
     // Start Claude Agent SDK query
     console.log(`[ClaudeService] 🤖 Querying Claude Agent SDK...`);
     console.log(`[ClaudeService] 📁 Working Directory: ${absoluteProjectPath}`);
+    console.log(`[ClaudeService] 🧩 Skills: ${availableSkills.join(', ') || 'none'}`);
     const response = query({
       prompt: instruction,
       options: {
@@ -730,17 +734,9 @@ export async function executeClaude(
         model: resolvedModel,
         resume: sessionId, // Resume previous session
         permissionMode: 'bypassPermissions', // Auto-approve commands and edits
-        systemPrompt: `You are an expert web developer building a Next.js application.
-- Use Next.js 16 App Router
-- Use TypeScript
-- Use Tailwind CSS for styling
-- Write clean, production-ready code
-- Follow best practices
-- The platform automatically installs dependencies and manages the preview dev server. Do not run package managers or dev-server commands yourself; rely on the existing preview.
-- Keep all project files directly in the project root. Never scaffold frameworks into subdirectories (avoid commands like "mkdir new-app" or "create-next-app my-app"; run generators against the current directory instead).
-- Never override ports or start your own development server processes. Rely on the managed preview service which assigns ports from the approved pool.
-- When sharing a preview link, read the actual NEXT_PUBLIC_APP_URL (e.g. from .env/.env.local or project metadata) instead of assuming a default port.
-- Prefer giving the user the live preview link that is actually running rather than written instructions.`,
+        settingSources: ['project'],
+        skills: availableSkills,
+        systemPrompt: buildQuantPilotSystemPrompt(),
         maxOutputTokens,
         // Capture SDK stderr so we can surface real errors instead of just exit code
         stderr: (data: string) => {
