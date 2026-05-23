@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from quantpilot_market_data.api import create_app
+from quantpilot_market_data.backtest import build_ma_crossover_backtest
 from quantpilot_market_data.cache import MarketDataCache
 from quantpilot_market_data.fundamentals import build_fundamental_indicators
 from quantpilot_market_data.indicators import build_technical_indicators
@@ -248,6 +249,64 @@ def build_kline_test_row(day: int) -> str:
         f"2026-05-{day:02d},{open_price},{close_price},{high_price},"
         f"{low_price},{volume},10000,1,1,1,1"
     )
+
+
+def test_build_ma_crossover_backtest_from_kline() -> None:
+    kline = parse_kline_payload(
+        "1.600519",
+        "daily",
+        "qfq",
+        {
+            "rc": 0,
+            "data": {
+                "code": "600519",
+                "market": 1,
+                "name": "贵州茅台",
+                "klines": [
+                    build_kline_test_row(day)
+                    for day in [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9,
+                        10,
+                        9,
+                        8,
+                        7,
+                        6,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9,
+                        10,
+                        11,
+                    ]
+                ],
+            },
+        },
+    )
+
+    backtest = build_ma_crossover_backtest(
+        kline,
+        fast_window=3,
+        slow_window=5,
+        fee_bps=Decimal("0"),
+    )
+
+    assert backtest.symbol == "600519"
+    assert backtest.strategy_id == "ma_crossover"
+    assert len(backtest.equity_curve) == 21
+    assert backtest.summary.sample_count == 21
+    assert backtest.summary.final_equity > Decimal("0")
+    assert backtest.summary.trade_count >= 0
+    assert backtest.summary.max_drawdown_pct is not None
+    assert backtest.data_quality.status in {"ok", "warning"}
 
 
 def test_parse_financial_reports_payload() -> None:

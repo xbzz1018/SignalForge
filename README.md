@@ -232,6 +232,7 @@ npx prisma db push
 | 批量实时行情 | `POST /api/v1/quotes/realtime` |
 | 历史 K 线 | `GET /api/v1/quotes/history/{symbol}?period=daily&adjustment=qfq&limit=120` |
 | 技术指标 | `GET /api/v1/indicators/technical/{symbol}?period=daily&adjustment=qfq&limit=120` |
+| 均线突破回测 | `GET /api/v1/backtests/ma-crossover/{symbol}?fast_window=20&slow_window=60&limit=250&fee_bps=5` |
 | 指数/ETF 行情 | 复用实时行情、历史 K 线和技术指标接口，例如 `000300`、`399006`、`510300` |
 | 财务报表 | `GET /api/v1/fundamentals/financials/{symbol}?limit=8` |
 | 财务衍生指标 | `GET /api/v1/indicators/fundamental/{symbol}?limit=8` |
@@ -244,6 +245,7 @@ curl "http://127.0.0.1:8000/api/v1/symbols/resolve?query=贵州茅台&count=5"
 curl "http://127.0.0.1:8000/api/v1/quotes/history/600519?period=daily&adjustment=qfq&limit=20"
 curl "http://127.0.0.1:8000/api/v1/fundamentals/financials/600519?limit=8"
 curl "http://127.0.0.1:8000/api/v1/quotes/history/000300?period=daily&adjustment=qfq&limit=120"
+curl "http://127.0.0.1:8000/api/v1/backtests/ma-crossover/510300?fast_window=20&slow_window=60&limit=250&fee_bps=5"
 ```
 
 接口响应会包含 `fetch.cache_status`、`fetch.cache_ttl_seconds`、`fetch.cached_at` 和 `fetch.expires_at`。实时行情默认短缓存 5 秒，K 线和技术指标默认缓存 30 分钟，财务数据默认缓存 6 小时，公告默认缓存 10 分钟。可通过 `QUANTPILOT_MARKET_CACHE_DIR` 指定缓存目录，或用 `QUANTPILOT_MARKET_CACHE_ENABLED=0` 临时关闭缓存。
@@ -296,6 +298,7 @@ Claude Code 使用的项目级 skills 统一放在 `.claude/skills/`，生成项
 - `quant-a-share-history`：获取 A 股历史 K 线、成交量、均线和阶段表现数据。
 - `quant-index-etf-market`：获取指数与 ETF 的实时行情、K 线和技术指标。
 - `quant-technical-indicators`：获取后端标准化 MA、收益率、回撤、波动率和成交量指标。
+- `quant-backtest`：调用后端均线突破回测，获取净值、回撤、交易明细、胜率和费用参数。
 - `quant-fundamental-financials`：获取营收、利润、现金流、ROE 等财务指标。
 - `quant-fundamental-indicators`：获取净利率、平均 ROE、平均毛利率等财务衍生指标。
 - `quant-announcement-events`：获取上市公司公告和事件信息。
@@ -345,7 +348,7 @@ npm run benchmark:quant -- --case stock-fundamental-maotai
 npm run benchmark:quant -- --case index-technical-hs300 --case etf-technical-300etf
 ```
 
-评测报告写入 `tmp/quantpilot-benchmark-reports/`，该目录不进入 Git。当前内置用例覆盖贵州茅台基本面、沪深300技术趋势和沪深300ETF趋势。
+评测报告写入 `tmp/quantpilot-benchmark-reports/`，该目录不进入 Git。当前内置用例覆盖贵州茅台基本面、沪深300技术趋势、沪深300ETF趋势和 510300 均线突破回测。
 
 默认情况下，评测完成后会删除 `data/projects/benchmark-*` 临时项目并停止对应预览端口，避免污染本地 `3100+` 预览端口。需要保留现场时可以增加：
 

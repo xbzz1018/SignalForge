@@ -230,6 +230,10 @@ function getFundamentalSummary(data: JsonRecord | null): JsonRecord | null {
   return asRecord(asRecord(data?.fundamentalIndicators)?.summary);
 }
 
+function getBacktest(data: JsonRecord | null): JsonRecord | null {
+  return asRecord(data?.backtest);
+}
+
 function getReports(data: JsonRecord | null): JsonRecord[] {
   const financials = asRecord(data?.financials) ?? asRecord(data?.fundamentals);
   return asArray(financials?.reports).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
@@ -313,6 +317,94 @@ function TrendChart({ bars }: { bars: JsonRecord[] }) {
         })}
       </svg>
     </div>
+  );
+}
+
+function buildEquityPath(points: JsonRecord[]): string {
+  const values = points.map((point) => numeric(point.equity)).filter((value): value is number => value !== null);
+  if (values.length < 2) {
+    return '';
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(max - min, 0.000001);
+  return values
+    .map((value, index) => {
+      const x = (index / Math.max(values.length - 1, 1)) * 100;
+      const y = 86 - ((value - min) / range) * 70;
+      return (index === 0 ? 'M ' : 'L ') + x.toFixed(2) + ' ' + y.toFixed(2);
+    })
+    .join(' ');
+}
+
+function BacktestPanel({ backtest }: { backtest: JsonRecord | null }) {
+  const summary = asRecord(backtest?.summary);
+  const points = asArray(backtest?.equity_curve).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+  const trades = asArray(backtest?.trades).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+  const equityPath = buildEquityPath(points);
+
+  if (!backtest) {
+    return null;
+  }
+
+  return (
+    <section className="backtest-section">
+      <div className="panel-heading">
+        <div>
+          <h2>回测复盘</h2>
+          <p>
+            {String(backtest.strategy_name ?? '均线突破')} · MA{String(backtest.fast_window ?? '-')} / MA{String(backtest.slow_window ?? '-')} · 费用 {formatNumber(backtest.fee_bps)} bps
+          </p>
+        </div>
+        <span>{points.length} 个交易日</span>
+      </div>
+
+      <div className="metric-grid backtest-metrics">
+        <article><span>策略收益</span><strong>{formatPercent(summary?.total_return_pct)}</strong></article>
+        <article><span>标的收益</span><strong>{formatPercent(summary?.benchmark_return_pct)}</strong></article>
+        <article><span>最大回撤</span><strong>{formatPercent(summary?.max_drawdown_pct)}</strong></article>
+        <article><span>胜率</span><strong>{formatPercent(summary?.win_rate_pct)}</strong></article>
+      </div>
+
+      <div className="backtest-grid">
+        <div className="chart-panel embedded">
+          <div className="panel-heading compact">
+            <div>
+              <h2>策略净值</h2>
+              <p>全仓/空仓规则下的净值曲线</p>
+            </div>
+            <span>净值 {formatNumber(summary?.final_equity, 4)}</span>
+          </div>
+          <svg className="trend-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="回测净值曲线">
+            <line x1="0" y1="86" x2="100" y2="86" className="axis" />
+            <line x1="0" y1="16" x2="100" y2="16" className="axis muted" />
+            {equityPath ? <path d={equityPath} className="equity-line" /> : null}
+          </svg>
+        </div>
+
+        <article className="data-panel">
+          <h2>交易明细</h2>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>买入</th><th>卖出</th><th>收益</th><th>天数</th></tr>
+              </thead>
+              <tbody>
+                {trades.slice(-8).reverse().map((trade, index) => (
+                  <tr key={String(trade.entry_date ?? index)}>
+                    <td>{String(trade.entry_date ?? '-')}</td>
+                    <td>{String(trade.exit_date ?? trade.status ?? '-')}</td>
+                    <td className={(numeric(trade.return_pct) ?? 0) >= 0 ? 'red' : 'green'}>{formatPercent(trade.return_pct)}</td>
+                    <td>{formatNumber(trade.holding_days, 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="empty-state">当前回测暂未建模滑点、停牌、分红再投资和冲击成本，结果用于策略研究参考。</p>
+        </article>
+      </div>
+    </section>
   );
 }
 
@@ -428,6 +520,7 @@ export default async function Home() {
   const fundamentalSummary = getFundamentalSummary(data);
   const reports = getReports(data);
   const announcements = getAnnouncements(data);
+  const backtest = getBacktest(data);
   const latestBar = bars.at(-1);
   const name = String(data?.name ?? quote?.name ?? data?.symbol ?? 'QuantPilot');
   const symbol = String(data?.symbol ?? quote?.symbol ?? '-');
@@ -473,6 +566,8 @@ export default async function Home() {
       </section>
 
       <TrendChart bars={bars} />
+
+      <BacktestPanel backtest={backtest} />
 
       <section className="metric-grid financial-metrics">
         <article>
@@ -700,6 +795,29 @@ h2 {
   padding: 20px;
 }
 
+.backtest-section {
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.backtest-section .metric-grid {
+  margin-top: 0;
+}
+
+.backtest-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.chart-panel.embedded {
+  margin-top: 0;
+}
+
 .panel-heading {
   display: flex;
   justify-content: space-between;
@@ -736,6 +854,13 @@ h2 {
   fill: none;
   stroke: var(--blue);
   stroke-width: 2.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.equity-line {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 2.4;
   vector-effect: non-scaling-stroke;
 }
 
@@ -938,7 +1063,8 @@ th {
 
   .hero-band,
   .detail-grid,
-  .detail-grid.wide {
+  .detail-grid.wide,
+  .backtest-grid {
     grid-template-columns: 1fr;
   }
 

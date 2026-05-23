@@ -54,5 +54,28 @@
       "kline",
       "technical_indicators"
     ]
+  },
+  {
+    "id": "backtest-300etf-ma-crossover",
+    "name": "沪深300ETF均线突破回测",
+    "question": "用最近一年的 20/60 日均线突破规则回测 510300，生成回测复盘看板。",
+    "capabilityId": "backtest_review",
+    "expectedSymbol": "510300",
+    "expectedAssetType": "etf",
+    "expectedRawFiles": [
+      "quote.json",
+      "kline-daily-qfq.json",
+      "technical-indicators.json",
+      "backtest-ma-crossover.json"
+    ],
+    "expectedDatasets": [
+      "quote",
+      "kline",
+      "technical_indicators",
+      "backtest"
+    ],
+    "expectedFinalFields": [
+      "backtest"
+    ]
   }
 ]

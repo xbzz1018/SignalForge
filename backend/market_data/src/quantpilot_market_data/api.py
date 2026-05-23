@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from quantpilot_market_data.backtest import build_ma_crossover_backtest
 from quantpilot_market_data.cache import MarketDataCache, ttl_from_env
 from quantpilot_market_data.fundamentals import build_fundamental_indicators
 from quantpilot_market_data.indicators import build_technical_indicators
 from quantpilot_market_data.models import (
     Adjustment,
     AnnouncementResponse,
+    BacktestResponse,
     BatchQuoteRequest,
     BatchQuoteResponse,
     DataProviderInfo,
@@ -75,6 +78,19 @@ DATA_PROVIDERS = [
         ),
         endpoints=["/api/v1/indicators/technical/{symbol}"],
         cache_ttl_seconds=KLINE_CACHE_TTL_SECONDS,
+    ),
+    DataProviderInfo(
+        id="quantpilot-ma-crossover-backtest",
+        name="QuantPilot 均线突破回测",
+        category="backtest",
+        status="available",
+        description=(
+            "基于历史 K 线运行单标的均线突破策略，输出净值、回撤、交易明细、胜率、"
+            "夏普和相对标的收益。"
+        ),
+        endpoints=["/api/v1/backtests/ma-crossover/{symbol}"],
+        cache_ttl_seconds=KLINE_CACHE_TTL_SECONDS,
+        limitations=["当前为单标的、全仓/空仓、日线级回测，暂不包含滑点、停牌和分红再投资建模。"],
     ),
     DataProviderInfo(
         id="eastmoney-index-etf-market",
@@ -315,6 +331,68 @@ def create_app() -> FastAPI:
                 KLINE_CACHE_TTL_SECONDS,
                 response,
                 TechnicalIndicatorsResponse,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        except EastMoneyError as error:
+            raise HTTPException(status_code=502, detail=str(error)) from error
+
+    @app.get("/api/v1/backtests/ma-crossover/{symbol}", response_model=BacktestResponse)
+    async def get_ma_crossover_backtest(
+        symbol: str,
+        fast_window: int = 20,
+        slow_window: int = 60,
+        period: KlinePeriod = "daily",
+        adjustment: Adjustment = "qfq",
+        limit: int = 250,
+        end: str = "20500101",
+        initial_cash: Decimal = Decimal("1"),
+        fee_bps: Decimal = Decimal("5"),
+    ) -> BacktestResponse:
+        normalized_fast = max(2, min(fast_window, 120))
+        normalized_slow = max(3, min(slow_window, 250))
+        normalized_limit = max(normalized_slow + 5, min(limit, 1000))
+        cache_key = cache.build_key(
+            "backtest-ma-crossover",
+            {
+                "symbol": symbol,
+                "fast_window": normalized_fast,
+                "slow_window": normalized_slow,
+                "period": period,
+                "adjustment": adjustment,
+                "limit": normalized_limit,
+                "end": end,
+                "initial_cash": str(initial_cash),
+                "fee_bps": str(fee_bps),
+            },
+        )
+        try:
+            cached = cache.read(cache_key)
+            if cached is not None:
+                return BacktestResponse.model_validate(cached.payload).model_copy(
+                    update={"fetch": cached.to_fetch_metadata("hit")}
+                )
+
+            kline = await client.get_kline(
+                symbol,
+                period=period,
+                adjustment=adjustment,
+                limit=normalized_limit,
+                end=end,
+            )
+            response = build_ma_crossover_backtest(
+                kline,
+                fast_window=normalized_fast,
+                slow_window=normalized_slow,
+                initial_cash=initial_cash,
+                fee_bps=fee_bps,
+            )
+            return cache_response(
+                cache,
+                cache_key,
+                KLINE_CACHE_TTL_SECONDS,
+                response,
+                BacktestResponse,
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error

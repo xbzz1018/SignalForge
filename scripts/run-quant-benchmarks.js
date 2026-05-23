@@ -116,6 +116,17 @@ async function inspectArtifacts({ projectPath, testCase, prefetch }) {
   assertCondition(page.includes('/api/market'), 'app/page.tsx 应声明 /api/market 数据入口。', failures);
   assertCondition(page.includes('<svg'), 'app/page.tsx 应包含 SVG 图表实现。', failures);
 
+  for (const expectedField of testCase.expectedFinalFields || []) {
+    assertCondition(finalData[expectedField] !== undefined, `final 数据缺少字段 ${expectedField}`, failures);
+  }
+
+  if (testCase.expectedFinalFields?.includes('backtest')) {
+    const backtest = finalData.backtest || {};
+    assertCondition(Array.isArray(backtest.equity_curve) && backtest.equity_curve.length > 0, 'backtest 应包含 equity_curve。', failures);
+    assertCondition(backtest.summary && typeof backtest.summary === 'object', 'backtest 应包含 summary。', failures);
+    assertCondition(page.includes('BacktestPanel'), 'app/page.tsx 应包含回测面板。', failures);
+  }
+
   const rawFiles = new Set((prefetch.rawFiles || []).map((filePath) => path.basename(filePath)));
   for (const expectedRaw of testCase.expectedRawFiles || []) {
     assertCondition(rawFiles.has(expectedRaw), `raw 数据缺少 ${expectedRaw}`, failures);
@@ -135,6 +146,8 @@ async function inspectArtifacts({ projectPath, testCase, prefetch }) {
       klineRows: finalData.kline?.bars?.length || 0,
       reportRows: finalData.financials?.reports?.length || 0,
       announcementRows: finalData.announcements?.announcements?.length || 0,
+      backtestRows: finalData.backtest?.equity_curve?.length || 0,
+      tradeRows: finalData.backtest?.trades?.length || 0,
     },
     quality: {
       status: quality.status,

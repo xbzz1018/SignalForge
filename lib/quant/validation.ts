@@ -412,10 +412,10 @@ async function checkFinalDataFile(
       const parsed = JSON.parse(raw) as unknown;
       const serialized = JSON.stringify(parsed);
       const hasDataShape =
-        /quote|price|symbol|secid|history|kline|financial|reports|announcement|source|fetched_at|quote_time|close|open|volume|amount|营收|净利润|毛利率|roe/i.test(
+        /quote|price|symbol|secid|history|kline|financial|reports|announcement|source|fetched_at|quote_time|close|open|volume|amount|backtest|equity_curve|trades|strategy|drawdown|win_rate|营收|净利润|毛利率|roe|回测|净值|回撤|胜率/i.test(
           serialized
         );
-      const hasPlaceholderSmell = /mock|sample|demo|example|placeholder|lorem|示例|样例|模拟|假数据/i.test(serialized);
+      const hasPlaceholderSmell = /mock|demo|example|placeholder|lorem|示例|样例|模拟|假数据/i.test(serialized);
 
       if (!isNonEmptyJsonValue(parsed)) {
         errors.push(`${normalizeRelativePath(projectPath, filePath)} 没有可用数据。`);

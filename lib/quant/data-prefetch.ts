@@ -36,7 +36,7 @@ const KNOWN_SYMBOLS: Array<{ keyword: string; symbol: string }> = [
 ];
 
 function isQuantAnalysisPlan(plan: QuantRunPlan): boolean {
-  return ['stock_diagnosis', 'technical_analysis', 'fundamental_analysis'].includes(plan.capabilityId);
+  return ['stock_diagnosis', 'technical_analysis', 'fundamental_analysis', 'backtest_review'].includes(plan.capabilityId);
 }
 
 function inferSymbol(plan: QuantRunPlan): string | null {
@@ -150,6 +150,7 @@ function finalDataFromResponses(params: {
   quote: JsonRecord;
   kline?: JsonRecord | null;
   technicalIndicators?: JsonRecord | null;
+  backtest?: JsonRecord | null;
   financials?: JsonRecord | null;
   fundamentalIndicators?: JsonRecord | null;
   announcements?: JsonRecord | null;
@@ -201,6 +202,7 @@ function finalDataFromResponses(params: {
     quote,
     kline,
     technicalIndicators: params.technicalIndicators ?? null,
+    backtest: params.backtest ?? null,
     financials,
     fundamentalIndicators: params.fundamentalIndicators ?? null,
     announcements,
@@ -242,6 +244,7 @@ export async function prefetchQuantDataForRunPlan(params: {
 
   let kline: JsonRecord | null = null;
   let technicalIndicators: JsonRecord | null = null;
+  let backtest: JsonRecord | null = null;
   let financials: JsonRecord | null = null;
   let fundamentalIndicators: JsonRecord | null = null;
   let announcements: JsonRecord | null = null;
@@ -268,6 +271,19 @@ export async function prefetchQuantDataForRunPlan(params: {
       rawFiles.push(path.relative(params.projectPath, filePath).replaceAll(path.sep, '/'));
     } catch (error) {
       warnings.push(`技术指标预取失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (params.plan.dataRequirements.some((endpoint) => endpoint.includes('/backtests/ma-crossover/'))) {
+    try {
+      backtest = await fetchJson(
+        `/api/v1/backtests/ma-crossover/${symbol}?fast_window=20&slow_window=60&period=daily&adjustment=qfq&limit=250&fee_bps=5`
+      );
+      const filePath = path.join(rawDir, 'backtest-ma-crossover.json');
+      await writeJson(filePath, backtest);
+      rawFiles.push(path.relative(params.projectPath, filePath).replaceAll(path.sep, '/'));
+    } catch (error) {
+      warnings.push(`均线突破回测预取失败：${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -318,6 +334,7 @@ export async function prefetchQuantDataForRunPlan(params: {
     quote,
     kline,
     technicalIndicators,
+    backtest,
     financials,
     fundamentalIndicators,
     announcements,

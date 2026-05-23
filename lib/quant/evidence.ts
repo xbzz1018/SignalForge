@@ -186,6 +186,9 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
     critical.add('kline');
   } else if (capabilityId === 'fundamental_analysis') {
     critical.add('financials');
+  } else if (capabilityId === 'backtest_review') {
+    critical.add('kline');
+    critical.add('backtest');
   } else if (assetType === 'stock') {
     critical.add('kline');
     critical.add('financials');
@@ -199,8 +202,11 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
   const fundamentalIndicators = asRecord(data.fundamentalIndicators);
   const announcements = asRecord(data.announcements) ?? asRecord(data.events);
   const technicalIndicators = asRecord(data.technicalIndicators) ?? asRecord(data.indicators);
+  const backtest = asRecord(data.backtest);
   const bars = firstArray(kline?.bars, kline?.data, data.bars, data.history);
   const indicatorPoints = firstArray(technicalIndicators?.points, technicalIndicators?.data);
+  const equityCurve = firstArray(backtest?.equity_curve, backtest?.equityCurve);
+  const trades = firstArray(backtest?.trades);
   const reports = firstArray(financials?.reports, financials?.data, data.reports);
   const fundamentalPoints = firstArray(fundamentalIndicators?.points, fundamentalIndicators?.data);
   const announcementRows = firstArray(announcements?.announcements, announcements?.data, data.announcements);
@@ -220,6 +226,10 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
   const requiresTechnicalIndicators =
     Boolean(technicalIndicators) ||
     runPlanRequirements.some((requirement) => requirement.includes('/indicators/technical/'));
+  const requiresBacktest =
+    Boolean(backtest) ||
+    runPlanRequirements.some((requirement) => requirement.includes('/backtests/ma-crossover/')) ||
+    capabilityId === 'backtest_review';
   const requiresFundamentalIndicators =
     isStockAsset &&
     (Boolean(fundamentalIndicators) ||
@@ -354,6 +364,43 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
             { label: 'net_margin/roe', keys: ['net_margin', 'weighted_roe'] },
           ]),
         ],
+      })
+    );
+  }
+
+  if (requiresBacktest) {
+    const financialsIndex = datasets.findIndex((dataset) => dataset.id === 'financials');
+    datasets.splice(
+      financialsIndex >= 0 ? financialsIndex : datasets.length,
+      0,
+      buildDataset({
+        id: 'backtest',
+        name: '均线突破回测',
+        record: backtest,
+        rowCount: equityCurve.length,
+        source: pickString(backtest?.source, rootSource) ?? rootSource,
+        endpoint: `GET /api/v1/backtests/ma-crossover/${symbol}`,
+        critical: critical.has('backtest'),
+        generatedAt,
+        missingFields: [
+          ...missingRequiredGroups(backtest, [
+            { label: 'fetched_at', keys: ['fetched_at', 'as_of'] },
+            { label: 'summary', keys: ['summary'] },
+          ]),
+          ...missingRequiredGroups(asRecord(equityCurve.at(-1)), [
+            { label: 'date', keys: ['date'] },
+            { label: 'equity', keys: ['equity'] },
+          ]),
+          ...(trades.length > 0
+            ? []
+            : critical.has('backtest')
+              ? ['trades']
+              : []),
+        ],
+        warnings:
+          trades.length > 0
+            ? []
+            : ['样本区间内未检测到完整交易，需在页面说明策略信号不足。'],
       })
     );
   }

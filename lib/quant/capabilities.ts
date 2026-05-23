@@ -344,6 +344,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
       'GET /api/v1/symbols/resolve',
       'GET /api/v1/quotes/history/{symbol}',
       'GET /api/v1/indicators/technical/{symbol}',
+      'GET /api/v1/backtests/ma-crossover/{symbol}',
     ],
     expectedArtifacts: [
       '.quantpilot/run_plan.json',
@@ -361,7 +362,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     ],
     promptGuidance: [
       '把策略想法拆为入场、出场、过滤、风控和评估指标。',
-      '当前阶段先生成研究看板，下一阶段接入正式回测引擎。',
+      '当前阶段优先使用均线突破回测作为可执行策略研究样例。',
     ],
   },
   {
@@ -371,11 +372,11 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     description: '复盘策略净值、回撤、胜率、换手、年度收益和交易明细。',
     inputHint: '例如：用最近两年的 20 日均线突破规则回测 510300。',
     tags: ['净值', '回撤', '胜率', '交易明细'],
-    status: 'planned',
+    status: 'ready',
     groupId: 'strategy_risk',
     agentType: 'quant_backtest',
     subAgentKey: 'backtest_review',
-    executionCapabilityId: 'technical_analysis',
+    executionCapabilityId: 'backtest_review',
     requiredSkills: [
       'quant-run-planner',
       'quant-symbol-resolver',
@@ -386,8 +387,10 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     ],
     dataEndpoints: [
       'GET /api/v1/symbols/resolve',
+      'GET /api/v1/quotes/realtime/{symbol}',
       'GET /api/v1/quotes/history/{symbol}',
       'GET /api/v1/indicators/technical/{symbol}',
+      'GET /api/v1/backtests/ma-crossover/{symbol}',
     ],
     expectedArtifacts: [
       '.quantpilot/run_plan.json',
@@ -399,13 +402,13 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
       'app/page.tsx',
     ],
     validationRules: [
-      '正式回测结果必须来自本地数据和可复现脚本。',
-      '必须展示收益、回撤、交易次数和样本区间。',
-      '当前未接正式回测时必须展示待执行规则与数据准备结果。',
+      '正式回测结果必须来自本地后端和可复现参数。',
+      '必须展示收益、回撤、交易次数、胜率、样本区间和交易明细。',
+      '必须说明当前回测暂未建模滑点、停牌、分红再投资等限制。',
     ],
     promptGuidance: [
-      '优先生成可执行的回测规则草案。',
-      '区分历史行情事实、策略定义和待回测结论。',
+      '默认使用 20/60 日均线突破作为最小可执行回测规则。',
+      '区分历史行情事实、策略回测结果和仍需人工判断的风险。',
     ],
   },
   {

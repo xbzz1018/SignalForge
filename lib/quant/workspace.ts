@@ -113,7 +113,7 @@ function wantsVisualization(instruction: string): boolean {
 }
 
 function isQuantAnalysisTask(instruction: string): boolean {
-  return /股票|个股|行情|走势|K线|K 线|财务|基本面|公告|指数|对比|量化|分析|回测/i.test(instruction);
+  return /股票|个股|行情|走势|K线|K 线|财务|基本面|公告|指数|对比|量化|分析|回测|策略/i.test(instruction);
 }
 
 function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean): string[] {
@@ -144,6 +144,17 @@ function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean): string[]
     ];
   }
 
+  if (capabilityId === 'backtest_review') {
+    return [
+      ...common,
+      '获取实时行情、历史 K 线和技术指标。',
+      '调用后端均线突破回测，生成净值曲线、回撤和交易明细。',
+      '检查回测样本、参数、费用和限制，并写入 evidence/sources.json 与 evidence/data_quality.json。',
+      '生成回测复盘数据文件和可视化页面。',
+      '验证页面、净值曲线、交易明细和数据来源。',
+    ];
+  }
+
   return [
     ...common,
     '获取实时行情、历史 K 线、财务摘要和公告事件。',
@@ -160,6 +171,9 @@ function buildVisualizationPanels(capabilityId: string): string[] {
   }
   if (capabilityId === 'fundamental_analysis') {
     return ['实时行情卡片', '营收与利润趋势', 'ROE/毛利率趋势', '公告事件摘要', '报告期数据表'];
+  }
+  if (capabilityId === 'backtest_review') {
+    return ['策略参数卡片', '净值曲线', '回撤指标', '交易明细', '样本与限制说明'];
   }
   return ['实时行情卡片', 'K 线与成交量', '财务摘要', '公告事件时间线', '数据明细表'];
 }
