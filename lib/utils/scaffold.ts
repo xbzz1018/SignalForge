@@ -68,7 +68,7 @@ module.exports = nextConfig;
   await writeFileIfMissing(
     path.join(projectPath, 'postcss.config.js'),
     `module.exports = {
-  plugins: {},
+  plugins: [],
 };
 `
   );
