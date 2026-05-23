@@ -182,18 +182,30 @@ export async function writeInitialRunPlan(params: {
   const manifest = await readManifest(params.projectPath);
   const manifestQuant = manifest?.quant;
   const capability = getQuantCapability(params.capabilityId ?? manifestQuant?.capabilityId);
-  const quantSettings = manifestQuant ?? buildQuantProjectSettings(capability.id);
+  const quantSettings = buildQuantProjectSettings(capability.id);
   const now = new Date().toISOString();
   const symbols = inferSymbols(params.instruction);
-  const dataRequirements = quantSettings.dataEndpoints?.length
-    ? quantSettings.dataEndpoints
-    : capability.dataEndpoints;
-  const expectedArtifacts = quantSettings.expectedArtifacts?.length
-    ? quantSettings.expectedArtifacts
-    : capability.expectedArtifacts;
-  const validationRules = quantSettings.validationRules?.length
-    ? quantSettings.validationRules
-    : capability.validationRules;
+  const dataRequirements = Array.from(
+    new Set([
+      ...capability.dataEndpoints,
+      ...(manifestQuant?.dataEndpoints ?? []),
+      ...(quantSettings.dataEndpoints ?? []),
+    ])
+  );
+  const expectedArtifacts = Array.from(
+    new Set([
+      ...capability.expectedArtifacts,
+      ...(manifestQuant?.expectedArtifacts ?? []),
+      ...(quantSettings.expectedArtifacts ?? []),
+    ])
+  );
+  const validationRules = Array.from(
+    new Set([
+      ...capability.validationRules,
+      ...(manifestQuant?.validationRules ?? []),
+      ...(quantSettings.validationRules ?? []),
+    ])
+  );
 
   const plan: QuantRunPlan = {
     schemaVersion: 1,

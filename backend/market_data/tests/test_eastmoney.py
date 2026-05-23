@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from quantpilot_market_data.indicators import build_technical_indicators
 from quantpilot_market_data.providers.eastmoney import (
     normalize_secid,
     parse_announcements_payload,
@@ -156,6 +157,47 @@ def test_parse_tencent_kline_payload() -> None:
     assert kline.bars[1].close == Decimal("63.440")
     assert kline.bars[1].change_percent is not None
     assert kline.bars[1].volume == 2008252
+
+
+def test_build_technical_indicators_from_kline() -> None:
+    kline = parse_kline_payload(
+        "1.600519",
+        "daily",
+        "qfq",
+        {
+            "rc": 0,
+            "data": {
+                "code": "600519",
+                "market": 1,
+                "name": "贵州茅台",
+                "klines": [build_kline_test_row(day) for day in range(1, 22)],
+            },
+        },
+    )
+
+    indicators = build_technical_indicators(kline)
+
+    assert indicators.symbol == "600519"
+    assert len(indicators.points) == 21
+    assert indicators.points[4].ma5 == Decimal("103.0000")
+    assert indicators.points[19].ma20 == Decimal("110.5000")
+    assert indicators.points[-1].return_pct is not None
+    assert indicators.summary.latest_close == Decimal("121")
+    assert indicators.summary.period_return_pct == Decimal("19.8020")
+    assert indicators.summary.max_drawdown_pct == Decimal("0.0000")
+    assert indicators.summary.volatility_annualized_pct is not None
+
+
+def build_kline_test_row(day: int) -> str:
+    open_price = 100 + day
+    close_price = 100 + day
+    high_price = 101 + day
+    low_price = 99 + day
+    volume = 1000 + day
+    return (
+        f"2026-05-{day:02d},{open_price},{close_price},{high_price},"
+        f"{low_price},{volume},10000,1,1,1,1"
+    )
 
 
 def test_parse_financial_reports_payload() -> None:

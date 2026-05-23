@@ -101,6 +101,14 @@ curl 'http://127.0.0.1:8000/api/v1/quotes/history/600519?period=daily&adjustment
 
 说明：当前东方财富历史 K 线外部源偶发断连，注册表会将能力标记为 `degraded`。调用失败时应展示真实错误，并降级到实时行情、财务摘要和公告事件。
 
+### 技术指标
+
+```bash
+curl 'http://127.0.0.1:8000/api/v1/indicators/technical/600519?period=daily&adjustment=qfq&limit=120'
+```
+
+返回 MA5/MA10/MA20、单日收益率、回撤序列、区间收益、最大回撤、年化波动率和 20 日平均成交量。
+
 ### 财务摘要
 
 ```bash

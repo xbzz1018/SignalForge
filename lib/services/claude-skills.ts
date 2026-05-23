@@ -11,6 +11,7 @@ export const DEFAULT_CLAUDE_SKILLS = [
   'quant-symbol-resolver',
   'quant-market-data',
   'quant-a-share-history',
+  'quant-technical-indicators',
   'quant-fundamental-financials',
   'quant-announcement-events',
   'quant-visualization-html',
@@ -121,6 +122,7 @@ export function buildQuantPilotSystemPrompt(): string {
 - After fetching market, K-line, financial, or event data, use quant-data-quality before visualization and write evidence/sources.json plus evidence/data_quality.json
 - Resolve ambiguous stock names or tickers with quant-symbol-resolver before fetching data
 - Use quant-a-share-history for historical K-line analysis
+- Use quant-technical-indicators for moving averages, returns, drawdown, volatility, and volume metrics
 - Use quant-fundamental-financials for revenue, profit, ROE, margin, and growth analysis
 - Use quant-announcement-events for announcement/event-driven context
 - For visualization tasks, use the quant-visualization-html skill and actually edit app/page.tsx into a usable dashboard

@@ -163,15 +163,23 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
   const kline = asRecord(data.kline) ?? asRecord(data.history);
   const financials = asRecord(data.financials) ?? asRecord(data.fundamentals);
   const announcements = asRecord(data.announcements) ?? asRecord(data.events);
+  const technicalIndicators = asRecord(data.technicalIndicators) ?? asRecord(data.indicators);
   const bars = firstArray(kline?.bars, kline?.data, data.bars, data.history);
+  const indicatorPoints = firstArray(technicalIndicators?.points, technicalIndicators?.data);
   const reports = firstArray(financials?.reports, financials?.data, data.reports);
   const announcementRows = firstArray(announcements?.announcements, announcements?.data, data.announcements);
 
   const firstBar = asRecord(bars[0]);
   const period = pickString(kline?.period, 'daily') ?? 'daily';
   const adjustment = pickString(kline?.adjustment, 'qfq') ?? 'qfq';
+  const runPlanRequirements = Array.isArray(runPlan?.dataRequirements)
+    ? runPlan.dataRequirements.map((requirement) => String(requirement))
+    : [];
+  const requiresTechnicalIndicators =
+    Boolean(technicalIndicators) ||
+    runPlanRequirements.some((requirement) => requirement.includes('/indicators/technical/'));
 
-  return [
+  const datasets: DatasetEvidence[] = [
     buildDataset({
       id: 'quote',
       name: '实时行情',
@@ -237,6 +245,32 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
       ],
     }),
   ];
+
+  if (requiresTechnicalIndicators) {
+    datasets.splice(
+      2,
+      0,
+      buildDataset({
+        id: 'technical_indicators',
+        name: '技术指标',
+        record: technicalIndicators,
+        rowCount: indicatorPoints.length,
+        source: pickString(technicalIndicators?.source, rootSource) ?? rootSource,
+        endpoint: `GET /api/v1/indicators/technical/${symbol}`,
+        critical: critical.has('kline'),
+        generatedAt,
+        missingFields: [
+          ...missingRequiredGroups(technicalIndicators, [{ label: 'fetched_at', keys: ['fetched_at', 'as_of'] }]),
+          ...missingRequiredGroups(asRecord(indicatorPoints.at(-1)), [
+            { label: 'date', keys: ['date'] },
+            { label: 'ma5/ma20', keys: ['ma5', 'ma20'] },
+          ]),
+        ],
+      })
+    );
+  }
+
+  return datasets;
 }
 
 function buildStatus(datasets: DatasetEvidence[]): EvidenceStatus {

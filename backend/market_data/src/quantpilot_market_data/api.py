@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from quantpilot_market_data.indicators import build_technical_indicators
 from quantpilot_market_data.models import (
     Adjustment,
     AnnouncementResponse,
@@ -17,6 +18,7 @@ from quantpilot_market_data.models import (
     KlineResponse,
     RealtimeQuote,
     SymbolResolveResponse,
+    TechnicalIndicatorsResponse,
 )
 from quantpilot_market_data.providers.eastmoney import EastMoneyClient, EastMoneyError
 
@@ -47,6 +49,14 @@ DATA_PROVIDERS = [
             "外部源偶发断连，后续会接入 AKShare/Tushare 降级源。"
         ),
         endpoints=["/api/v1/quotes/history/{symbol}"],
+    ),
+    DataProviderInfo(
+        id="quantpilot-technical-indicators",
+        name="QuantPilot 技术指标",
+        category="indicator",
+        status="available",
+        description="基于历史 K 线计算 MA5/MA10/MA20、区间收益、最大回撤和年化波动率。",
+        endpoints=["/api/v1/indicators/technical/{symbol}"],
     ),
     DataProviderInfo(
         id="eastmoney-financial-summary",
@@ -143,6 +153,28 @@ def create_app() -> FastAPI:
                 limit=max(1, min(limit, 1000)),
                 end=end,
             )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        except EastMoneyError as error:
+            raise HTTPException(status_code=502, detail=str(error)) from error
+
+    @app.get("/api/v1/indicators/technical/{symbol}", response_model=TechnicalIndicatorsResponse)
+    async def get_technical_indicators(
+        symbol: str,
+        period: KlinePeriod = "daily",
+        adjustment: Adjustment = "qfq",
+        limit: int = 120,
+        end: str = "20500101",
+    ) -> TechnicalIndicatorsResponse:
+        try:
+            kline = await client.get_kline(
+                symbol,
+                period=period,
+                adjustment=adjustment,
+                limit=max(1, min(limit, 1000)),
+                end=end,
+            )
+            return build_technical_indicators(kline)
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         except EastMoneyError as error:

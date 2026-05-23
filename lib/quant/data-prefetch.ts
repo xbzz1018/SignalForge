@@ -138,6 +138,7 @@ function finalDataFromResponses(params: {
   symbol: string;
   quote: JsonRecord;
   kline?: JsonRecord | null;
+  technicalIndicators?: JsonRecord | null;
   financials?: JsonRecord | null;
   announcements?: JsonRecord | null;
 }): JsonRecord {
@@ -175,6 +176,7 @@ function finalDataFromResponses(params: {
     as_of: quote.as_of ?? quote.quote_time ?? quote.fetched_at,
     quote,
     kline,
+    technicalIndicators: params.technicalIndicators ?? null,
     financials,
     announcements,
     computedMetrics: calculateMetrics(kline),
@@ -213,6 +215,7 @@ export async function prefetchQuantDataForRunPlan(params: {
   rawFiles.push(path.relative(params.projectPath, quotePath).replaceAll(path.sep, '/'));
 
   let kline: JsonRecord | null = null;
+  let technicalIndicators: JsonRecord | null = null;
   let financials: JsonRecord | null = null;
   let announcements: JsonRecord | null = null;
   const warnings: string[] = [];
@@ -225,6 +228,19 @@ export async function prefetchQuantDataForRunPlan(params: {
       rawFiles.push(path.relative(params.projectPath, filePath).replaceAll(path.sep, '/'));
     } catch (error) {
       warnings.push(`历史 K 线预取失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (params.plan.dataRequirements.some((endpoint) => endpoint.includes('/indicators/technical/'))) {
+    try {
+      technicalIndicators = await fetchJson(
+        `/api/v1/indicators/technical/${symbol}?period=daily&adjustment=qfq&limit=120`
+      );
+      const filePath = path.join(rawDir, 'technical-indicators.json');
+      await writeJson(filePath, technicalIndicators);
+      rawFiles.push(path.relative(params.projectPath, filePath).replaceAll(path.sep, '/'));
+    } catch (error) {
+      warnings.push(`技术指标预取失败：${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -254,6 +270,7 @@ export async function prefetchQuantDataForRunPlan(params: {
     symbol,
     quote,
     kline,
+    technicalIndicators,
     financials,
     announcements,
   });

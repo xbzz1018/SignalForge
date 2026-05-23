@@ -231,6 +231,7 @@ npx prisma db push
 | 单只实时行情 | `GET /api/v1/quotes/realtime/{symbol}` |
 | 批量实时行情 | `POST /api/v1/quotes/realtime` |
 | 历史 K 线 | `GET /api/v1/quotes/history/{symbol}?period=daily&adjustment=qfq&limit=120` |
+| 技术指标 | `GET /api/v1/indicators/technical/{symbol}?period=daily&adjustment=qfq&limit=120` |
 | 财务报表 | `GET /api/v1/fundamentals/financials/{symbol}?limit=8` |
 | 公告事件 | `GET /api/v1/events/announcements/{symbol}?limit=20` |
 
@@ -248,6 +249,7 @@ curl "http://127.0.0.1:8000/api/v1/fundamentals/financials/600519?limit=8"
 
 - `data_file/raw/<run_id>/quote.json`
 - `data_file/raw/<run_id>/kline-daily-qfq.json`
+- `data_file/raw/<run_id>/technical-indicators.json`
 - `data_file/raw/<run_id>/financials.json`
 - `data_file/raw/<run_id>/announcements.json`
 - `data_file/final/dashboard-data.json`
@@ -266,6 +268,7 @@ Claude Code 使用的项目级 skills 统一放在 `.claude/skills/`，生成项
 - `quant-symbol-resolver`：把中文股票名、简称或代码解析成标准证券代码。
 - `quant-market-data`：获取实时价格、涨跌幅、成交额、盘口等行情信息。
 - `quant-a-share-history`：获取 A 股历史 K 线、成交量、均线和阶段表现数据。
+- `quant-technical-indicators`：获取后端标准化 MA、收益率、回撤、波动率和成交量指标。
 - `quant-fundamental-financials`：获取营收、利润、现金流、ROE 等财务指标。
 - `quant-announcement-events`：获取上市公司公告和事件信息。
 - `quant-data-quality`：在取数后生成 `evidence/sources.json` 与 `evidence/data_quality.json`，记录来源、时间戳、缺失字段、警告和限制。

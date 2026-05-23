@@ -234,6 +234,68 @@ class KlineResponse(BaseModel):
         return self
 
 
+class TechnicalIndicatorPoint(BaseModel):
+    date: str = Field(description="交易日期或时间")
+    close: Decimal | None = None
+    volume: int | None = None
+    ma5: Decimal | None = None
+    ma10: Decimal | None = None
+    ma20: Decimal | None = None
+    return_pct: Decimal | None = Field(default=None, description="相对上一根 K 线收益率，单位：%")
+    drawdown_pct: Decimal | None = Field(
+        default=None,
+        description="相对历史最高收盘价回撤，单位：%",
+    )
+
+
+class TechnicalIndicatorSummary(BaseModel):
+    latest_close: Decimal | None = None
+    period_return_pct: Decimal | None = None
+    max_drawdown_pct: Decimal | None = None
+    volatility_annualized_pct: Decimal | None = None
+    avg_volume20: Decimal | None = None
+    ma5: Decimal | None = None
+    ma10: Decimal | None = None
+    ma20: Decimal | None = None
+
+
+class TechnicalIndicatorsResponse(BaseModel):
+    symbol: str
+    name: str | None = None
+    secid: str
+    asset_type: str = "stock"
+    market: MarketCode = "UNKNOWN"
+    source: str = "eastmoney"
+    currency: str = "CNY"
+    timezone: str = "Asia/Shanghai"
+    period: KlinePeriod
+    adjustment: Adjustment
+    points: list[TechnicalIndicatorPoint]
+    summary: TechnicalIndicatorSummary
+    as_of: datetime | str | None = None
+    fetched_at: datetime
+    data_quality: DataQuality = Field(default_factory=DataQuality)
+
+    @model_validator(mode="after")
+    def fill_contract_fields(self) -> Self:
+        if self.as_of is None:
+            self.as_of = self.points[-1].date if self.points else self.fetched_at
+
+        missing = [] if self.points else ["points"]
+        warnings = (
+            []
+            if len(self.points) >= 20
+            else ["技术指标样本少于 20 条，MA20 或波动率解释需谨慎。"]
+        )
+        self.data_quality = _merge_data_quality(
+            self.data_quality,
+            missing_fields=missing,
+            warnings=warnings,
+            status="warning" if missing or warnings else None,
+        )
+        return self
+
+
 class FinancialReportItem(BaseModel):
     symbol: str
     name: str | None = None
