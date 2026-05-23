@@ -5,6 +5,7 @@ import { getQuantCapability } from '@/lib/quant/capabilities';
 const SKILLS_DIR = path.join(process.cwd(), '.claude', 'skills');
 
 export const DEFAULT_CLAUDE_SKILLS = [
+  'quant-run-planner',
   'quant-data-registry',
   'quant-symbol-resolver',
   'quant-market-data',
@@ -111,6 +112,7 @@ export function buildQuantPilotSystemPrompt(): string {
 - Never edit the parent QuantPilot platform repository
 - Build the actual usable quantitative analysis interface, not a placeholder page
 - When the user asks for visible thinking or process narration, write a concise execution summary inside <thinking>...</thinking>; do not reveal hidden chain-of-thought
+- For quantitative analysis tasks, first use the quant-run-planner skill and update .quantpilot/run_plan.json before fetching data or editing app/page.tsx
 - For stock data tasks, first use the quant-market-data skill to fetch required market data from http://127.0.0.1:8000
 - For broad financial data tasks, first use quant-data-registry to select the right data endpoint
 - Resolve ambiguous stock names or tickers with quant-symbol-resolver before fetching data

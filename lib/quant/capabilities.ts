@@ -42,6 +42,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     agentType: 'quant_analysis',
     subAgentKey: 'stock_diagnosis',
     requiredSkills: [
+      'quant-run-planner',
       'quant-symbol-resolver',
       'quant-market-data',
       'quant-a-share-history',
@@ -83,6 +84,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     agentType: 'quant_analysis',
     subAgentKey: 'technical_analysis',
     requiredSkills: [
+      'quant-run-planner',
       'quant-symbol-resolver',
       'quant-market-data',
       'quant-a-share-history',
@@ -120,6 +122,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     agentType: 'quant_analysis',
     subAgentKey: 'fundamental_analysis',
     requiredSkills: [
+      'quant-run-planner',
       'quant-symbol-resolver',
       'quant-market-data',
       'quant-fundamental-financials',

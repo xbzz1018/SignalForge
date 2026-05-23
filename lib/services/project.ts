@@ -78,14 +78,21 @@ async function writeQuantPilotManifest(params: {
     `${JSON.stringify(
       {
         schemaVersion: 1,
+        runId: null,
         status: 'pending',
         capabilityId: capability.id,
-        question: null,
+        question: '',
         symbols: [],
         timeRange: null,
         dataRequirements: capability.dataEndpoints,
+        analysisSteps: [],
+        visualization: {
+          required: false,
+          panels: [],
+        },
         expectedArtifacts: capability.expectedArtifacts,
         validationRules: capability.validationRules,
+        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
       null,

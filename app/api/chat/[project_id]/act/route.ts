@@ -28,6 +28,7 @@ import {
   upsertUserRequest,
   markUserRequestAsProcessing,
 } from '@/lib/services/user-requests';
+import { writeInitialRunPlan } from '@/lib/quant/workspace';
 
 interface RouteContext {
   params: Promise<{ project_id: string }>;
@@ -371,6 +372,21 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const projectPath = project.repoPath || path.join(process.cwd(), 'projects', project_id);
 
     const existingSelected = normalizeModelId(project.preferredCli ?? 'claude', project.selectedModel ?? undefined);
+
+    try {
+      await writeInitialRunPlan({
+        projectPath,
+        instruction: finalInstruction,
+        requestId,
+        capabilityId:
+          coerceString((body as Record<string, unknown>).quantCapabilityId) ??
+          coerceString(legacyBody['quant_capability_id']) ??
+          coerceString((body as Record<string, unknown>).capabilityId) ??
+          coerceString(legacyBody['capability_id']),
+      });
+    } catch (error) {
+      console.error('[API] Failed to write QuantPilot run plan:', error);
+    }
 
     if (
       project.preferredCli !== cliPreference ||
