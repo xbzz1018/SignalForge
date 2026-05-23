@@ -25,6 +25,7 @@
     "prisma:reset": "prisma migrate reset",
     "setup": "npm install && prisma generate && prisma db push",
     "check-cli": "node scripts/check-claude-cli.js",
+    "benchmark:quant": "node scripts/run-quant-benchmarks.js",
     "postinstall": "npm run ensure:env"
   },
   "dependencies": {

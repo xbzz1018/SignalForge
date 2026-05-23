@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { buildQuantProjectSettings, getQuantCapability } from '@/lib/quant/capabilities';
+import { buildQuantProjectSettings, getExecutionQuantCapability, getQuantCapability } from '@/lib/quant/capabilities';
 
 type QuantManifest = {
   schemaVersion?: number;
@@ -14,6 +14,8 @@ type QuantManifest = {
     dataEndpoints?: string[];
     expectedArtifacts?: string[];
     validationRules?: string[];
+    executionCapabilityId?: string;
+    status?: string;
   };
 };
 
@@ -24,6 +26,8 @@ export interface QuantRunPlan {
   runId: string;
   status: RunPlanStatus;
   capabilityId: string;
+  requestedCapabilityId?: string;
+  executionCapabilityId?: string;
   question: string;
   symbols: string[];
   timeRange: string | null;
@@ -160,6 +164,16 @@ function buildVisualizationPanels(capabilityId: string): string[] {
   return ['实时行情卡片', 'K 线与成交量', '财务摘要', '公告事件时间线', '数据明细表'];
 }
 
+function plannedCapabilityNotice(requestedCapabilityId: string, executionCapabilityId: string): string[] {
+  if (requestedCapabilityId === executionCapabilityId) {
+    return [];
+  }
+  return [
+    `用户选择的能力为 ${requestedCapabilityId}，当前先映射到已验证执行链路 ${executionCapabilityId}。`,
+    '页面必须显式说明尚未完全接入的分析维度，避免把计划能力包装成已完成结果。',
+  ];
+}
+
 export async function ensureQuantWorkspace(projectPath: string) {
   await Promise.all([
     fs.mkdir(quantDir(projectPath), { recursive: true }),
@@ -191,12 +205,13 @@ export async function writeInitialRunPlan(params: {
   const manifest = await readManifest(params.projectPath);
   const manifestQuant = manifest?.quant;
   const capability = getQuantCapability(params.capabilityId ?? manifestQuant?.capabilityId);
+  const executionCapability = getExecutionQuantCapability(capability.id);
   const quantSettings = buildQuantProjectSettings(capability.id);
   const now = new Date().toISOString();
   const symbols = inferSymbols(params.instruction);
   const dataRequirements = Array.from(
     new Set([
-      ...capability.dataEndpoints,
+      ...executionCapability.dataEndpoints,
       ...(manifestQuant?.dataEndpoints ?? []),
       ...(quantSettings.dataEndpoints ?? []),
     ])
@@ -211,6 +226,7 @@ export async function writeInitialRunPlan(params: {
   const validationRules = Array.from(
     new Set([
       ...capability.validationRules,
+      ...plannedCapabilityNotice(capability.id, executionCapability.id),
       ...(manifestQuant?.validationRules ?? []),
       ...(quantSettings.validationRules ?? []),
     ])
@@ -220,15 +236,20 @@ export async function writeInitialRunPlan(params: {
     schemaVersion: 1,
     runId: params.requestId,
     status: 'planned',
-    capabilityId: capability.id,
+    capabilityId: executionCapability.id,
+    requestedCapabilityId: capability.id,
+    executionCapabilityId: executionCapability.id,
     question: params.instruction,
     symbols,
     timeRange: inferTimeRange(params.instruction),
     dataRequirements,
-    analysisSteps: buildAnalysisSteps(capability.id, symbols.length > 0),
+    analysisSteps: [
+      ...plannedCapabilityNotice(capability.id, executionCapability.id),
+      ...buildAnalysisSteps(executionCapability.id, symbols.length > 0),
+    ],
     visualization: {
       required: wantsVisualization(params.instruction) || isQuantAnalysisTask(params.instruction),
-      panels: buildVisualizationPanels(capability.id),
+      panels: buildVisualizationPanels(executionCapability.id),
     },
     expectedArtifacts,
     validationRules,

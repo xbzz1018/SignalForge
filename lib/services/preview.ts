@@ -3,8 +3,10 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process';
+import { execFile } from 'child_process';
 import path from 'path';
 import fs from 'fs/promises';
+import { promisify } from 'util';
 import { findAvailablePort } from '@/lib/utils/ports';
 import { getProjectById, updateProject, updateProjectStatus } from './project';
 import { scaffoldBasicNextApp } from '@/lib/utils/scaffold';
@@ -14,6 +16,7 @@ const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const yarnCommand = process.platform === 'win32' ? 'yarn.cmd' : 'yarn';
 const bunCommand = process.platform === 'win32' ? 'bun.exe' : 'bun';
+const execFileAsync = promisify(execFile);
 
 type PackageManagerId = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
@@ -98,6 +101,7 @@ interface PreviewProcess {
   status: PreviewStatus;
   logs: string[];
   startedAt: Date;
+  projectPath: string;
 }
 
 interface EnvOverrides {
@@ -285,6 +289,78 @@ function terminateProcessTree(child: ChildProcess | null): void {
     } catch {
       // Already exited.
     }
+  }
+}
+
+function extractPidsFromSs(output: string): number[] {
+  const pids = new Set<number>();
+  for (const match of output.matchAll(/pid=(\d+)/g)) {
+    const pid = Number.parseInt(match[1], 10);
+    if (Number.isInteger(pid) && pid > 0) {
+      pids.add(pid);
+    }
+  }
+  return Array.from(pids);
+}
+
+async function findListeningPids(port: number): Promise<number[]> {
+  if (process.platform === 'win32') {
+    return [];
+  }
+  try {
+    const { stdout } = await execFileAsync('ss', ['-ltnpH', `sport = :${port}`]);
+    return extractPidsFromSs(stdout);
+  } catch {
+    return [];
+  }
+}
+
+async function isPidWithinProject(pid: number, projectPath: string): Promise<boolean> {
+  if (process.platform === 'win32') {
+    return false;
+  }
+
+  try {
+    const cwd = await fs.readlink(`/proc/${pid}/cwd`);
+    const normalizedCwd = path.resolve(cwd);
+    const normalizedProjectPath = path.resolve(projectPath);
+    return normalizedCwd === normalizedProjectPath || normalizedCwd.startsWith(`${normalizedProjectPath}${path.sep}`);
+  } catch {
+    return false;
+  }
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function terminatePortListeners(port: number, projectPath?: string | null): Promise<void> {
+  if (process.platform === 'win32') {
+    return;
+  }
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const listeningPids = await findListeningPids(port);
+    const pids = projectPath
+      ? (
+          await Promise.all(
+            listeningPids.map(async (pid) => ((await isPidWithinProject(pid, projectPath)) ? pid : null))
+          )
+        ).filter((pid): pid is number => pid !== null)
+      : listeningPids;
+    if (pids.length === 0) {
+      return;
+    }
+
+    const signal = attempt < 2 ? 'SIGTERM' : 'SIGKILL';
+    for (const pid of pids) {
+      try {
+        process.kill(pid, signal);
+      } catch {
+        // 监听进程可能已退出。
+      }
+    }
+    await wait(attempt < 2 ? 300 : 100);
   }
 }
 
@@ -789,6 +865,7 @@ class PreviewManager {
       status: 'starting',
       logs: [],
       startedAt: new Date(),
+      projectPath,
     };
 
     const log = this.getLogger(previewProcess);
@@ -983,12 +1060,17 @@ class PreviewManager {
     const processInfo = this.processes.get(projectId);
     if (!processInfo) {
       const project = await getProjectById(projectId);
+      const previewPort = project?.previewPort ?? null;
+      const projectPath = project?.repoPath ? path.resolve(project.repoPath) : null;
       if (project) {
         await updateProject(projectId, {
           previewUrl: null,
           previewPort: null,
         });
         await updateProjectStatus(projectId, 'idle');
+      }
+      if (previewPort) {
+        await terminatePortListeners(previewPort, projectPath);
       }
       return {
         port: null,
@@ -1003,6 +1085,7 @@ class PreviewManager {
     } catch (error) {
       console.error('[PreviewManager] Failed to stop preview process:', error);
     }
+    await terminatePortListeners(processInfo.port, processInfo.projectPath);
 
     this.processes.delete(projectId);
     await updateProject(projectId, {

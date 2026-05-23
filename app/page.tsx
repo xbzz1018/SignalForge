@@ -24,6 +24,7 @@ import {
 } from '@/lib/utils/cliOptions';
 import {
   DEFAULT_QUANT_CAPABILITY_ID,
+  QUANT_CAPABILITY_GROUPS,
   QUANT_CAPABILITIES,
   getQuantCapability,
   type QuantCapabilityId,
@@ -44,6 +45,25 @@ const ASSISTANT_OPTIONS = ACTIVE_CLI_OPTIONS.map(({ id, name, icon }) => ({
 const assistantBrandColors = ACTIVE_CLI_BRAND_COLORS;
 
 const MODEL_OPTIONS_BY_ASSISTANT = ACTIVE_CLI_MODEL_OPTIONS;
+
+const CAPABILITY_PROMPTS: Record<QuantCapabilityId, string> = {
+  stock_diagnosis:
+    '分析贵州茅台最近的行情、K 线、财务和公告，生成一个个股诊断看板。需要展示数据来源、更新时间、关键指标、K 线/成交量和财务摘要。',
+  technical_analysis:
+    '分析宁德时代最近 120 个交易日的走势，生成技术分析看板。需要包含 K 线、成交量、均线、阶段涨跌、波动率和最大回撤。',
+  fundamental_analysis:
+    '分析贵州茅台最近几个报告期的基本面情况，生成财务质量看板。需要展示营收、利润、利润率、ROE、现金流和公告事件摘要。',
+  asset_comparison:
+    '对比贵州茅台、招商银行和 510300 的最近表现，生成多标的对比看板。需要先获取可用真实数据，并说明暂未完全接入的对比维度。',
+  sector_rotation:
+    '分析沪深300和创业板指最近一年的趋势和相对强弱，生成行业/指数观察看板。需要包含走势、成交量、均线、波动和阶段回撤。',
+  strategy_research:
+    '研究一个基于 20 日均线突破和成交量确认的 A 股趋势策略，先生成策略研究看板。需要定义信号、样本、风控和待回测指标。',
+  backtest_review:
+    '用最近两年的 20 日均线突破规则分析 510300，生成回测复盘准备看板。需要说明规则、样本区间、数据来源和当前待接入的正式回测指标。',
+  portfolio_risk:
+    '分析一个贵州茅台、招商银行、510300 的组合风险，生成组合风控看板。需要先整理持仓、数据来源、风险维度和当前可计算的数据限制。',
+};
 
 export default function HomePage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -1178,47 +1198,75 @@ export default function HomePage() {
               </div>
             </form>
             
-            {/* Example Cards */}
-            <div className="flex flex-wrap gap-2 justify-center mt-8">
-              {[
-                { 
-                  text: '个股诊断',
-                  capabilityId: 'stock_diagnosis' as QuantCapabilityId,
-                  prompt: '分析贵州茅台最近的行情、K 线、财务和公告，生成一个个股诊断看板。需要展示数据来源、更新时间、关键指标、K 线/成交量和财务摘要。'
-                },
-                { 
-                  text: '技术分析',
-                  capabilityId: 'technical_analysis' as QuantCapabilityId,
-                  prompt: '分析宁德时代最近 120 个交易日的走势，生成技术分析看板。需要包含 K 线、成交量、均线、阶段涨跌、波动率和最大回撤。'
-                },
-                { 
-                  text: '基本面',
-                  capabilityId: 'fundamental_analysis' as QuantCapabilityId,
-                  prompt: '分析贵州茅台最近几个报告期的基本面情况，生成财务质量看板。需要展示营收、利润、利润率、ROE、现金流和公告事件摘要。'
-                },
-                { 
-                  text: '银行对比',
-                  capabilityId: 'fundamental_analysis' as QuantCapabilityId,
-                  prompt: '对比招商银行和平安银行的盈利能力、估值和最近财务表现，生成多标的基本面对比看板。'
-                },
-                { 
-                  text: '指数趋势',
-                  capabilityId: 'technical_analysis' as QuantCapabilityId,
-                  prompt: '生成沪深 300 最近一年的趋势分析看板，包含走势、成交量、均线、波动和阶段回撤。'
-                }
-              ].map((example) => (
-                <button
-                  key={example.text}
-                  onClick={() => {
-                    setPrompt(example.prompt);
-                    setSelectedCapability(example.capabilityId);
-                  }}
-                  disabled={isCreatingProject}
-                  className="px-4 py-2 text-sm font-medium text-gray-500 bg-transparent border border-[#DE7356]/10 rounded-full hover:bg-gray-50 hover:border-[#DE7356]/15 hover:text-gray-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {example.text}
-                </button>
-              ))}
+            {/* 量化能力目录 */}
+            <div className="mt-8 space-y-4">
+              {QUANT_CAPABILITY_GROUPS.map((group) => {
+                const capabilities = QUANT_CAPABILITIES.filter((capability) => capability.groupId === group.id);
+                return (
+                  <section key={group.id} className="text-left">
+                    <div className="mb-2 flex flex-wrap items-end justify-between gap-2 px-1">
+                      <div>
+                        <h2 className="text-sm font-semibold text-gray-900">{group.name}</h2>
+                        <p className="text-xs text-gray-500">{group.description}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                      {capabilities.map((capability) => {
+                        const isSelected = selectedCapability === capability.id;
+                        const isReady = capability.status === 'ready';
+                        return (
+                          <button
+                            key={capability.id}
+                            type="button"
+                            onClick={() => {
+                              setPrompt(CAPABILITY_PROMPTS[capability.id] ?? capability.inputHint);
+                              setSelectedCapability(capability.id);
+                            }}
+                            disabled={isCreatingProject}
+                            className={`min-h-[118px] rounded-lg border p-3 text-left shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                              isSelected
+                                ? 'border-gray-900 bg-gray-900 text-white shadow-md'
+                                : 'border-gray-200 bg-white text-gray-800 hover:border-[#DE7356]/40 hover:bg-[#FFF8F5]'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="text-sm font-semibold leading-5">{capability.name}</div>
+                              <span
+                                className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                  isSelected
+                                    ? 'bg-white/15 text-white'
+                                    : isReady
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-amber-50 text-amber-700'
+                                }`}
+                              >
+                                {isReady ? '已接入' : '规划中'}
+                              </span>
+                            </div>
+                            <p className={`mt-2 line-clamp-2 text-xs leading-5 ${isSelected ? 'text-gray-200' : 'text-gray-500'}`}>
+                              {capability.description}
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-1">
+                              {capability.tags.slice(0, 3).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className={`rounded-full px-2 py-0.5 text-[11px] ${
+                                    isSelected
+                                      ? 'bg-white/10 text-gray-100'
+                                      : 'bg-gray-100 text-gray-500'
+                                  }`}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           </div>
         </div>
