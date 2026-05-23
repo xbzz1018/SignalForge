@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import CreateProjectModal from '@/components/modals/CreateProjectModal';
 import DeleteProjectModal from '@/components/modals/DeleteProjectModal';
@@ -8,7 +8,17 @@ import GlobalSettings from '@/components/settings/GlobalSettings';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { getDefaultModelForCli, getModelDisplayName } from '@/lib/constants/cliModels';
 import Image from 'next/image';
-import { Image as ImageIcon } from 'lucide-react';
+import {
+  ArrowUp,
+  ChevronDown,
+  Image as ImageIcon,
+  Menu,
+  Pencil,
+  Search,
+  Settings,
+  Trash2,
+  X,
+} from 'lucide-react';
 import type { Project as ProjectSummary } from '@/types/project';
 import { fetchCliStatusSnapshot, createCliStatusFallback } from '@/hooks/useCLI';
 import type { CLIStatus } from '@/types/cli';
@@ -24,8 +34,6 @@ import {
 } from '@/lib/utils/cliOptions';
 import {
   DEFAULT_QUANT_CAPABILITY_ID,
-  QUANT_CAPABILITY_GROUPS,
-  QUANT_CAPABILITIES,
   getQuantCapability,
   type QuantCapabilityId,
 } from '@/lib/quant/capabilities';
@@ -113,27 +121,29 @@ export default function HomePage() {
   const [selectedCapability, setSelectedCapability] = useState<QuantCapabilityId>(DEFAULT_QUANT_CAPABILITY_ID);
   const [usingGlobalDefaults, setUsingGlobalDefaults] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
+  const [projectSearch, setProjectSearch] = useState('');
   const [cliStatus, setCLIStatus] = useState<CLIStatus>({});
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const selectedAssistantOption = ACTIVE_CLI_OPTIONS_MAP[selectedAssistant];
   
-  // Get available models based on current assistant
+  // 根据当前 Agent 获取可用模型
   const availableModels = MODEL_OPTIONS_BY_ASSISTANT[selectedAssistant] || [];
   
-  // Sync with Global Settings (until user overrides locally)
+  // 同步全局设置，直到用户在当前页面手动覆盖
   const { settings: globalSettings } = useGlobalSettings();
   
-  // Check if this is a fresh page load (not navigation)
+  // 判断是否是刷新进入，而不是站内导航
   useEffect(() => {
     const isPageRefresh = !sessionStorage.getItem('navigationFlag');
     
     if (isPageRefresh) {
-      // Fresh page load or refresh - use global defaults
+      // 刷新或首次加载时使用全局默认值
       sessionStorage.setItem('navigationFlag', 'true');
       setIsInitialLoad(true);
       setUsingGlobalDefaults(true);
     } else {
-      // Navigation within session - check for stored selections
+      // 站内导航时延续本轮会话的选择
       const storedAssistantRaw = sessionStorage.getItem('selectedAssistant');
       const storedModelRaw = sessionStorage.getItem('selectedModel');
 
@@ -148,9 +158,9 @@ export default function HomePage() {
       }
     }
     
-    // Clean up navigation flag on unmount
+    // 卸载时无需主动清理，页面刷新由 beforeunload 处理
     return () => {
-      // Don't clear on navigation, only on actual page unload
+      // 保留站内导航标记
     };
   }, [sanitizeAssistant, normalizeModelForAssistant]);
   
@@ -164,7 +174,7 @@ export default function HomePage() {
     setSelectedModel(normalizeModelForAssistant(cli, modelFromGlobal));
   }, [globalSettings, usingGlobalDefaults, isInitialLoad, sanitizeAssistant, normalizeModelForAssistant]);
   
-  // Save selections to sessionStorage when they change
+  // 用户手动切换后写入会话缓存
   useEffect(() => {
     if (!isInitialLoad && selectedAssistant && selectedModel) {
       const normalizedAssistant = sanitizeAssistant(selectedAssistant);
@@ -173,7 +183,7 @@ export default function HomePage() {
     }
   }, [selectedAssistant, selectedModel, isInitialLoad, sanitizeAssistant, normalizeModelForAssistant]);
   
-  // Clear navigation flag on page unload
+  // 页面真正卸载时清理导航标记
   useEffect(() => {
     const handleBeforeUnload = () => {
       sessionStorage.removeItem('navigationFlag');
@@ -194,7 +204,13 @@ export default function HomePage() {
   const assistantDropdownRef = useRef<HTMLDivElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Check CLI installation status
+  const openTaskDrawer = useCallback(() => {
+    setShowAssistantDropdown(false);
+    setShowModelDropdown(false);
+    setTaskDrawerOpen(true);
+  }, []);
+
+  // 检查 CLI 安装状态
   useEffect(() => {
     const checkingStatus = ASSISTANT_OPTIONS.reduce<CLIStatus>((acc, cli) => {
       acc[cli.id] = {
@@ -215,7 +231,7 @@ export default function HomePage() {
       });
   }, []);
 
-  // Click outside handler
+  // 点击下拉框外部时收起菜单
   useEffect(() => {
     const handleDocumentClick = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -237,25 +253,24 @@ export default function HomePage() {
     };
   }, []);
 
-  // Format time for display
+  // 格式化任务时间
   const formatTime = (dateString: string | null) => {
-    if (!dateString) return 'Never';
+    if (!dateString) return '暂无记录';
     
-    // Server sends UTC time without 'Z' suffix, so we need to add it
-    // to ensure it's parsed as UTC, not local time
+    // 服务端可能返回不带 Z 的 UTC 时间，这里补齐时区避免被解析成本地时间
     let utcDateString = dateString;
     
-    // Check if the string has timezone info
+    // 判断是否已经包含时区信息
     const hasTimezone = dateString.endsWith('Z') || 
                        dateString.includes('+') || 
                        dateString.match(/[-+]\d{2}:\d{2}$/);
     
     if (!hasTimezone) {
-      // Add 'Z' to indicate UTC
+      // 补 Z 表示 UTC
       utcDateString = dateString + 'Z';
     }
     
-    // Parse the date as UTC
+    // 按 UTC 解析后计算相对时间
     const date = new Date(utcDateString);
     const now = new Date();
     // Calculate the actual time difference
@@ -264,19 +279,19 @@ export default function HomePage() {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 30) return `${diffDays}d ago`;
+    if (diffMins < 1) return '刚刚';
+    if (diffMins < 60) return `${diffMins} 分钟前`;
+    if (diffHours < 24) return `${diffHours} 小时前`;
+    if (diffDays < 30) return `${diffDays} 天前`;
     
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
+    return date.toLocaleDateString('zh-CN', {
+      month: 'short',
       day: 'numeric',
-      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
     });
   };
 
-  // Format CLI and model information
+  // 格式化 CLI 和模型信息
   const formatCliInfo = (cli?: string, model?: string) => {
     const normalizedCli = sanitizeAssistant(cli);
     const assistantOption = ACTIVE_CLI_OPTIONS_MAP[normalizedCli];
@@ -287,7 +302,7 @@ export default function HomePage() {
   };
 
   const formatFullTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
+    return new Date(dateString).toLocaleString('zh-CN', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -378,16 +393,16 @@ export default function HomePage() {
       const response = await fetchAPI(`${API_BASE}/api/projects/${deleteModal.project.id}`, { method: 'DELETE' });
       
       if (response.ok) {
-        showToast('Project deleted successfully', 'success');
+        showToast('任务已删除', 'success');
         await load();
         closeDeleteModal();
       } else {
-        const errorData = await response.json().catch(() => ({ detail: 'Failed to delete project' }));
-        showToast(errorData.detail || 'Failed to delete project', 'error');
+        const errorData = await response.json().catch(() => ({ detail: '删除任务失败' }));
+        showToast(errorData.detail || '删除任务失败', 'error');
       }
     } catch (error) {
       console.warn('Failed to delete project:', error);
-      showToast('Failed to delete project. Please try again.', 'error');
+      showToast('删除任务失败，请重试', 'error');
     } finally {
       setIsDeleting(false);
     }
@@ -402,16 +417,16 @@ export default function HomePage() {
       });
       
       if (response.ok) {
-        showToast('Project updated successfully', 'success');
+        showToast('任务名称已更新', 'success');
         await load();
         setEditingProject(null);
       } else {
-        const errorData = await response.json().catch(() => ({ detail: 'Failed to update project' }));
-        showToast(errorData.detail || 'Failed to update project', 'error');
+        const errorData = await response.json().catch(() => ({ detail: '更新任务失败' }));
+        showToast(errorData.detail || '更新任务失败', 'error');
       }
     } catch (error) {
       console.warn('Failed to update project:', error);
-      showToast('Failed to update project. Please try again.', 'error');
+      showToast('更新任务失败，请重试', 'error');
     }
   }
 
@@ -699,10 +714,382 @@ export default function HomePage() {
     setShowModelDropdown(false);
   };
 
+  const selectedModelLabel =
+    availableModels.find((model) => model.id === selectedModel)?.name ??
+    getModelDisplayName(selectedAssistant, selectedModel);
+  const selectedAssistantName = selectedAssistantOption?.name ?? 'Claude Code';
+  const runningProjects = projects.filter((project) => project.previewUrl || project.status === 'running').length;
+  const recentProjects = projects.slice(0, 8);
+  const filteredProjects = projects.filter((project) => {
+    const keyword = projectSearch.trim().toLowerCase();
+    if (!keyword) return true;
+    return [
+      project.name,
+      project.description,
+      project.initialPrompt,
+      getQuantCapability(project.quantCapabilityId).shortName,
+      formatCliInfo(project.preferredCli ?? undefined, project.selectedModel ?? undefined),
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword));
+  });
+  const capabilityShortcuts = [
+    {
+      id: 'market',
+      name: '行情分析',
+      description: '价格、K 线、成交量、技术指标和阶段走势',
+      prompt: '分析一只股票最近的行情、K 线、成交量和技术指标，生成可视化看板。',
+    },
+    {
+      id: 'fundamental',
+      name: '基本面研究',
+      description: '财务报表、盈利质量、现金流和公告事件',
+      prompt: '分析一只股票最近的财务表现、盈利质量、现金流和公告事件，生成基本面研究看板。',
+    },
+    {
+      id: 'comparison',
+      name: '标的对比',
+      description: '股票、指数、ETF 的横向表现和风险比较',
+      prompt: '对比多个股票、指数或 ETF 的近期表现、波动、回撤和关键指标，生成对比看板。',
+    },
+    {
+      id: 'strategy',
+      name: '策略研究',
+      description: '信号规则、回测复盘、交易明细和参数假设',
+      prompt: '研究一个量化交易策略，说明信号规则、样本范围、回测指标、交易明细和参数假设。',
+    },
+    {
+      id: 'risk',
+      name: '组合风控',
+      description: '持仓暴露、相关性、回撤、仓位和风险约束',
+      prompt: '分析一个投资组合的风险暴露、相关性、回撤、仓位和风控约束，生成组合风控看板。',
+    },
+  ];
+
+  const openProject = (project: ProjectSummary) => {
+    const params = new URLSearchParams();
+    if (selectedAssistant) params.set('cli', selectedAssistant);
+    if (selectedModel) params.set('model', selectedModel);
+    router.push(`/${project.id}/chat${params.toString() ? '?' + params.toString() : ''}`);
+  };
+
+  const renderProjectItem = (project: ProjectSummary) => {
+    const projectCli = sanitizeAssistant(project.preferredCli);
+    const projectColor = assistantBrandColors[projectCli] || assistantBrandColors[DEFAULT_ASSISTANT];
+    const capability = getQuantCapability(project.quantCapabilityId);
+
+    return (
+      <div
+        key={project.id}
+        className="group rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-red-100 hover:bg-red-50/70"
+      >
+        {editingProject?.id === project.id ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target as HTMLFormElement);
+              const newName = formData.get('name') as string;
+              if (newName.trim()) {
+                updateProject(project.id, newName.trim());
+              }
+            }}
+            className="space-y-2"
+          >
+            <input
+              name="name"
+              defaultValue={project.name}
+              className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 outline-none focus:border-red-400"
+              autoFocus
+              onBlur={() => setEditingProject(null)}
+            />
+            <div className="flex gap-2">
+              <button type="submit" className="rounded-md bg-red-500 px-2.5 py-1 text-xs font-medium text-white">
+                保存
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingProject(null)}
+                className="rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600"
+              >
+                取消
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex items-start gap-2">
+            <button type="button" onClick={() => openProject(project)} className="min-w-0 flex-1 text-left">
+              <div className="flex items-center gap-2">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: projectColor }}
+                />
+                <h3 className="truncate text-sm font-semibold text-gray-900">{project.name}</h3>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-500">
+                <span>{formatTime(project.lastMessageAt || project.createdAt)}</span>
+                <span>•</span>
+                <span>{capability.shortName}</span>
+              </div>
+              <div className="mt-1 truncate text-[11px] text-gray-400">
+                {formatCliInfo(projectCli, project.selectedModel ?? undefined)}
+              </div>
+            </button>
+            <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={() => setEditingProject(project)}
+                className="rounded-md p-1 text-gray-400 hover:bg-white hover:text-red-500"
+                title="重命名"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openDeleteModal(project)}
+                className="rounded-md p-1 text-gray-400 hover:bg-white hover:text-red-500"
+                title="删除"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTaskRecordItem = (project: ProjectSummary) => {
+    const projectCli = sanitizeAssistant(project.preferredCli);
+    const capability = getQuantCapability(project.quantCapabilityId);
+    const title = project.name || project.initialPrompt || '未命名任务';
+    const isEditing = editingProject?.id === project.id;
+
+    return (
+      <div
+        key={project.id}
+        className="group relative border-b border-gray-100 px-4 py-3 transition-colors hover:bg-gray-50"
+      >
+        {isEditing ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const formData = new FormData(event.currentTarget);
+              const newName = String(formData.get('name') || '').trim();
+              if (newName) {
+                updateProject(project.id, newName);
+              }
+            }}
+            className="space-y-2"
+          >
+            <input
+              name="name"
+              defaultValue={title}
+              autoFocus
+              className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-950 outline-none focus:border-red-400"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setEditingProject(null);
+                }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingProject(null)}
+                className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-gray-950 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600"
+              >
+                保存
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div>
+            <button
+              type="button"
+              onClick={() => openProject(project)}
+              className="block w-full min-w-0 text-left"
+            >
+              <div className="truncate text-sm font-semibold text-gray-950">{title}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                <span>{formatTime(project.lastMessageAt || project.createdAt)}</span>
+                <span>@{project.id.slice(-8)}</span>
+              </div>
+              <div className="mt-1 truncate text-xs text-gray-400">
+                {capability.shortName} · {formatCliInfo(projectCli, project.selectedModel ?? undefined)}
+              </div>
+            </button>
+            <div className="pointer-events-none absolute right-3 top-3 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={() => setEditingProject(project)}
+                className="pointer-events-auto rounded-md p-1.5 text-gray-400 hover:bg-white hover:text-red-500"
+                title="重命名任务"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openDeleteModal(project)}
+                className="pointer-events-auto rounded-md p-1.5 text-gray-400 hover:bg-white hover:text-red-500"
+                title="删除任务"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTaskHistoryDrawer = () => {
+    return (
+      <AnimatePresence initial={false}>
+        {taskDrawerOpen && (
+          <motion.div
+            key="task-history-drawer"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="fixed inset-0 z-[500] bg-transparent"
+            onClick={() => setTaskDrawerOpen(false)}
+          >
+            <motion.aside
+              initial={{ x: -120, opacity: 0, scaleX: 0.94 }}
+              animate={{ x: 0, opacity: 1, scaleX: 1 }}
+              exit={{ x: -110, opacity: 0, scaleX: 0.96 }}
+              transition={{
+                type: 'spring',
+                stiffness: 360,
+                damping: 24,
+                mass: 0.85,
+              }}
+              style={{ transformOrigin: 'left center' }}
+              className="flex h-full w-full max-w-[420px] flex-col border-r border-gray-200 bg-white shadow-2xl"
+              onClick={(event: React.MouseEvent<HTMLElement>) => event.stopPropagation()}
+            >
+              <div className="flex h-10 shrink-0 items-center justify-between border-b border-gray-100 px-3">
+                <div className="flex items-baseline gap-1.5">
+                  <h2 className="text-base font-semibold text-gray-950">任务记录</h2>
+                  <span className="text-xs text-gray-400">({projects.length})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTaskDrawerOpen(false)}
+                  className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-950"
+                  title="关闭"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="border-b border-gray-100 bg-gray-50/70 px-3 py-3">
+                <div className="flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-500">
+                  <Search className="h-4 w-4 shrink-0" />
+                  <input
+                    value={projectSearch}
+                    onChange={(event) => setProjectSearch(event.target.value)}
+                    placeholder="搜索对话标题、用户或内容..."
+                    className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {filteredProjects.length === 0 ? (
+                  <div className="px-4 py-10 text-center text-sm text-gray-400">
+                    暂无匹配的任务记录
+                  </div>
+                ) : (
+                  filteredProjects.map(renderTaskRecordItem)
+                )}
+              </div>
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  };
+
+  const renderTaskSidebar = (isMobile = false) => (
+    <aside
+      className={`flex h-full flex-col border-r border-gray-200 bg-white/95 ${
+        isMobile ? 'w-[286px]' : 'w-[260px]'
+      }`}
+    >
+      <div className="flex h-16 items-center justify-between border-b border-gray-100 px-4">
+        <button
+          type="button"
+          onClick={openTaskDrawer}
+          className="flex items-center gap-2 text-gray-950 hover:text-red-600"
+          title="打开任务记录"
+        >
+          <Menu className="h-4 w-4" />
+          <span className="text-base font-semibold text-gray-950">任务记录</span>
+        </button>
+        {isMobile && (
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            title="关闭"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-3 py-4">
+        <div className="mb-3 px-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">分析能力</div>
+        </div>
+
+        <div className="space-y-1">
+          {capabilityShortcuts.map((capability) => (
+            <button
+              key={capability.id}
+              type="button"
+              onClick={() => {
+                setPrompt(capability.prompt);
+                if (isMobile) {
+                  setSidebarOpen(false);
+                }
+              }}
+              className="w-full rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
+              title={capability.description}
+            >
+              <div className="text-sm font-semibold text-gray-950">{capability.name}</div>
+              <div className="mt-1 text-xs leading-5 text-gray-500">{capability.description}</div>
+            </button>
+          ))}
+        </div>
+
+      </div>
+
+      <div className="border-t border-gray-100 p-3">
+        <button
+          type="button"
+          onClick={() => setShowGlobalSettings(true)}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-950"
+        >
+          <Settings className="h-4 w-4" />
+          模型与数据源设置
+        </button>
+      </div>
+    </aside>
+  );
+
 
   return (
-    <div className="flex h-screen relative overflow-hidden bg-white ">
-      {/* Radial gradient background from bottom center */}
+    <div className="relative flex h-screen overflow-hidden bg-[#fbfbfc] text-gray-950">
+      {/* 柔和底部背景，保持输入区聚焦 */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-white " />
         <div 
@@ -727,327 +1114,141 @@ export default function HomePage() {
         />
       </div>
       
-      {/* Content wrapper */}
+      {/* 页面主体 */}
       <div className="relative z-10 flex h-full w-full">
-        {/* Thin sidebar bar when closed */}
-        <div className={`${sidebarOpen ? 'w-0' : 'w-12'} fixed inset-y-0 left-0 z-40 bg-transparent border-r border-gray-200/20 transition-all duration-300 flex flex-col`}>
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="w-full h-12 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-            title="Open sidebar"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-          
-          {/* Settings button when sidebar is closed */}
-          <div className="mt-auto mb-2">
-            <button
-              onClick={() => setShowGlobalSettings(true)}
-              className="w-full h-12 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-              title="Settings"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-          </div>
+        <div className="hidden lg:block">
+          {renderTaskSidebar()}
         </div>
-        
-        {/* Sidebar - Overlay style */}
-        <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-40 w-64 bg-white/95 backdrop-blur-2xl border-r border-gray-200 transition-transform duration-300`}>
-        <div className="flex flex-col h-full">
-          {/* History header with close button */}
-          <div className="p-3 border-b border-gray-200 ">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 px-2 py-1">
-                <h2 className="text-gray-900 font-medium text-lg">History</h2>
-              </div>
+
+        {sidebarOpen && (
+          <div className="fixed inset-0 z-40 bg-black/20 lg:hidden" onClick={() => setSidebarOpen(false)}>
+            <div className="h-full" onClick={(event) => event.stopPropagation()}>
+              {renderTaskSidebar(true)}
+            </div>
+          </div>
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b border-gray-100 bg-white/85 px-4 backdrop-blur md:px-6">
+            <div className="flex min-w-0 items-center gap-3">
               <button
-                onClick={() => setSidebarOpen(false)}
-                className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                title="Close sidebar"
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-950 lg:hidden"
+                title="打开任务记录"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+                <Menu className="h-5 w-5" />
+              </button>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600 text-base font-bold text-white shadow-sm">
+                Q
+              </div>
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-bold text-gray-950 md:text-lg">QuantPilot</h1>
+                <div className="mt-1 hidden items-center gap-2 text-xs text-gray-500 md:flex">
+                  <span>任务 {projects.length}</span>
+                  <span>•</span>
+                  <span>运行中 {runningProjects}</span>
+                  <span>•</span>
+                  <span>{selectedModelLabel}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowGlobalSettings(true)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-950"
+                title="模型与数据源设置"
+              >
+                <Settings className="h-4 w-4" />
               </button>
             </div>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-2">
-            <div className="space-y-1">
-              {projects.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 text-sm">No conversations yet</p>
-                </div>
-              ) : (
-                projects.map((project) => {
-                  const projectCli = sanitizeAssistant(project.preferredCli);
-                  const projectColor = assistantBrandColors[projectCli] || assistantBrandColors[DEFAULT_ASSISTANT];
-                  return (
-                    <div 
-                      key={project.id}
-                      className="p-2 px-3 rounded-lg transition-all group"
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = `${projectColor}15`;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    {editingProject?.id === project.id ? (
-                      // Edit mode
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const formData = new FormData(e.target as HTMLFormElement);
-                          const newName = formData.get('name') as string;
-                          if (newName.trim()) {
-                            updateProject(project.id, newName.trim());
-                          }
-                        }}
-                        className="space-y-2"
-                      >
-                        <input
-                          name="name"
-                          defaultValue={project.name}
-                          className="w-full px-2 py-1 text-sm bg-white border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                          autoFocus
-                          onBlur={() => setEditingProject(null)}
-                        />
-                        <div className="flex gap-1">
-                          <button
-                            type="submit"
-                            className="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingProject(null)}
-                            className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      // View mode
-                      <div className="flex items-center justify-between gap-2">
-                        <div 
-                          className="flex-1 cursor-pointer min-w-0"
-                          onClick={() => {
-                            // Pass current model selection when navigating from sidebar
-                            const params = new URLSearchParams();
-                            if (selectedAssistant) params.set('cli', selectedAssistant);
-                            if (selectedModel) params.set('model', selectedModel);
-                            router.push(`/${project.id}/chat${params.toString() ? '?' + params.toString() : ''}`);
-                          }}
-                        >
-                          <h3 
-                            className="text-gray-900 text-sm transition-colors truncate"
-                            style={{
-                              '--hover-color': projectColor || '#DE7356'
-                            } as React.CSSProperties}
-                          >
-                            <span 
-                              className="group-hover:text-[var(--hover-color)]"
-                              style={{
-                                transition: 'color 0.2s'
-                              }}
-                            >
-                              {project.name.length > 28 
-                                ? `${project.name.substring(0, 28)}...` 
-                                : project.name
-                              }
-                            </span>
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="text-gray-500 text-xs">
-                              {formatTime(project.lastMessageAt || project.createdAt)}
-                            </div>
-                            {project.preferredCli && (
-                              <div className="flex items-center gap-1">
-                                <span className="text-gray-400 text-xs">•</span>
-                                <span
-                                  className="text-xs transition-colors"
-                                  style={{
-                                    color: (projectColor || '#6B7280') + 'CC'
-                                  }}
-                                >
-                                  {formatCliInfo(projectCli, project.selectedModel ?? undefined)}
-                                </span>
-                              </div>
-                            )}
-                            {project.quantCapabilityId && (
-                              <div className="flex items-center gap-1">
-                                <span className="text-gray-400 text-xs">•</span>
-                                <span className="text-xs text-gray-500">
-                                  {getQuantCapability(project.quantCapabilityId).shortName}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingProject(project);
-                            }}
-                            className="p-1 text-gray-400 hover:text-orange-500 transition-colors"
-                            title="Edit project name"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeleteModal(project);
-                            }}
-                            className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                            title="Delete project"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-          
-          <div className="p-2 border-t border-gray-200 ">
-            <button 
-              onClick={() => setShowGlobalSettings(true)}
-              className="w-full flex items-center gap-2 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all text-sm"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Settings
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      {/* Main Content - Not affected by sidebar */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-4xl">
-            <div className="text-center mb-12">
-              <div className="flex justify-center mb-6">
-                <h1 
-                  className="font-extrabold tracking-tight select-none transition-colors duration-1000 ease-in-out"
-                  style={{
-                    fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                    color: (assistantBrandColors[selectedAssistant] || assistantBrandColors.claude),
-                    letterSpacing: '-0.06em',
-                    fontWeight: 800,
-                    fontSize: '72px',
-                    lineHeight: '72px'
-                  }}
-                >
-                  QuantPilot
-                </h1>
-              </div>
-              <p className="text-xl text-gray-700 font-light tracking-tight">
-                连接 CLI Agent • 构建量化工作流 • 即时预览与部署
-              </p>
-            </div>
-            
-            {/* Image thumbnails */}
-            {uploadedImages.length > 0 && (
-              <div className="mb-4 flex flex-wrap gap-2">
-                {uploadedImages.map((image, index) => (
-                  <div key={image.id} className="relative group">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={image.url} 
-                      alt={image.name}
-                      className="w-20 h-20 object-cover rounded-lg border border-gray-200 "
-                    />
-                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-1 py-0.5 rounded-b-lg">
-                      Image #{index + 1}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeImage(image.id)}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+          </header>
 
-            {/* Main Input Form */}
-            <form 
-              onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              className={`group flex flex-col gap-4 p-4 w-full rounded-[28px] border backdrop-blur-xl text-base shadow-xl transition-all duration-150 ease-in-out mb-6 relative overflow-visible ${
-                isDragOver 
-                  ? 'border-[#DE7356] bg-[#DE7356]/10 ' 
-                  : 'border-gray-200 bg-white '
-              }`}
-            >
-              <div className="relative flex flex-1 items-center">
+          <main className="relative flex-1 overflow-y-auto">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-[radial-gradient(ellipse_at_bottom,rgba(239,68,68,0.16),rgba(255,255,255,0)_68%)]" />
+            <div className="relative mx-auto flex min-h-full w-full max-w-6xl flex-col items-center justify-center px-4 py-8 md:px-8">
+              <div className="mb-6 text-center">
+                <h2 className="text-3xl font-bold tracking-normal text-red-600 md:text-5xl">
+                  QuantPilot
+                </h2>
+                <p className="mt-3 text-sm text-gray-500 md:text-base">
+                  选择能力，描述需求，等待任务完成并生成可验证的量化看板
+                </p>
+              </div>
+
+              {uploadedImages.length > 0 && (
+                <div className="mb-3 flex w-full max-w-4xl flex-wrap gap-2">
+                  {uploadedImages.map((image, index) => (
+                    <div key={image.id} className="group relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={image.url}
+                        alt={image.name}
+                        className="h-16 w-16 rounded-lg border border-gray-200 object-cover"
+                      />
+                      <span className="absolute bottom-1 left-1 rounded bg-black/55 px-1 text-[10px] text-white">
+                        图 {index + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeImage(image.id)}
+                        className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                        title="移除图片"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  handleSubmit();
+                }}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                className={`relative w-full max-w-4xl rounded-lg border bg-white shadow-[0_18px_45px_rgba(15,23,42,0.12)] transition-colors ${
+                  isDragOver ? 'border-red-400 bg-red-50' : 'border-gray-200'
+                }`}
+              >
                 <textarea
                   value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="让 QuantPilot 创建一个量化策略看板，例如..."
+                  onChange={(event) => setPrompt(event.target.value)}
+                  placeholder="请输入任务，例如：贵州茅台最近财务怎么样？生成 K 线、成交量和财务看板"
                   disabled={isCreatingProject}
-                  className="flex w-full rounded-md px-2 py-2 placeholder:text-gray-400 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 resize-none text-[16px] leading-snug md:text-base focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent focus:bg-transparent flex-1 text-gray-900 overflow-y-auto"
-                  style={{ height: '120px' }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      if (e.metaKey || e.ctrlKey) {
-                        e.preventDefault();
+                  className="min-h-[128px] w-full resize-none rounded-lg bg-transparent px-5 py-4 text-[16px] leading-6 text-gray-900 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      if (event.metaKey || event.ctrlKey) {
+                        event.preventDefault();
                         handleSubmit();
-                      } else if (!e.shiftKey) {
-                        e.preventDefault();
+                      } else if (!event.shiftKey) {
+                        event.preventDefault();
                         handleSubmit();
                       }
                     }
                   }}
                 />
-              </div>
-              
-              {/* Drag overlay */}
-              {isDragOver && (
-                <div className="absolute inset-0 bg-[#DE7356]/10 rounded-[28px] flex items-center justify-center z-10 border-2 border-dashed border-[#DE7356]">
-                  <div className="text-center">
-                    <div className="text-3xl mb-3">📸</div>
-                    <div className="text-lg font-semibold text-[#DE7356] mb-2">
-                      将图片拖到这里
-                    </div>
-                    <div className="text-sm text-[#DE7356] ">
-                      支持：JPG、PNG、GIF、WEBP
+
+                {isDragOver && (
+                  <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-red-400 bg-red-50/90">
+                    <div className="text-center text-red-600">
+                      <ImageIcon className="mx-auto mb-2 h-6 w-6" />
+                      <div className="text-sm font-semibold">将图片拖到这里</div>
+                      <div className="mt-1 text-xs">支持 JPG、PNG、GIF、WEBP</div>
                     </div>
                   </div>
-                </div>
-              )}
-              
-              <div className="flex gap-1 flex-wrap items-center">
-                {/* Image Upload Button */}
-                <div className="flex items-center gap-2">
-                  <label 
-                    className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+
+                <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-3 py-3">
+                  <label
+                    className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
                     title="上传图片"
                   >
                     <ImageIcon className="h-4 w-4" />
@@ -1061,224 +1262,127 @@ export default function HomePage() {
                       className="hidden"
                     />
                   </label>
-                </div>
-                {/* Agent Selector */}
-                <div className="relative z-[200]" ref={assistantDropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAssistantDropdown(!showAssistantDropdown);
-                      setShowModelDropdown(false);
-                    }}
-                    className="justify-center whitespace-nowrap text-sm font-medium transition-colors duration-100 ease-in-out focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 border border-gray-200/50 bg-transparent shadow-sm hover:bg-gray-50 hover:border-gray-300/50 px-3 py-2 flex h-8 items-center gap-1 rounded-full text-gray-700 hover:text-gray-900 focus-visible:ring-0"
-                  >
-                    <div className="w-4 h-4 rounded overflow-hidden">
-                      <Image
-                        src={selectedAssistantOption?.icon ?? '/claude.png'}
-                        alt={selectedAssistantOption?.name ?? 'Claude Code'}
-                        width={16}
-                        height={16}
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <span className="hidden md:flex text-sm font-medium">
-                      {selectedAssistantOption?.name ?? 'Claude Code'}
-                    </span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 -960 960 960" className="shrink-0 h-3 w-3 rotate-90" fill="currentColor">
-                      <path d="M530-481 353-658q-9-9-8.5-21t9.5-21 21.5-9 21.5 9l198 198q5 5 7 10t2 11-2 11-7 10L396-261q-9 9-21 8.5t-21-9.5-9-21.5 9-21.5z"/>
-                    </svg>
-                  </button>
-                  
-                  {showAssistantDropdown && (
-                    <div className="absolute top-full mt-1 left-0 z-[300] min-w-full whitespace-nowrap rounded-2xl border border-gray-200 bg-white backdrop-blur-xl shadow-lg">
-                      {ASSISTANT_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          onClick={() => handleAssistantChange(option.id)}
-                          disabled={!cliStatus[option.id]?.installed}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-left first:rounded-t-2xl last:rounded-b-2xl transition-colors ${
-                            !cliStatus[option.id]?.installed
-                              ? 'opacity-50 cursor-not-allowed text-gray-400 '
-                              : selectedAssistant === option.id 
-                              ? 'bg-gray-100 text-black font-semibold' 
-                              : 'text-gray-800 hover:text-black hover:bg-gray-100 '
-                          }`}
-                        >
-                          <div className="w-4 h-4 rounded overflow-hidden">
-                            <Image
-                              src={option.icon ?? '/claude.png'}
-                              alt={option.name}
-                              width={16}
-                              height={16}
-                              className="w-full h-full object-contain"
-                            />
-                          </div>
-                          <span className="text-sm font-medium">{option.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Quant Capability Selector */}
-                <div className="flex items-center gap-1 rounded-full border border-gray-200/50 bg-transparent p-0.5 shadow-sm">
-                  {QUANT_CAPABILITIES.map((capability) => (
-                    <button
-                      key={capability.id}
-                      type="button"
-                      onClick={() => setSelectedCapability(capability.id)}
-                      title={capability.description}
-                      className={`h-7 rounded-full px-3 text-sm font-medium transition-colors ${
-                        selectedCapability === capability.id
-                          ? 'bg-gray-900 text-white'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
-                    >
-                      {capability.shortName}
-                    </button>
-                  ))}
-                </div>
 
-                {/* Model Selector */}
-                <div className="relative z-[200]" ref={modelDropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowModelDropdown((current) => !current);
-                      setShowAssistantDropdown(false);
-                    }}
-                    className="justify-center whitespace-nowrap text-sm font-medium transition-colors duration-100 ease-in-out focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 border border-gray-200/50 bg-transparent shadow-sm hover:bg-gray-50 hover:border-gray-300/50 px-3 py-2 flex h-8 items-center gap-1 rounded-full text-gray-700 hover:text-gray-900 focus-visible:ring-0 min-w-[140px]"
-                  >
-                    <span className="text-sm font-medium whitespace-nowrap">
-                      {availableModels.find(m => m.id === selectedModel)?.name ?? getModelDisplayName(selectedAssistant, selectedModel)}
-                    </span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 -960 960 960" className="shrink-0 h-3 w-3 rotate-90 ml-auto" fill="currentColor">
-                      <path d="M530-481 353-658q-9-9-8.5-21t9.5-21 21.5-9 21.5 9l198 198q5 5 7 10t2 11-2 11-7 10L396-261q-9 9-21 8.5t-21-9.5-9-21.5 9-21.5z"/>
-                    </svg>
-                  </button>
-                  
-                  {showModelDropdown && (
-                    <div className="absolute top-full mt-1 left-0 z-[300] min-w-full max-h-[300px] overflow-y-auto rounded-2xl border border-gray-200 bg-white backdrop-blur-xl shadow-lg">
-                      {availableModels.map((model) => (
+                  <div className="relative z-[200]" ref={assistantDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAssistantDropdown(!showAssistantDropdown);
+                        setShowModelDropdown(false);
+                      }}
+                      className="flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 hover:bg-gray-50 hover:text-gray-950"
+                    >
+                      <div className="h-4 w-4 overflow-hidden rounded">
+                        <Image
+                          src={selectedAssistantOption?.icon ?? '/claude.png'}
+                          alt={selectedAssistantOption?.name ?? 'Claude Code'}
+                          width={16}
+                          height={16}
+                          className="h-full w-full object-contain"
+                        />
+                      </div>
+                      <span>{selectedAssistantName}</span>
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                    </button>
+
+                    {showAssistantDropdown && (
+                      <div className="absolute left-0 top-full z-[300] mt-2 min-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                        {ASSISTANT_OPTIONS.map((option) => (
                           <button
-                            key={model.id}
-                            onClick={() => handleModelChange(model.id)}
-                            className={`w-full px-3 py-2 text-left first:rounded-t-2xl last:rounded-b-2xl transition-colors ${
-                              selectedModel === model.id 
-                                ? 'bg-gray-100 text-black font-semibold' 
-                                : 'text-gray-800 hover:text-black hover:bg-gray-100 '
+                            key={option.id}
+                            type="button"
+                            onClick={() => handleAssistantChange(option.id)}
+                            disabled={!cliStatus[option.id]?.installed}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                              !cliStatus[option.id]?.installed
+                                ? 'cursor-not-allowed text-gray-400 opacity-60'
+                                : selectedAssistant === option.id
+                                ? 'bg-red-50 font-semibold text-red-600'
+                                : 'text-gray-700 hover:bg-gray-50 hover:text-gray-950'
                             }`}
                           >
-                            <span className="text-sm font-medium">{model.name}</span>
+                            <div className="h-4 w-4 overflow-hidden rounded">
+                              <Image
+                                src={option.icon ?? '/claude.png'}
+                                alt={option.name}
+                                width={16}
+                                height={16}
+                                className="h-full w-full object-contain"
+                              />
+                            </div>
+                            <span className="whitespace-nowrap">{option.name}</span>
                           </button>
                         ))}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Send Button */}
-                <div className="ml-auto flex items-center gap-1">
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="relative z-[200]" ref={modelDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowModelDropdown((current) => !current);
+                        setShowAssistantDropdown(false);
+                      }}
+                      className="flex h-9 min-w-[150px] items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 hover:bg-gray-50 hover:text-gray-950"
+                    >
+                      <span className="truncate">{selectedModelLabel}</span>
+                      <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 text-gray-400" />
+                    </button>
+
+                    {showModelDropdown && (
+                      <div className="absolute left-0 top-full z-[300] mt-2 max-h-[300px] min-w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                        {availableModels.map((model) => (
+                          <button
+                            key={model.id}
+                            type="button"
+                            onClick={() => handleModelChange(model.id)}
+                            className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                              selectedModel === model.id
+                                ? 'bg-red-50 font-semibold text-red-600'
+                                : 'text-gray-700 hover:bg-gray-50 hover:text-gray-950'
+                            }`}
+                          >
+                            {model.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     type="submit"
                     disabled={(!prompt.trim() && uploadedImages.length === 0) || isCreatingProject}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900 text-white transition-opacity duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50 hover:scale-110"
+                    className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg bg-gray-950 text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    title="提交任务"
                   >
                     {isCreatingProject ? (
-                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
                     ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 -960 960 960" className="shrink-0" fill="currentColor">
-                        <path d="M442.39-616.87 309.78-487.26q-11.82 11.83-27.78 11.33t-27.78-12.33q-11.83-11.83-11.83-27.78 0-15.96 11.83-27.79l198.43-199q11.83-11.82 28.35-11.82t28.35 11.82l198.43 199q11.83 11.83 11.83 27.79 0 15.95-11.83 27.78-11.82 11.83-27.78 11.83t-27.78-11.83L521.61-618.87v348.83q0 16.95-11.33 28.28-11.32 11.33-28.28 11.33t-28.28-11.33q-11.33-11.33-11.33-28.28z"/>
-                      </svg>
+                      <ArrowUp className="h-5 w-5" />
                     )}
                   </button>
                 </div>
-              </div>
-            </form>
-            
-            {/* 量化能力目录 */}
-            <div className="mt-8 space-y-4">
-              {QUANT_CAPABILITY_GROUPS.map((group) => {
-                const capabilities = QUANT_CAPABILITIES.filter((capability) => capability.groupId === group.id);
-                return (
-                  <section key={group.id} className="text-left">
-                    <div className="mb-2 flex flex-wrap items-end justify-between gap-2 px-1">
-                      <div>
-                        <h2 className="text-sm font-semibold text-gray-900">{group.name}</h2>
-                        <p className="text-xs text-gray-500">{group.description}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-                      {capabilities.map((capability) => {
-                        const isSelected = selectedCapability === capability.id;
-                        const isReady = capability.status === 'ready';
-                        return (
-                          <button
-                            key={capability.id}
-                            type="button"
-                            onClick={() => {
-                              setPrompt(CAPABILITY_PROMPTS[capability.id] ?? capability.inputHint);
-                              setSelectedCapability(capability.id);
-                            }}
-                            disabled={isCreatingProject}
-                            className={`min-h-[118px] rounded-lg border p-3 text-left shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
-                              isSelected
-                                ? 'border-gray-900 bg-gray-900 text-white shadow-md'
-                                : 'border-gray-200 bg-white text-gray-800 hover:border-[#DE7356]/40 hover:bg-[#FFF8F5]'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="text-sm font-semibold leading-5">{capability.name}</div>
-                              <span
-                                className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                  isSelected
-                                    ? 'bg-white/15 text-white'
-                                    : isReady
-                                    ? 'bg-emerald-50 text-emerald-700'
-                                    : 'bg-amber-50 text-amber-700'
-                                }`}
-                              >
-                                {isReady ? '已接入' : '规划中'}
-                              </span>
-                            </div>
-                            <p className={`mt-2 line-clamp-2 text-xs leading-5 ${isSelected ? 'text-gray-200' : 'text-gray-500'}`}>
-                              {capability.description}
-                            </p>
-                            <div className="mt-3 flex flex-wrap gap-1">
-                              {capability.tags.slice(0, 3).map((tag) => (
-                                <span
-                                  key={tag}
-                                  className={`rounded-full px-2 py-0.5 text-[11px] ${
-                                    isSelected
-                                      ? 'bg-white/10 text-gray-100'
-                                      : 'bg-gray-100 text-gray-500'
-                                  }`}
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
+              </form>
 
-      {/* Global Settings Modal */}
+            </div>
+          </main>
+        </div>
+
+
+      {/* 任务记录抽屉 */}
+      {renderTaskHistoryDrawer()}
+
+      {/* 全局设置弹窗 */}
       <GlobalSettings
         isOpen={showGlobalSettings}
         onClose={() => setShowGlobalSettings(false)}
       />
 
-      {/* Delete Project Modal */}
+      {/* 删除任务弹窗 */}
       {deleteModal.isOpen && deleteModal.project && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <motion.div
@@ -1302,14 +1406,14 @@ export default function HomePage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 ">Delete Project</h3>
-                <p className="text-sm text-gray-500 ">This action cannot be undone</p>
+                <h3 className="text-lg font-semibold text-gray-900 ">删除任务</h3>
+                <p className="text-sm text-gray-500 ">该操作无法撤销</p>
               </div>
             </div>
             
             <p className="text-gray-700 mb-6">
-              Are you sure you want to delete <strong>&quot;{deleteModal.project.name}&quot;</strong>? 
-              This will permanently delete all project files and chat history.
+              确定要删除 <strong>&quot;{deleteModal.project.name}&quot;</strong> 吗？
+              该任务的项目文件与对话记录将被永久删除。
             </p>
             
             <div className="flex gap-3 justify-end">
@@ -1318,7 +1422,7 @@ export default function HomePage() {
                 disabled={isDeleting}
                 className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
               >
-                Cancel
+                取消
               </button>
               <button
                 onClick={deleteProject}
@@ -1331,10 +1435,10 @@ export default function HomePage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Deleting...
+                    删除中...
                   </>
                 ) : (
-                  'Delete Project'
+                  '删除任务'
                 )}
               </button>
             </div>
@@ -1342,7 +1446,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Toast Messages */}
+      {/* 轻提示 */}
       {toast && (
         <div className="fixed bottom-4 right-4 z-50">
           <motion.div
