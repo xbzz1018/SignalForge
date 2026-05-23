@@ -260,6 +260,26 @@ Claude Code 使用的项目级 skills 统一放在 `.claude/skills/`，生成项
 
 量化分析任务的推荐链路是：先解析标的，再获取所需数据，最后调用可视化 skill 生成页面。涉及 A 股走势时，可视化应优先包含 K 线、成交量、均线、涨跌幅、关键指标和数据表，并遵循 A 股红涨绿跌的颜色习惯。
 
+## 自动验证链路
+
+Agent 执行完成后，QuantPilot 会自动对生成项目执行一轮验收，并把摘要写回聊天记录。验证报告保存在生成项目的 `.quantpilot/validation.json`，同时会在 `.quantpilot/events.jsonl` 记录 `validation_started` 和 `validation_completed` 事件。
+
+当前验证项：
+
+- `npm run build`，并在验证时固定 `NODE_ENV=production`。
+- 生成项目预览首页返回 HTTP 200。
+- `data_file/final/dashboard-data.json` 或 `data_file/final/*.json` 存在，且包含真实行情、K 线、财务或来源字段。
+- `app/page.tsx` 已绑定最终数据文件或同源 `/api/market` 接口，没有停留在 Next.js 默认页。
+- 页面中存在金融图表实现，例如 SVG/canvas/K 线/成交量/财务趋势。
+- 生成项目提供 `/api/market/**` 同源代理，并能访问本地 `8000` 后端实时行情。
+
+也可以手动触发或读取某个项目的验证结果：
+
+```bash
+curl -X POST "http://localhost:3000/api/projects/<project_id>/quant/validation"
+curl "http://localhost:3000/api/projects/<project_id>/quant/validation"
+```
+
 ## 模型管理
 
 前端模型选项来自 `lib/constants/cliModels.ts` 及各 CLI 的模型定义文件。Claude Code 当前默认映射到 `MiniMax-M2.7`，并保留 Anthropic-compatible 的外部模型接入能力。

@@ -258,6 +258,36 @@ function isCommandNotFound(error: unknown): boolean {
   return err.code === 'ENOENT';
 }
 
+function terminateProcessTree(child: ChildProcess | null): void {
+  if (!child?.pid) {
+    return;
+  }
+
+  try {
+    if (process.platform !== 'win32') {
+      process.kill(-child.pid, 'SIGTERM');
+      const forceKill = setTimeout(() => {
+        try {
+          process.kill(-child.pid!, 'SIGKILL');
+        } catch {
+          // Process group already exited.
+        }
+      }, 5_000);
+      forceKill.unref?.();
+      return;
+    }
+
+    child.kill('SIGTERM');
+    return;
+  } catch {
+    try {
+      child.kill('SIGTERM');
+    } catch {
+      // Already exited.
+    }
+  }
+}
+
 async function detectPackageManager(projectPath: string): Promise<PackageManagerId> {
   const packageJson = await readPackageJson(projectPath);
   const fromField = parsePackageManagerField(packageJson?.packageManager);
@@ -872,6 +902,7 @@ class PreviewManager {
       {
         cwd: projectPath,
         env,
+        detached: process.platform !== 'win32',
         shell: process.platform === 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
       }
@@ -968,7 +999,7 @@ class PreviewManager {
     }
 
     try {
-      processInfo.process?.kill('SIGTERM');
+      terminateProcessTree(processInfo.process);
     } catch (error) {
       console.error('[PreviewManager] Failed to stop preview process:', error);
     }

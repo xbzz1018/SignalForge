@@ -60,6 +60,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     expectedArtifacts: [
       '.quantpilot/run_plan.json',
       '.quantpilot/events.jsonl',
+      '.quantpilot/validation.json',
       'data_file/final/dashboard-data.json',
       'app/page.tsx',
     ],
@@ -98,6 +99,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     expectedArtifacts: [
       '.quantpilot/run_plan.json',
       '.quantpilot/events.jsonl',
+      '.quantpilot/validation.json',
       'data_file/final/dashboard-data.json',
       'app/page.tsx',
     ],
@@ -138,6 +140,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     expectedArtifacts: [
       '.quantpilot/run_plan.json',
       '.quantpilot/events.jsonl',
+      '.quantpilot/validation.json',
       'data_file/final/dashboard-data.json',
       'app/page.tsx',
     ],

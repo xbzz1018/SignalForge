@@ -100,6 +100,7 @@ QuantPilot 执行约束：
 - 如果用户要求可视化或看板，必须实际修改 app/page.tsx，不能只输出文字说明。
 - A 股趋势类页面必须优先包含 K 线/量价/均线/风险指标；历史接口失败时也要生成 K 线面板、真实错误和重试入口。
 - 最终数据优先写入 data_file/final/dashboard-data.json，页面应读取真实数据或同源 API，不得硬编码样例行情。
+- Agent 执行完成后平台会自动验证 Next.js build、预览 HTTP 200、data_file/final 数据文件、页面图表和 /api/market 代理；请按这些验收项完成产物。
 - 不要留下 Next.js 默认页；最终必须生成实际可访问的量化分析界面。`;
 }
 
@@ -123,6 +124,7 @@ export function buildQuantPilotSystemPrompt(): string {
 - A-share visualization dashboards must include real chart panels; for trend tasks include candlestick/OHLC or an explicit K-line error panel, volume, moving averages, and risk metrics
 - Prefer same-origin API routes in generated projects to proxy http://127.0.0.1:8000 instead of direct browser calls
 - Do not hard-code stock quote data; fetch it before analysis and keep refresh capability in the generated page
+- Before finishing a quantitative dashboard, ensure data_file/final/dashboard-data.json exists, app/page.tsx reads real data or same-origin APIs, and /api/market/** proxies the local market backend
 - Include loading, error, and empty states for market data
 - Display source, quote_time, and fetched_at when showing live stock data
 - Use A-share color convention: red for gains and green for losses

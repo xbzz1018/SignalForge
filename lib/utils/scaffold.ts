@@ -25,7 +25,7 @@ export async function scaffoldBasicNextApp(
     version: '0.1.0',
     scripts: {
       dev: 'node scripts/run-dev.js',
-      build: 'next build',
+      build: 'next build --webpack',
       start: 'next start',
       lint: 'next lint',
     },

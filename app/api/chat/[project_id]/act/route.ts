@@ -29,6 +29,7 @@ import {
   markUserRequestAsProcessing,
 } from '@/lib/services/user-requests';
 import { writeInitialRunPlan } from '@/lib/quant/workspace';
+import { validateQuantProject } from '@/lib/quant/validation';
 
 interface RouteContext {
   params: Promise<{ project_id: string }>;
@@ -67,6 +68,29 @@ function resolveProjectRoot(projectId: string, repoPath?: string | null): string
     return path.isAbsolute(repoPath) ? repoPath : path.resolve(process.cwd(), repoPath);
   }
   return path.join(PROJECTS_DIR_ABSOLUTE, projectId);
+}
+
+function runValidationAfterExecution(params: {
+  execution: Promise<void>;
+  projectId: string;
+  projectPath: string;
+  requestId: string;
+  conversationId?: string | null;
+  cliSource?: string | null;
+}) {
+  params.execution
+    .then(() =>
+      validateQuantProject({
+        projectId: params.projectId,
+        projectPath: params.projectPath,
+        requestId: params.requestId,
+        conversationId: params.conversationId,
+        cliSource: params.cliSource,
+      })
+    )
+    .catch((error) => {
+      console.error('[API] Agent execution or automatic validation failed:', error);
+    });
 }
 
 async function mirrorAssetToPublic(
@@ -425,14 +449,20 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           ? initializeGLMProject
           : initializeClaudeProject;
 
-      executor(
+      const execution = executor(
         project_id,
         projectPath,
         finalInstruction,
         selectedModel,
+        requestId
+      );
+      runValidationAfterExecution({
+        execution,
+        projectId: project_id,
+        projectPath,
         requestId,
-      ).catch((error) => {
-        console.error('[API] Failed to initialize project:', error);
+        conversationId,
+        cliSource: cliPreference,
       });
     } else {
       const executor =
@@ -453,15 +483,21 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           ? project.activeCursorSessionId || undefined
           : undefined;
 
-      executor(
+      const execution = executor(
         project_id,
         projectPath,
         finalInstruction,
         selectedModel,
         sessionId,
+        requestId
+      );
+      runValidationAfterExecution({
+        execution,
+        projectId: project_id,
+        projectPath,
         requestId,
-      ).catch((error) => {
-        console.error('[API] Failed to execute AI:', error);
+        conversationId,
+        cliSource: cliPreference,
       });
     }
 
