@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Brain, SendHorizontal, MessageSquare, Image as ImageIcon, Wrench } from 'lucide-react';
+import { SendHorizontal, MessageSquare, Image as ImageIcon, Wrench } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
 
@@ -37,8 +37,6 @@ interface ChatInputProps {
   projectId?: string;
   preferredCli?: string;
   selectedModel?: string;
-  thinkingMode?: boolean;
-  onThinkingModeChange?: (enabled: boolean) => void;
   modelOptions?: ModelPickerOption[];
   onModelChange?: (option: ModelPickerOption) => void;
   modelChangeDisabled?: boolean;
@@ -57,8 +55,6 @@ export default function ChatInput({
   projectId,
   preferredCli = 'claude',
   selectedModel = '',
-  thinkingMode = true,
-  onThinkingModeChange,
   modelOptions = [],
   onModelChange,
   modelChangeDisabled = false,
@@ -76,23 +72,6 @@ export default function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submissionLockRef = useRef(false);
   const supportsImageUpload = preferredCli !== 'cursor' && preferredCli !== 'qwen' && preferredCli !== 'glm';
-
-  // Log CLI compatibility details
-  console.log('🔧 CLI Compatibility Check:', {
-    preferredCli,
-    supportsImageUpload,
-    projectId: projectId ? 'valid' : 'missing',
-    uploadButtonAvailable: supportsImageUpload && !!projectId
-  });
-
-  // Inform the user about the current state
-  if (supportsImageUpload && projectId) {
-    console.log('✅ Image upload is ready! Click the upload button or drag in a file.');
-  } else if (!supportsImageUpload) {
-    console.log('❌ The current CLI does not support image uploads. Please switch to Claude CLI.');
-  } else {
-    console.log('❌ Please select a project.');
-  }
 
   const modelOptionsForCli = useMemo(
     () => modelOptions.filter(option => option.cli === preferredCli),
@@ -408,7 +387,7 @@ export default function ChatInput({
         : 'border-gray-200'
     }`}
     >
-      <div className="p-4 space-y-3">
+      <div className="p-3">
         {/* 拖拽上传遮罩 */}
         {isDragOver && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-blue-50 bg-opacity-95 rounded-2xl z-10 pointer-events-none">
@@ -422,115 +401,17 @@ export default function ChatInput({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            {projectId && (
-              (!supportsImageUpload) ? (
-                <div
-                  className="flex items-center justify-center w-8 h-8 text-gray-300 cursor-not-allowed opacity-50 rounded-full"
-                  title={
-                    preferredCli === 'qwen'
-                      ? 'Qwen Coder 暂不支持图片输入，请使用 Claude Code。'
-                      : preferredCli === 'cursor'
-                      ? 'Cursor CLI 暂不支持图片输入，请使用 Claude Code。'
-                      : 'GLM CLI 仅支持文本输入，请使用 Claude Code。'
-                  }
-                >
-                  <ImageIcon className="h-4 w-4" />
-                </div>
-              ) : (
-                <div
-                  className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="上传图片"
-                  onClick={() => {
-                    console.log('📸 Upload button clicked:', {
-                      projectId,
-                      supportsImageUpload,
-                      isUploading,
-                      disabled
-                    });
-                    if (fileInputRef.current) {
-                      console.log('📸 Triggering file input click');
-                      fileInputRef.current.click();
-                    } else {
-                      console.error('📸 fileInputRef is null');
-                    }
-                  }}
-                >
-                  <ImageIcon className="h-4 w-4" />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageUpload}
-                    disabled={isUploading || disabled}
-                    className="hidden"
-                  />
-                </div>
-              )
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex flex-col text-[11px] text-gray-500 ">
-              <span>助手</span>
-              <select
-                value={preferredCli}
-                onChange={(e) => {
-                  onCliChange?.(e.target.value);
-                  requestAnimationFrame(() => textareaRef.current?.focus());
-                }}
-                disabled={cliChangeDisabled || !onCliChange}
-                className="mt-1 w-32 rounded-md border border-gray-300 bg-white text-gray-700 text-xs py-1 px-2 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-60"
-              >
-                {cliOptions.length === 0 && <option value={preferredCli}>{preferredCli}</option>}
-                {cliOptions.map(option => (
-                  <option key={option.id} value={option.id} disabled={!option.available}>
-                    {option.name}{!option.available ? '（不可用）' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col text-[11px] text-gray-500 ">
-              <span>模型</span>
-              <select
-                value={selectedModelValue}
-                onChange={(e) => {
-                  const option = modelOptionsForCli.find(opt => opt.id === e.target.value);
-                  if (option) {
-                    onModelChange?.(option);
-                    requestAnimationFrame(() => textareaRef.current?.focus());
-                  }
-                }}
-                disabled={modelChangeDisabled || !onModelChange || modelOptionsForCli.length === 0}
-                className="mt-1 w-40 rounded-md border border-gray-300 bg-white text-gray-700 text-xs py-1 px-2 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-60"
-              >
-                {modelOptionsForCli.length === 0 && <option value="">暂无可用模型</option>}
-                {modelOptionsForCli.length > 0 && selectedModelValue === '' && (
-                  <option value="" disabled>选择模型</option>
-                )}
-                {modelOptionsForCli.map(option => (
-                  <option key={option.id} value={option.id} disabled={!option.available}>
-                    {option.name}{!option.available ? '（不可用）' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
         <div className="relative">
           <textarea
             ref={textareaRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full ring-offset-background placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 resize-none text-[16px] leading-snug md:text-base bg-transparent focus:bg-transparent rounded-md p-2 text-gray-900 border border-gray-200 "
+            className="w-full ring-offset-background placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 resize-none text-[15px] leading-6 md:text-sm bg-transparent focus:bg-transparent rounded-md px-2 py-2 text-gray-900 border-0"
             id="chatinput"
             placeholder={placeholder}
             disabled={disabled || isUploading || isSubmitting}
-            style={{ minHeight: '60px' }}
+            style={{ minHeight: '84px' }}
           />
           {isDragOver && projectId && supportsImageUpload && (
             <div className="pointer-events-none absolute inset-0 bg-blue-50/90 rounded-md flex items-center justify-center z-10 border-2 border-dashed border-blue-500">
@@ -547,8 +428,87 @@ export default function ChatInput({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center bg-gray-100 rounded-full p-0.5">
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            {projectId && (
+              (!supportsImageUpload) ? (
+                <div
+                  className="flex h-8 w-8 items-center justify-center text-gray-300 cursor-not-allowed opacity-50 rounded-full"
+                  title={
+                    preferredCli === 'qwen'
+                      ? 'Qwen Coder 暂不支持图片输入，请使用 Claude Code。'
+                      : preferredCli === 'cursor'
+                      ? 'Cursor CLI 暂不支持图片输入，请使用 Claude Code。'
+                      : 'GLM CLI 仅支持文本输入，请使用 Claude Code。'
+                  }
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="flex h-8 w-8 items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="上传图片"
+                  onClick={() => {
+                    if (fileInputRef.current) {
+                      fileInputRef.current.click();
+                    }
+                  }}
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageUpload}
+                    disabled={isUploading || disabled}
+                    className="hidden"
+                  />
+                </button>
+              )
+            )}
+            <select
+              value={preferredCli}
+              onChange={(e) => {
+                onCliChange?.(e.target.value);
+                requestAnimationFrame(() => textareaRef.current?.focus());
+              }}
+              disabled={cliChangeDisabled || !onCliChange}
+              className="h-8 min-w-[118px] rounded-md border border-transparent bg-transparent px-2 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-200 disabled:opacity-60"
+              aria-label="选择助手"
+            >
+              {cliOptions.length === 0 && <option value={preferredCli}>{preferredCli}</option>}
+              {cliOptions.map(option => (
+                <option key={option.id} value={option.id} disabled={!option.available}>
+                  {option.name}{!option.available ? '（不可用）' : ''}
+                </option>
+              ))}
+            </select>
+            <select
+              value={selectedModelValue}
+              onChange={(e) => {
+                const option = modelOptionsForCli.find(opt => opt.id === e.target.value);
+                if (option) {
+                  onModelChange?.(option);
+                  requestAnimationFrame(() => textareaRef.current?.focus());
+                }
+              }}
+              disabled={modelChangeDisabled || !onModelChange || modelOptionsForCli.length === 0}
+              className="h-8 min-w-[136px] rounded-md border border-transparent bg-transparent px-2 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-200 disabled:opacity-60"
+              aria-label="选择模型"
+            >
+              {modelOptionsForCli.length === 0 && <option value="">暂无可用模型</option>}
+              {modelOptionsForCli.length > 0 && selectedModelValue === '' && (
+                <option value="" disabled>选择模型</option>
+              )}
+              {modelOptionsForCli.map(option => (
+                <option key={option.id} value={option.id} disabled={!option.available}>
+                  {option.name}{!option.available ? '（不可用）' : ''}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center rounded-full border border-gray-200 bg-white p-0.5">
             <button
               type="button"
               onClick={() => onModeChange?.('act')}
@@ -575,6 +535,7 @@ export default function ChatInput({
               <MessageSquare className="h-3.5 w-3.5" />
               <span>Chat</span>
             </button>
+            </div>
           </div>
 
           <button
@@ -587,32 +548,6 @@ export default function ChatInput({
           </button>
         </div>
 
-        {onThinkingModeChange && (
-          <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-            <div className="flex min-w-0 items-center gap-2 text-xs text-gray-600">
-              <Brain className="h-4 w-4 shrink-0 text-gray-500" />
-              <div className="min-w-0">
-                <div className="font-medium text-gray-700">过程叙述</div>
-                <div className="truncate text-[11px] text-gray-500">开启后要求模型输出可见的执行过程摘要</div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onThinkingModeChange(!thinkingMode)}
-              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 focus-visible:ring-offset-2 ${
-                thinkingMode ? 'bg-gray-900' : 'bg-gray-300'
-              }`}
-              aria-pressed={thinkingMode}
-              title={thinkingMode ? '关闭过程叙述' : '开启过程叙述'}
-            >
-              <span
-                className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                  thinkingMode ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Uploaded Images Preview */}

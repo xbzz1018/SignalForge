@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo, type ChangeEvent, type KeyboardEvent, type UIEvent } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionH3, MotionP, MotionButton } from '@/lib/motion';
-import { useRouter, useSearchParams, useParams } from 'next/navigation';
+import { useRouter, useSearchParams, useParams, usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { FaCode, FaDesktop, FaMobileAlt, FaPlay, FaStop, FaSync, FaCog, FaRocket, FaFolder, FaFolderOpen, FaFile, FaFileCode, FaCss3Alt, FaHtml5, FaJs, FaReact, FaPython, FaDocker, FaGitAlt, FaMarkdown, FaDatabase, FaPhp, FaJava, FaRust, FaVuejs, FaLock, FaHome, FaChevronUp, FaChevronRight, FaChevronDown, FaArrowLeft, FaArrowRight, FaRedo } from 'react-icons/fa';
 import { SiTypescript, SiGo, SiRuby, SiSvelte, SiJson, SiYaml, SiCplusplus } from 'react-icons/si';
@@ -42,7 +42,6 @@ const VISIBLE_PROCESS_INSTRUCTIONS = `
 请默认使用中文输出可见的执行过程摘要。不要暴露隐藏推理链，只写用户可验证的任务拆解、数据路径、工具动作和执行状态。
 
 请在正式执行或回答前，先用如下格式输出：
-<thinking>
 ### 任务拆解
 | 维度 | 初步识别 | 状态 |
 | --- | --- | --- |
@@ -61,12 +60,18 @@ const VISIBLE_PROCESS_INSTRUCTIONS = `
 - 已明确：
 - 待确认：
 - 下一步：
-</thinking>
 
-后续执行过程中，如果调用 skill、读取文件、请求接口、生成数据、修改页面或验证结果，请继续用简短中文说明可见进展；需要表格时使用标准 Markdown 表格。`;
+后续执行过程中，请把工具调用组织成“阶段化执行日志”，不要只连续输出工具名：
+- 每次调用 skill 前先写一句：现在使用 \`skill-name\` 做什么、为什么需要它。
+- 每组 Bash/Read/Write/Edit 前后都用 1-2 句中文说明：本步目标、输入数据、得到的结果或下一步。
+- 数据请求完成后说明接口、标的、时间范围、记录数、关键字段和数据质量；不要只展示命令。
+- 写入文件后说明文件用途，例如 run_plan、sources、data_quality、dashboard-data、页面代码分别解决什么问题。
+- 验证阶段必须逐项说明 build、HTTP 200、数据文件、图表存在性和 /api/market 代理检查结果。
+- Todo List 要持续更新，已完成项用 ✅，失败或待处理项用 ❌/⏳ 并写明原因。
+- 最终可视化页面和数据都准备完成后，再呈现或说明预览结果。`;
 
 const appendVisibleProcessInstructions = (message: string) => {
-  if (message.includes('<thinking>') || message.includes('可见的执行过程摘要')) {
+  if (message.includes('可见的执行过程摘要')) {
     return message;
   }
   return `${message}${VISIBLE_PROCESS_INSTRUCTIONS}`;
@@ -225,7 +230,13 @@ function TreeView({ entries, selectedFile, expandedFolders, folderContents, onTo
 
 export default function ChatPage() {
   const params = useParams<{ project_id: string }>();
-  const projectId = params?.project_id ?? '';
+  const pathname = usePathname();
+  const routeProjectId = params?.project_id;
+  const projectIdFromParams = Array.isArray(routeProjectId) ? routeProjectId[0] : routeProjectId;
+  const projectId =
+    projectIdFromParams ??
+    pathname?.split('/').filter(Boolean).find((segment) => segment.startsWith('project-')) ??
+    '';
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -295,7 +306,7 @@ export default function ChatPage() {
   const [deploymentStatus, setDeploymentStatus] = useState<'idle' | 'deploying' | 'ready' | 'error'>('idle');
   const deployPollRef = useRef<NodeJS.Timeout | null>(null);
   const [isStartingPreview, setIsStartingPreview] = useState(false);
-  const [previewInitializationMessage, setPreviewInitializationMessage] = useState('Starting development server...');
+  const [previewInitializationMessage, setPreviewInitializationMessage] = useState('正在启动预览服务...');
   const [cliStatuses, setCliStatuses] = useState<Record<string, CliStatusSnapshot>>({});
   const [conversationId, setConversationId] = useState<string>(() => {
     if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
@@ -306,10 +317,10 @@ export default function ChatPage() {
   const [preferredCli, setPreferredCli] = useState<ActiveCliId>(DEFAULT_ACTIVE_CLI);
   const [selectedModel, setSelectedModel] = useState<string>(getDefaultModelForCli(DEFAULT_ACTIVE_CLI));
   const [usingGlobalDefaults, setUsingGlobalDefaults] = useState<boolean>(true);
-  const [thinkingMode, setThinkingMode] = useState<boolean>(true);
   const [isUpdatingModel, setIsUpdatingModel] = useState<boolean>(false);
   const [currentRoute, setCurrentRoute] = useState<string>('/');
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const shouldShowPreviewFrame = Boolean(previewUrl) && !isStartingPreview;
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
   const lineNumberRef = useRef<HTMLDivElement>(null);
@@ -364,6 +375,7 @@ export default function ChatPage() {
 
       const requestBody = {
         instruction: appendVisibleProcessInstructions(initialPrompt),
+        displayInstruction: initialPrompt.trim(),
         images: [],
         isInitialPrompt: true,
         cliPreference: preferredCli,
@@ -801,31 +813,50 @@ const persistProjectPreferences = useCallback(
   const start = useCallback(async () => {
     try {
       setIsStartingPreview(true);
-      setPreviewInitializationMessage('Starting development server...');
+      setPreviewInitializationMessage('正在启动预览服务...');
       
       // Simulate progress updates
-      setTimeout(() => setPreviewInitializationMessage('Installing dependencies...'), 1000);
-      setTimeout(() => setPreviewInitializationMessage('Building your application...'), 2500);
+      setTimeout(() => setPreviewInitializationMessage('正在检查依赖...'), 1000);
+      setTimeout(() => setPreviewInitializationMessage('正在构建和验证看板...'), 2500);
       
       const r = await fetch(`${API_BASE}/api/projects/${projectId}/preview/start`, { method: 'POST' });
       if (!r.ok) {
-        console.error('Failed to start preview:', r.statusText);
-        setPreviewInitializationMessage('Failed to start preview');
+        let errorMessage = r.statusText || '预览启动失败';
+        try {
+          const payload = await r.json();
+          if (typeof payload?.error === 'string' && payload.error.trim()) {
+            errorMessage = payload.error.trim();
+          }
+        } catch {
+          // 响应体不是 JSON 时使用 HTTP 状态文本。
+        }
+        console.warn('[Preview] start failed:', errorMessage);
+        setPreviewInitializationMessage(`预览启动失败：${errorMessage}`);
         setTimeout(() => setIsStartingPreview(false), 2000);
         return;
       }
       const payload = await r.json();
       const data = payload?.data ?? payload ?? {};
+      const nextPreviewUrl =
+        typeof data.url === 'string'
+          ? data.url
+          : typeof data.previewUrl === 'string'
+          ? data.previewUrl
+          : typeof payload?.url === 'string'
+          ? payload.url
+          : typeof payload?.previewUrl === 'string'
+          ? payload.previewUrl
+          : null;
 
-      setPreviewInitializationMessage('Preview ready!');
+      setPreviewInitializationMessage('预览已就绪');
       setTimeout(() => {
-        setPreviewUrl(typeof data.url === 'string' ? data.url : null);
+        setPreviewUrl(nextPreviewUrl);
         setIsStartingPreview(false);
         setCurrentRoute('/'); // Reset to root route when starting
       }, 1000);
     } catch (error) {
-      console.error('Error starting preview:', error);
-      setPreviewInitializationMessage('An error occurred');
+      console.warn('[Preview] start request failed:', error);
+      setPreviewInitializationMessage('预览启动异常');
       setTimeout(() => setIsStartingPreview(false), 2000);
     }
   }, [projectId]);
@@ -1481,6 +1512,15 @@ const persistProjectPreferences = useCallback(
       const followGlobal = !rawPreferredCli && !rawSelectedModel;
       setUsingGlobalDefaults(followGlobal);
       setProjectDescription(project.description || '');
+      const loadedPreviewUrl =
+        typeof project.previewUrl === 'string'
+          ? project.previewUrl
+          : typeof project.preview_url === 'string'
+          ? project.preview_url
+          : typeof project.url === 'string'
+          ? project.url
+          : null;
+      setPreviewUrl(loadedPreviewUrl);
 
       if (project.initial_prompt) {
         setHasInitialPrompt(true);
@@ -1666,7 +1706,8 @@ const persistProjectPreferences = useCallback(
   };
 
   async function runAct(messageOverride?: string, externalImages?: any[]) {
-    let finalMessage = messageOverride || prompt;
+    const visibleMessage = (messageOverride || prompt).trim();
+    let finalMessage = visibleMessage;
     const imagesToUse = externalImages || uploadedImages;
 
     if (!finalMessage.trim() && imagesToUse.length === 0) {
@@ -1679,13 +1720,11 @@ const persistProjectPreferences = useCallback(
       finalMessage = finalMessage + "\n\nDo not modify code, only answer to the user's request.";
     }
 
-    if (thinkingMode) {
-      finalMessage = appendVisibleProcessInstructions(finalMessage);
-    }
+    finalMessage = appendVisibleProcessInstructions(finalMessage);
 
     // Create request fingerprint for deduplication
     const requestFingerprint = JSON.stringify({
-      message: finalMessage.trim(),
+      message: visibleMessage,
       imageCount: imagesToUse.length,
       cliPreference: preferredCli,
       model: selectedModel,
@@ -1699,6 +1738,7 @@ const persistProjectPreferences = useCallback(
     }
 
     setIsRunning(true);
+    setPreviewInitializationMessage('正在准备数据和可视化看板，验证通过后自动展示...');
     const requestId = crypto.randomUUID();
     let tempUserMessageId: string | null = null;
 
@@ -1804,6 +1844,7 @@ const persistProjectPreferences = useCallback(
 
       const requestBody = {
         instruction: finalMessage,
+        displayInstruction: visibleMessage,
         images: processedImages,
         isInitialPrompt: false,
         cliPreference: preferredCli,
@@ -1833,7 +1874,7 @@ const persistProjectPreferences = useCallback(
           projectId: projectId,
           role: 'user' as const,
           messageType: 'chat' as const,
-          content: finalMessage,
+          content: visibleMessage,
           conversationId: conversationId || null,
           requestId: requestId,
           createdAt: new Date().toISOString(),
@@ -2255,8 +2296,6 @@ const persistProjectPreferences = useCallback(
                 projectId={projectId}
                 preferredCli={preferredCli}
                 selectedModel={selectedModel}
-                thinkingMode={thinkingMode}
-                onThinkingModeChange={setThinkingMode}
                 modelOptions={modelOptions}
                 onModelChange={handleModelChange}
                 modelChangeDisabled={isUpdatingModel}
@@ -2299,7 +2338,7 @@ const persistProjectPreferences = useCallback(
                   </div>
                   
                   {/* Center Controls */}
-                  {showPreview && previewUrl && (
+                  {showPreview && shouldShowPreviewFrame && (
                     <div className="flex items-center gap-3">
                       {/* Route Navigation */}
                       <div className="h-9 flex items-center bg-gray-100 rounded-lg px-3 border border-gray-200 ">
@@ -2386,7 +2425,7 @@ const persistProjectPreferences = useCallback(
                   </button>
                   
                   {/* Stop Button */}
-                  {showPreview && previewUrl && (
+                  {showPreview && shouldShowPreviewFrame && (
                     <button 
                       className="h-9 px-3 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                       onClick={stop}
@@ -2397,7 +2436,7 @@ const persistProjectPreferences = useCallback(
                   )}
                   
                   {/* Publish/Update */}
-                  {showPreview && previewUrl && (
+                  {showPreview && shouldShowPreviewFrame && (
                     <div className="relative">
                     <button
                       className="h-9 flex items-center gap-2 px-3 bg-black text-white rounded-lg text-sm font-medium transition-colors hover:bg-gray-900 border border-black/10 shadow-sm"
@@ -2585,7 +2624,7 @@ const persistProjectPreferences = useCallback(
                     exit={{ opacity: 0 }}
                     style={{ height: '100%' }}
                   >
-                {previewUrl ? (
+                {shouldShowPreviewFrame ? (
                   <div className="relative w-full h-full bg-gray-100 flex items-center justify-center">
                     <div 
                       className={`bg-white ${
@@ -2597,7 +2636,7 @@ const persistProjectPreferences = useCallback(
                       <iframe 
                         ref={iframeRef}
                         className="w-full h-full border-none bg-white "
-                        src={previewUrl}
+                        src={previewUrl ?? undefined}
                         onError={() => {
                           // Show error overlay
                           const overlay = document.getElementById('iframe-error-overlay');
@@ -2708,7 +2747,7 @@ const persistProjectPreferences = useCallback(
                         
                         {/* Content */}
                         <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                          Starting Preview Server
+                          正在准备可视化看板
                         </h3>
                         
                         <div className="flex items-center justify-center gap-1 text-gray-600 ">
@@ -2782,7 +2821,7 @@ const persistProjectPreferences = useCallback(
                                   animation: 'shimmerText 5s linear infinite'
                                 }}
                               >
-                                Building...
+                                正在生成看板...
                               </span>
                               <style>{`
                                 @keyframes shimmerText {
@@ -2846,11 +2885,11 @@ const persistProjectPreferences = useCallback(
                             </div>
                             
                             <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                              Preview Not Running
+                              看板待生成
                             </h3>
                             
                             <p className="text-gray-600 max-w-lg mx-auto">
-                              Start your development server to see live changes
+                              数据获取、页面生成和验证完成后会自动展示最终可视化结果
                             </p>
                           </>
                         )}

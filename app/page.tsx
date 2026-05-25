@@ -1168,7 +1168,7 @@ export default function HomePage() {
 
           <main className="relative flex-1 overflow-y-auto">
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-[radial-gradient(ellipse_at_bottom,rgba(239,68,68,0.16),rgba(255,255,255,0)_68%)]" />
-            <div className="relative mx-auto flex min-h-full w-full max-w-6xl flex-col items-center justify-center px-4 py-8 md:px-8">
+            <div className="relative mx-auto flex min-h-full w-full max-w-6xl -translate-y-6 flex-col items-center justify-center px-4 py-8 md:-translate-y-12 md:px-8 lg:-translate-y-14">
               <div className="mb-6 text-center">
                 <h2 className="text-3xl font-bold tracking-normal text-red-600 md:text-5xl">
                   QuantPilot

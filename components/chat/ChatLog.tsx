@@ -1,10 +1,8 @@
 "use client";
-import React, { useEffect, useState, useRef, ReactElement, useCallback } from 'react';
+import React, { useEffect, useState, useRef, ReactElement, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { Brain } from 'lucide-react';
 import ToolResultItem from './ToolResultItem';
-import ThinkingSection from './ThinkingSection';
 import type { ChatMessage, RealtimeEvent, RealtimeStatus } from '@/types';
 import { toChatMessage, normalizeChatContent } from '@/lib/serializers/client/chat';
 import { toRelativePath } from '@/lib/utils/path';
@@ -152,6 +150,92 @@ const stringifyToolDetail = (value: unknown): string | undefined => {
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const parseJsonRecord = (value: string): Record<string, unknown> | null => {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const extractSkillNameFromValue = (value: unknown): string | undefined => {
+  if (typeof value === 'string') {
+    const jsonRecord = parseJsonRecord(value);
+    if (jsonRecord) {
+      return extractSkillNameFromValue(jsonRecord);
+    }
+    const launchMatch = value.match(/Launching skill:\s*([A-Za-z0-9_.-]+)/i);
+    if (launchMatch?.[1]) {
+      return launchMatch[1];
+    }
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const directKeys = ['skill', 'skillName', 'skill_name', 'skillId', 'skill_id'];
+  for (const key of directKeys) {
+    const candidate = pickFirstString(value[key]);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const nestedKeys = ['args', 'input', 'toolInput', 'tool_input'];
+  for (const key of nestedKeys) {
+    const candidate = extractSkillNameFromValue(value[key]);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
+
+const isGenericSkillToolName = (toolName?: string): boolean => {
+  if (!toolName) {
+    return false;
+  }
+  const normalized = toolName.trim().toLowerCase();
+  return normalized === 'skill' || normalized === 'skills' || normalized === 'tool' || normalized === 'tool_use';
+};
+
+const extractSkillTargetFromInput = (input: unknown): string | undefined => {
+  if (!isRecord(input)) {
+    return undefined;
+  }
+
+  const directArgs = input.args;
+  if (typeof directArgs === 'string' && directArgs.trim()) {
+    return directArgs.trim();
+  }
+
+  if (isRecord(directArgs)) {
+    const query =
+      pickFirstString(directArgs.query) ??
+      pickFirstString(directArgs.symbol) ??
+      pickFirstString(directArgs.name) ??
+      pickFirstString(directArgs.prompt) ??
+      pickFirstString(directArgs.task);
+    if (query) {
+      return query;
+    }
+  }
+
+  return undefined;
+};
+
 const extractPathFromInput = (input: unknown, action?: ToolAction): string | undefined => {
   if (!input || typeof input !== 'object') return undefined;
   const record = input as Record<string, unknown>;
@@ -212,6 +296,27 @@ const extractPathFromInput = (input: unknown, action?: ToolAction): string | und
   return undefined;
 };
 
+const extractPathFromToolText = (value: unknown): string | undefined => {
+  const text = stringifyToolDetail(value);
+  if (!text) return undefined;
+
+  const patterns = [
+    /File created successfully at:\s*([^\n(]+)/i,
+    /The file\s+(.+?)\s+has been updated successfully/i,
+    /File (?:updated|written|created) successfully at:\s*([^\n(]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const candidate = match?.[1]?.trim();
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
+
 const extractToolCallId = (
   metadata?: Record<string, unknown> | null
 ): string | null => {
@@ -222,6 +327,10 @@ const extractToolCallId = (
     metadata.tool_call_id,
     metadata.toolCallID,
     metadata.tool_callID,
+    metadata.toolUseId,
+    metadata.tool_use_id,
+    metadata.toolUseID,
+    metadata.tool_useID,
   ];
 
   for (const candidate of directCandidates) {
@@ -241,6 +350,8 @@ const extractToolCallId = (
       nested.toolCallId,
       nested.tool_call_id,
       nested.tool_callID,
+      nested.toolUseId,
+      nested.tool_use_id,
     ];
     for (const candidate of nestedCandidates) {
       const value = pickFirstString(candidate);
@@ -263,6 +374,7 @@ const deriveToolInfoFromMetadata = (
   command?: string;
   input?: string;
   output?: string;
+  summary?: string;
   status?: 'executing' | 'done';
 } => {
   if (!metadata) {
@@ -270,10 +382,17 @@ const deriveToolInfoFromMetadata = (
   }
 
   const meta = metadata as Record<string, unknown>;
-  const toolName = pickFirstString(meta.toolName) ?? pickFirstString(meta.tool_name);
+  const rawToolName = pickFirstString(meta.toolName) ?? pickFirstString(meta.tool_name);
+  const toolInput = meta.toolInput ?? meta.tool_input ?? meta.input;
+  const skillName =
+    extractSkillNameFromValue(toolInput) ??
+    extractSkillNameFromValue(meta.args) ??
+    extractSkillNameFromValue(meta);
+  const toolName = isGenericSkillToolName(rawToolName) && skillName ? skillName : rawToolName;
   const action =
     normalizeAction(meta.action) ??
     normalizeAction(meta.operation) ??
+    inferActionFromToolName(rawToolName) ??
     inferActionFromToolName(toolName);
 
   const directPath =
@@ -284,7 +403,6 @@ const deriveToolInfoFromMetadata = (
     pickFirstString(meta.path) ??
     pickFirstString(meta.target);
 
-  const toolInput = meta.toolInput ?? meta.tool_input ?? meta.input;
   const toolOutput =
     meta.toolOutput ??
     meta.tool_output ??
@@ -293,7 +411,13 @@ const deriveToolInfoFromMetadata = (
     meta.diff ??
     meta.diffInfo ??
     meta.diff_info;
-  let filePath = directPath ?? extractPathFromInput(toolInput, action);
+  const outputSkillName = extractSkillNameFromValue(toolOutput);
+  const finalToolName = isGenericSkillToolName(toolName) && outputSkillName ? outputSkillName : toolName;
+  let filePath =
+    directPath ??
+    (skillName ? extractSkillTargetFromInput(toolInput) : undefined) ??
+    extractPathFromInput(toolInput, action) ??
+    extractPathFromToolText(toolOutput);
 
   if (!filePath) {
     const command =
@@ -314,15 +438,21 @@ const deriveToolInfoFromMetadata = (
     pickFirstString(meta.diff_info) ??
     pickFirstString(meta.message) ??
     pickFirstString(meta.content);
+  const summary =
+    pickFirstString(meta.summary) ??
+    pickFirstString(meta.description) ??
+    pickFirstString(meta.resultSummary) ??
+    pickFirstString(meta.result_summary);
 
   return {
-    action: action ?? inferActionFromToolName(toolName),
+    action: action ?? inferActionFromToolName(finalToolName),
     filePath,
     cleanContent,
-    toolName,
+    toolName: finalToolName,
     command: pickFirstString(meta.command) ?? (toolInput && typeof toolInput === 'object' ? pickFirstString((toolInput as Record<string, unknown>).command) : undefined),
     input: stringifyToolDetail(toolInput),
     output: stringifyToolDetail(toolOutput),
+    summary,
     status: meta.isTransientToolMessage ? 'executing' : 'done',
   };
 };
@@ -807,6 +937,136 @@ const integrateMessages = (
   return areMessagesEqual(previous, sorted) ? previous : sorted;
 };
 
+const getMessageMetadataRecord = (message: ChatMessage): Record<string, unknown> | null =>
+  message.metadata && typeof message.metadata === 'object'
+    ? (message.metadata as Record<string, unknown>)
+    : null;
+
+const getToolOutputText = (message: ChatMessage): string | undefined => {
+  const metadata = getMessageMetadataRecord(message);
+  if (metadata) {
+    const output =
+      metadata.toolOutput ??
+      metadata.tool_output ??
+      metadata.output ??
+      metadata.result ??
+      metadata.content ??
+      metadata.summary;
+    const serialized = stringifyToolDetail(output);
+    if (serialized) {
+      return serialized;
+    }
+  }
+
+  const content = normalizeChatContent(message.content).trim();
+  return content.length > 0 ? content : undefined;
+};
+
+const mergeToolResultIntoUsage = (
+  usage: ChatMessage,
+  result: ChatMessage
+): ChatMessage => {
+  const usageMetadata = getMessageMetadataRecord(usage) ?? {};
+  const resultMetadata = getMessageMetadataRecord(result) ?? {};
+  const outputText = getToolOutputText(result);
+
+  const mergedMetadata: Record<string, unknown> = {
+    ...usageMetadata,
+    ...Object.fromEntries(
+      Object.entries(resultMetadata).filter(([key, value]) =>
+        value !== undefined &&
+        value !== null &&
+        !['toolInput', 'tool_input', 'input', 'toolName', 'tool_name'].includes(key)
+      )
+    ),
+    toolName: usageMetadata.toolName ?? usageMetadata.tool_name,
+    tool_name: usageMetadata.tool_name ?? usageMetadata.toolName,
+    toolInput: usageMetadata.toolInput ?? usageMetadata.tool_input ?? usageMetadata.input,
+    tool_input: usageMetadata.tool_input ?? usageMetadata.toolInput ?? usageMetadata.input,
+    isTransientToolMessage: false,
+  };
+
+  if (outputText) {
+    mergedMetadata.toolOutput = outputText;
+    mergedMetadata.tool_output = outputText;
+    mergedMetadata.output = outputText;
+  }
+
+  return {
+    ...usage,
+    metadata: mergedMetadata,
+    updatedAt: result.updatedAt ?? result.createdAt ?? usage.updatedAt,
+    isStreaming: false,
+    isFinal: true,
+  };
+};
+
+const mergeToolResultsIntoUsage = (messages: ChatMessage[]): ChatMessage[] => {
+  if (messages.length === 0) {
+    return messages;
+  }
+
+  const resultByCallId = new Map<string, ChatMessage>();
+  const usageCallIds = new Set<string>();
+
+  messages.forEach((message) => {
+    const metadata = getMessageMetadataRecord(message);
+    const toolCallId = extractToolCallId(metadata);
+    if (!toolCallId) {
+      return;
+    }
+
+    if (message.messageType === 'tool_result') {
+      resultByCallId.set(toolCallId, message);
+    } else if (message.messageType === 'tool_use') {
+      usageCallIds.add(toolCallId);
+    }
+  });
+
+  if (resultByCallId.size === 0) {
+    return messages;
+  }
+
+  const mergedMessages: ChatMessage[] = [];
+  const usageIndexByCallId = new Map<string, number>();
+  let changed = false;
+
+  messages.forEach((message) => {
+    const metadata = getMessageMetadataRecord(message);
+    const toolCallId = extractToolCallId(metadata);
+
+    if (message.messageType === 'tool_result' && toolCallId && usageCallIds.has(toolCallId)) {
+      changed = true;
+      return;
+    }
+
+    if (message.messageType === 'tool_use' && toolCallId) {
+      const mergedWithResult = resultByCallId.has(toolCallId)
+        ? mergeToolResultIntoUsage(message, resultByCallId.get(toolCallId)!)
+        : message;
+
+      if (resultByCallId.has(toolCallId)) {
+        changed = true;
+      }
+
+      const existingIndex = usageIndexByCallId.get(toolCallId);
+      if (existingIndex !== undefined) {
+        mergedMessages[existingIndex] = mergeMessageRecord(mergedMessages[existingIndex], mergedWithResult);
+        changed = true;
+        return;
+      }
+
+      usageIndexByCallId.set(toolCallId, mergedMessages.length);
+      mergedMessages.push(mergedWithResult);
+      return;
+    }
+
+    mergedMessages.push(message);
+  });
+
+  return changed ? mergedMessages : messages;
+};
+
 // Tool Message Component - Enhanced with new design
 const ToolMessage = ({
   content,
@@ -827,6 +1087,7 @@ const ToolMessage = ({
     toolName?: string;
     input?: string;
     output?: string;
+    summary?: string;
     status?: 'executing' | 'done';
   }>({});
 
@@ -853,6 +1114,14 @@ const ToolMessage = ({
 
     if (!processedContent) {
       processedContent = normalizeChatContent(rawContent);
+    }
+
+    if (
+      metadataInfo.output &&
+      (!processedContent || processedContent === 'Using tool: Skill' || /^Using tool:/i.test(processedContent))
+    ) {
+      processedContent = metadataInfo.output;
+      cleanContent = metadataInfo.output;
     }
 
     if (!processedContent && rawContent && typeof rawContent === 'object') {
@@ -1009,6 +1278,9 @@ const ToolMessage = ({
   if (metadataInfo.output ?? cleanedContent ?? metadataContentCandidate) {
     lastStableValuesRef.current.output = metadataInfo.output ?? cleanedContent ?? metadataContentCandidate;
   }
+  if (metadataInfo.summary) {
+    lastStableValuesRef.current.summary = metadataInfo.summary;
+  }
   if (metadataInfo.status) {
     lastStableValuesRef.current.status = metadataInfo.status;
   }
@@ -1029,6 +1301,7 @@ const ToolMessage = ({
     (cleanedContent && cleanedContent.trim().length > 0 ? cleanedContent : undefined) ??
     metadataContentCandidate ??
     lastStableValuesRef.current.output;
+  const persistedSummary = metadataInfo.summary ?? lastStableValuesRef.current.summary;
   const persistedStatus = metadataInfo.status ?? lastStableValuesRef.current.status ?? 'done';
   
   return (
@@ -1039,6 +1312,7 @@ const ToolMessage = ({
       toolName={persistedToolName}
       input={persistedInput}
       output={persistedOutput}
+      summary={persistedSummary}
       status={persistedStatus}
       isExpanded={isExpanded}
       onToggle={onToggle}
@@ -1342,6 +1616,11 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
   const hasLoggedSseFallbackRef = useRef(false);
   const [enableSseFallback, setEnableSseFallback] = useState(false);
   const [isSseConnected, setIsSseConnected] = useState(false);
+  const realtimeTransportMode =
+    process.env.NEXT_PUBLIC_REALTIME_TRANSPORT === 'websocket'
+      ? 'websocket'
+      : 'sse';
+  const useWebSocketTransport = realtimeTransportMode === 'websocket';
   const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(new Set());
   const [expandedToolMessages, setExpandedToolMessages] = useState<Record<string, ToolExpansionState>>({});
   const fallbackMessageIdRef = useRef<Map<string, string>>(new Map());
@@ -1383,6 +1662,8 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
 
     latestMessageCursorRef.current = latestCursor;
   }, [messages]);
+
+  const displayMessages = useMemo(() => mergeToolResultsIntoUsage(messages), [messages]);
 
   const ensureStableMessageId = useCallback((message: ChatMessage): string => {
     if (message.id) {
@@ -1848,10 +2129,26 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
     },
     [handleRealtimeMessage, handleRealtimeStatus, handleRealtimeError]
   );
+  const handleRealtimeEnvelopeRef = useRef(handleRealtimeEnvelope);
+  const recoverMissingMessagesRef = useRef(recoverMissingMessages);
+  const onSseFallbackActiveRef = useRef(onSseFallbackActive);
+
+  useEffect(() => {
+    handleRealtimeEnvelopeRef.current = handleRealtimeEnvelope;
+  }, [handleRealtimeEnvelope]);
+
+  useEffect(() => {
+    recoverMissingMessagesRef.current = recoverMissingMessages;
+  }, [recoverMissingMessages]);
+
+  useEffect(() => {
+    onSseFallbackActiveRef.current = onSseFallbackActive;
+  }, [onSseFallbackActive]);
 
   // Use the centralized WebSocket hook (with SSE fallback defined below)
   const { isConnected, isConnecting } = useWebSocket({
     projectId,
+    enabled: useWebSocketTransport,
     onMessage: handleRealtimeMessage,
     onStatus: handleRealtimeStatus,
     onConnect: () => {
@@ -1875,6 +2172,11 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
   });
 
   useEffect(() => {
+    if (!useWebSocketTransport) {
+      setEnableSseFallback(true);
+      return;
+    }
+
     if (isConnected) {
       setEnableSseFallback(false);
       hasLoggedSseFallbackRef.current = false;
@@ -1913,7 +2215,7 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
         sseFallbackTimerRef.current = null;
       }
     };
-  }, [isConnected, isConnecting, onSseFallbackActive]);
+  }, [isConnected, isConnecting, onSseFallbackActive, useWebSocketTransport]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -1972,11 +2274,11 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
         eventSource = source;
 
         source.onopen = () => {
-          console.log('🔄 [Transport] SSE connection established');
+          console.debug('🔄 [Transport] SSE connection established');
           setIsSseConnected(true);
-          onSseFallbackActive?.(true);
+          onSseFallbackActiveRef.current?.(true);
           // Recover any missing messages that might have been lost during SSE disconnection
-          recoverMissingMessages();
+          recoverMissingMessagesRef.current();
         };
 
         source.onmessage = (event) => {
@@ -1985,7 +2287,7 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
           }
           try {
             const envelope = JSON.parse(event.data) as RealtimeEvent;
-            handleRealtimeEnvelope(envelope);
+            handleRealtimeEnvelopeRef.current(envelope);
           } catch (error) {
             console.error('🔄 [Realtime] Failed to parse SSE message:', error);
           }
@@ -2022,7 +2324,7 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
         clearTimeout(reconnectTimer);
       }
     };
-  }, [projectId, enableSseFallback, handleRealtimeEnvelope, onSseFallbackActive, recoverMissingMessages]);
+  }, [projectId, enableSseFallback]);
 
   useEffect(() => {
     return () => {
@@ -2092,7 +2394,7 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
       const toolCallToKey = new Map<string, string>();
       const keyToMessage = new Map<string, ChatMessage>();
 
-      messages.forEach((msg) => {
+      displayMessages.forEach((msg) => {
         if (msg.messageType === 'tool_result' || isToolUsageMessage(msg)) {
           const key = ensureStableMessageId(msg);
           validKeys.add(key);
@@ -2191,12 +2493,12 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
 
       return next;
     });
-  }, [messages, ensureStableMessageId, isToolUsageMessage]);
+  }, [displayMessages, ensureStableMessageId, isToolUsageMessage]);
 
   useEffect(() => {
     const validIds = new Set<string>();
 
-    messages.forEach((msg) => {
+    displayMessages.forEach((msg) => {
       if (msg.messageType === 'tool_result') {
         const id = msg.id ?? ensureStableMessageId(msg);
         if (id) {
@@ -2211,7 +2513,7 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
         visibleSet.delete(id);
       }
     });
-  }, [messages, ensureStableMessageId]);
+  }, [displayMessages, ensureStableMessageId]);
 
   // Load chat history
   const loadChatHistory = useCallback(
@@ -2233,35 +2535,14 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
             ? expandMessagesList(chatMessages.map(toChatMessage), ensureStableMessageId)
             : [];
 
-          console.log('[ChatLog] Loaded messages from API:', {
-            totalMessages: normalized.length,
-            messagesWithMetadata: normalized.filter(msg => !!msg.metadata).length,
-            messagesWithAttachments: normalized.filter(msg =>
-              msg.metadata &&
-              typeof msg.metadata === 'object' &&
-              (msg.metadata as any).attachments
-            ).length,
-            sampleMessageMetadata: normalized[0]?.metadata
-          });
-
           // Update pagination state
           if (payload.pagination) {
-            console.log(`[ChatLog] Loaded ${payload.pagination.count}/${payload.totalCount} messages`);
             setHasMoreMessages(payload.pagination.hasMore || false);
             setTotalMessageCount(payload.totalCount || 0);
           } else {
             setHasMoreMessages(false);
             setTotalMessageCount(normalized.length);
           }
-
-          normalized.forEach((message) => {
-            if (Array.isArray((message.metadata as any)?.attachments) && (message.metadata as any).attachments.length > 0) {
-              console.log('🖼️ DB loaded message with attachments:', {
-                messageId: message.id,
-                attachments: (message.metadata as any).attachments,
-              });
-            }
-          });
 
           setMessages((prev) => integrateMessages(prev, normalized));
         }
@@ -2623,6 +2904,12 @@ const ToolResultMessage = ({
     if (!content) return content;
     
     let cleanedContent = content;
+
+    const visibleProcessMarker = '请默认使用中文输出可见的执行过程摘要。';
+    const visibleProcessIndex = cleanedContent.indexOf(visibleProcessMarker);
+    if (visibleProcessIndex >= 0) {
+      cleanedContent = cleanedContent.slice(0, visibleProcessIndex);
+    }
     
     // Remove think hard instruction
     cleanedContent = cleanedContent.replace(/\.\s*think\s+hard\.\s*$/, '');
@@ -2633,7 +2920,7 @@ const ToolResultMessage = ({
     return cleanedContent.trim();
   };
 
-  // Function to render content with thinking tags
+  // Function to render content while flattening legacy thinking tags into normal markdown
   const renderContentWithThinking = (content: string): ReactElement => {
     const parts: ReactElement[] = [];
     let lastIndex = 0;
@@ -2655,14 +2942,12 @@ const ToolResultMessage = ({
         }
       }
 
-      // Add the thinking section using the new component
       const thinkingText = match[1].trim();
       if (thinkingText) {
         parts.push(
-          <ThinkingSection 
-            key={createKey('thinking')}
-            content={thinkingText}
-          />
+          <React.Fragment key={createKey('thinking-text')}>
+            {renderLightMarkdown(thinkingText)}
+          </React.Fragment>
         );
       }
 
@@ -2774,7 +3059,6 @@ const ToolResultMessage = ({
 
     // **Important**: Always display messages that include attachments
     if (metadata && metadata.attachments && Array.isArray(metadata.attachments) && metadata.attachments.length > 0) {
-      console.log('🖼️ Message has attachments, displaying:', { messageId: message.id, attachments: metadata.attachments });
       return true;
     }
 
@@ -2827,7 +3111,6 @@ const ToolResultMessage = ({
 
     // **Important**: Also display messages that match the legacy image-path pattern
     if (contentText && contentText.includes('Image #') && contentText.includes('path:')) {
-      console.log('🖼️ Message contains image paths, displaying:', { messageId: message.id, content: contentText });
       return true;
     }
 
@@ -2869,8 +3152,8 @@ const ToolResultMessage = ({
 
       case 'thinking':
         return (
-          <div className="italic">
-            过程叙述：{shortenPath(log.data.content)}
+          <div>
+            {renderLightMarkdown(shortenPath(log.data.content), { codeBreakAll: true })}
           </div>
         );
 
@@ -3114,7 +3397,7 @@ const ToolResultMessage = ({
         )}
 
         {/* Render chat messages */}
-        {messages.filter(shouldDisplayMessage).map((message, index) => {
+        {displayMessages.filter(shouldDisplayMessage).map((message, index) => {
           const messageMetadata = message.metadata as Record<string, unknown> | null;
           const messageText = normalizeChatContent(message.content);
           const isToolMessage = message.messageType === 'tool_result' || isToolUsageMessage(message);
@@ -3161,12 +3444,10 @@ const ToolResultMessage = ({
                                 const attachments = Array.isArray((messageMetadata as Record<string, any>)?.attachments)
                                   ? ((messageMetadata as Record<string, any>).attachments as any[])
                                   : [];
-                                console.log('🖼️ Message attachments:', attachments);
                                 if (attachments.length > 0) {
                                   return (
                                     <div className="mt-2 flex flex-wrap gap-2">
                                       {attachments.map((attachment: any, idx: number) => {
-                                        console.log(`🖼️ Processing attachment ${idx}:`, attachment);
                                         const candidateRawUrls: string[] = [];
                                         const pushCandidate = (value: unknown) => {
                                           if (typeof value === 'string') {
@@ -3184,7 +3465,6 @@ const ToolResultMessage = ({
 
                                         const uniqueCandidates = Array.from(new Set(candidateRawUrls));
                                         if (uniqueCandidates.length === 0) {
-                                          console.log(`🖼️ No URL found for attachment ${idx}`);
                                           return null;
                                         }
                                         const resolveUrl = (value: string) => {
@@ -3202,14 +3482,9 @@ const ToolResultMessage = ({
                                           resolvedCandidates.find(url => !failedImageUrls.has(url)) ??
                                           resolvedCandidates[0];
                                         if (!imageUrl) {
-                                          console.log(`🖼️ Failed to resolve any URL for attachment ${idx}`);
                                           return null;
                                         }
                                         const allCandidatesFailed = resolvedCandidates.every(url => failedImageUrls.has(url));
-                                        console.log(`🖼️ Resolved image URL for attachment ${idx}:`, imageUrl, {
-                                          candidates: resolvedCandidates,
-                                          allCandidatesFailed,
-                                        });
 
                                         const handleImageError = () => {
                                           console.error('❌ Image failed to load:', imageUrl);

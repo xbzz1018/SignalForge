@@ -11,7 +11,7 @@ interface ThinkingSectionProps {
 
 export default function ThinkingSection({ 
   content, 
-  isExpanded: initialExpanded = false
+  isExpanded: initialExpanded = true
 }: ThinkingSectionProps) {
   const [isExpanded, setIsExpanded] = useState(initialExpanded);
   const [isModalOpen, setIsModalOpen] = useState(false);
