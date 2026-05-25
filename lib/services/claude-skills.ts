@@ -2,6 +2,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
 import { getQuantCapability } from '@/lib/quant/capabilities';
+import { readQuantRunPlan, type QuantRunPlan } from '@/lib/quant/workspace';
+import { serializeQuantVisualizationTemplate } from '@/lib/quant/visualization-templates';
 import {
   describeQuantSkillsForPrompt,
   getDefaultQuantSkillIds,
@@ -16,6 +18,7 @@ export const DEFAULT_CLAUDE_SKILLS = [
   'quant-data-registry',
   'quant-data-quality',
   'quant-symbol-resolver',
+  'quant-image-extraction',
   'quant-market-data',
   'quant-a-share-history',
   'quant-index-etf-market',
@@ -139,20 +142,53 @@ export async function readQuantPilotManifest(projectPath: string): Promise<Quant
   }
 }
 
-async function buildCapabilityContext(manifest: QuantManifest | null): Promise<string> {
+async function buildCapabilityContext(
+  manifest: QuantManifest | null,
+  runPlan: QuantRunPlan | null = null
+): Promise<string> {
   const quant = manifest?.quant;
-  const capability = getQuantCapability(quant?.capabilityId);
-  const requiredSkills = quant?.requiredSkills?.length ? quant.requiredSkills : capability.requiredSkills;
-  const dataEndpoints = quant?.dataEndpoints?.length ? quant.dataEndpoints : capability.dataEndpoints;
-  const expectedArtifacts = quant?.expectedArtifacts?.length ? quant.expectedArtifacts : capability.expectedArtifacts;
-  const validationRules = quant?.validationRules?.length ? quant.validationRules : capability.validationRules;
+  const runCapabilityId = runPlan?.requestedCapabilityId ?? runPlan?.capabilityId;
+  const capability = getQuantCapability(runCapabilityId ?? quant?.capabilityId);
+  const shouldInheritManifest = !runCapabilityId || quant?.capabilityId === capability.id;
+  const requiredSkills =
+    shouldInheritManifest && quant?.requiredSkills?.length
+      ? quant.requiredSkills
+      : capability.requiredSkills;
+  const dataEndpoints = runPlan?.dataRequirements?.length
+    ? runPlan.dataRequirements
+    : shouldInheritManifest && quant?.dataEndpoints?.length
+      ? quant.dataEndpoints
+      : capability.dataEndpoints;
+  const expectedArtifacts = runPlan?.expectedArtifacts?.length
+    ? runPlan.expectedArtifacts
+    : shouldInheritManifest && quant?.expectedArtifacts?.length
+      ? quant.expectedArtifacts
+      : capability.expectedArtifacts;
+  const validationRules = runPlan?.validationRules?.length
+    ? runPlan.validationRules
+    : shouldInheritManifest && quant?.validationRules?.length
+      ? quant.validationRules
+      : capability.validationRules;
+  const serializedTemplate = serializeQuantVisualizationTemplate(capability.id);
+  const visualizationTemplate = {
+    templateId: runPlan?.visualization?.templateId ?? serializedTemplate.templateId,
+    name: runPlan?.visualization?.name ?? serializedTemplate.name,
+    scenario: runPlan?.visualization?.scenario ?? serializedTemplate.scenario,
+    painPoints: runPlan?.visualization?.painPoints ?? serializedTemplate.painPoints,
+    requiredComponents: runPlan?.visualization?.panels?.length
+      ? runPlan.visualization.panels
+      : serializedTemplate.requiredComponents,
+    dataSignals: runPlan?.visualization?.dataSignals ?? serializedTemplate.dataSignals,
+  };
   const skillsRegistry = await readQuantSkillsRegistry();
   const skillsContext = describeQuantSkillsForPrompt(skillsRegistry);
 
   return `当前量化能力：
 - capability_id: ${capability.id}
-- agent_type: ${quant?.agentType ?? capability.agentType}
-- sub_agent_key: ${quant?.subAgentKey ?? capability.subAgentKey}
+- requested_capability_id: ${runPlan?.requestedCapabilityId ?? capability.id}
+- execution_capability_id: ${runPlan?.executionCapabilityId ?? capability.executionCapabilityId}
+- agent_type: ${shouldInheritManifest ? quant?.agentType ?? capability.agentType : capability.agentType}
+- sub_agent_key: ${shouldInheritManifest ? quant?.subAgentKey ?? capability.subAgentKey : capability.subAgentKey}
 - 名称：${capability.name}
 - 说明：${capability.description}
 - 必需 skills：${requiredSkills.join(', ')}
@@ -160,6 +196,10 @@ async function buildCapabilityContext(manifest: QuantManifest | null): Promise<s
 - 预期产物：${expectedArtifacts.join('；')}
 - 验证规则：${validationRules.join('；')}
 - 能力指导：${capability.promptGuidance.join('；')}
+- 可视化模板：${visualizationTemplate.templateId}（${visualizationTemplate.name}）
+- 场景痛点：${visualizationTemplate.painPoints.join('；')}
+- 必备组件：${visualizationTemplate.requiredComponents.join('；')}
+- 数据信号：${visualizationTemplate.dataSignals.join('；')}
 
 ${skillsContext}`;
 }
@@ -170,7 +210,8 @@ export async function buildQuantPilotTaskPrompt(
   manifest: QuantManifest | null = null
 ): Promise<string> {
   const normalizedProjectPath = path.resolve(projectPath);
-  const capabilityContext = await buildCapabilityContext(manifest);
+  const runPlan = await readQuantRunPlan(normalizedProjectPath);
+  const capabilityContext = await buildCapabilityContext(manifest, runPlan);
 
   return `${instruction}
 
@@ -184,6 +225,8 @@ QuantPilot 执行约束：
 - 如果用户问题缺少标的、对比范围或投资周期/风险偏好等关键输入，先使用 quant-run-planner 写入 status=needs_clarification，向用户提出 1-3 个澄清问题并停止，不要取数或生成页面。
 - 如果任务文本包含“承接上一轮澄清”“原始问题”“用户补充”，将原始问题和补充信息合并为完整任务继续执行；补充后仍不清楚时只追问剩余缺口。
 - 如果任务涉及股票、行情、量化分析或可视化，先使用对应数据 skill 获取真实数据，再使用 quant-visualization-html 生成可视化看板。
+- 如果用户上传了图片或 .quantpilot/attachments.json 存在，必须先使用 quant-image-extraction，调用 mcp__QuantPilotImage__quant_extract_uploaded_image 读取附件清单并写入 evidence/image_extraction.json；MiniMax understand_image MCP 可用时再进行视觉识别，否则明确标记需要人工确认的字段，不要声称没有收到图片。
+- 可视化页面必须按 .quantpilot/run_plan.json 的 visualization.templateId 选择场景模板；展示组件优先覆盖 visualization.panels，不能把持仓、选股、技术、基本面、回测页面都生成成同一种通用模板。
 - 调用本地 HTTP API 且参数包含中文时，必须使用 curl -G --data-urlencode，不要把中文直接拼接到 URL 查询串。
 - 获取真实数据后、生成看板前，必须使用 quant-data-quality 写入 evidence/sources.json 和 evidence/data_quality.json，记录来源、时间、缺失字段和限制。
 - 如果用户要求可视化或看板，必须实际修改 app/page.tsx，不能只输出文字说明。
@@ -192,7 +235,9 @@ QuantPilot 执行约束：
 - 最终数据优先写入 data_file/final/dashboard-data.json，页面应读取真实数据或同源 API，不得硬编码样例行情。
 - .quantpilot/run_plan.json 的 symbols 必须保持为证券代码字符串数组，例如 ["600519"]；如果需要名称、市场、secid，请写入 resolvedSymbols[] 或 final 数据，避免平台预取链路无法识别。
 - dashboard-data.json 使用标准契约：quote.price/change_percent/quote_time、kline.bars[].date/open/high/low/close/volume/amount、technicalIndicators.summary 或 computedMetrics；多标的使用 assets[] 和 comparison.rows[]。
+- dashboard-data.json 应保留 visualization.template_id、visualization.required_components、visualization.rendered_components 和 visualization.pain_points，页面据此展示对应场景的组件完成情况。
 - 页面优先保留平台标准模板中的 DATA_FILE、readDashboardData、getBars、TrendChart 和 data-source-file={DATA_FILE} 结构，在此基础上增强展示，不要改成无法验证的自定义数据入口。
+- 生成 app/page.tsx 时必须通过严格 TypeScript：所有动态 JSON 先用 JsonRecord/asRecord/asArray/numeric 守卫处理；flatMap/map 新增字段的对象显式标注为 JsonRecord，避免 build 出现 “Property does not exist on type ...”。
 - Agent 执行完成后平台会自动验证 Next.js build、预览 HTTP 200、data_file/final 数据文件、页面图表和 /api/market 代理；请按这些验收项完成产物。
 - 当 .quantpilot/run_plan.json、data_file/final/dashboard-data.json、evidence/sources.json、evidence/data_quality.json 和 app/page.tsx 已经完成后，立即输出中文执行摘要并结束；不要继续运行 whoami、echo、hello world、临时文件写入或无关 Bash 测试。
 - 默认输出中文可见执行过程摘要；开始时直接用 Markdown 输出任务拆解、执行计划和当前状态，执行中必须按阶段解释每个 skill、数据请求、文件读写和验证结果，不要只连续输出工具调用，不要使用 <thinking> 标签，不要暴露隐藏推理链。
@@ -222,6 +267,7 @@ export function buildQuantPilotSystemPrompt(): string {
 - For Chinese query parameters in local HTTP requests, use curl -G --data-urlencode. Do not concatenate raw Chinese text into URLs
 - After fetching market, K-line, financial, or event data, use quant-data-quality before visualization and write evidence/sources.json plus evidence/data_quality.json
 - Resolve ambiguous stock names or tickers with quant-symbol-resolver before fetching data
+- If uploaded images exist or .quantpilot/attachments.json exists, first use quant-image-extraction and call mcp__QuantPilotImage__quant_extract_uploaded_image. Write evidence/image_extraction.json and keep dashboard-data.json.imageExtraction. If MiniMax understand_image MCP is available, use it for visual recognition; otherwise mark uncertain screenshot fields as null and list fields requiring manual confirmation
 - Use quant-comparison for multi-symbol questions. When dashboard-data.json contains assets[] and comparison, render all assets instead of only the primary symbol
 - Use quant-a-share-history for historical K-line analysis
 - Use quant-index-etf-market for index and ETF tasks such as 沪深300、创业板指、中证500、科创50 or 510300 ETF
@@ -230,6 +276,7 @@ export function buildQuantPilotSystemPrompt(): string {
 - Use quant-fundamental-indicators for derived profitability, margin, ROE, and financial quality metrics
 - Use quant-announcement-events for announcement/event-driven context
 - For visualization tasks, use the quant-visualization-html skill and actually edit app/page.tsx into a usable dashboard
+- For visualization tasks, choose the scenario template from .quantpilot/run_plan.json visualization.templateId and render the scenario-specific required components instead of a generic dashboard
 - Use Write/Edit tools for source, CSS, JSON, and evidence file changes. Do not use Bash cat/tee/echo/printf, redirection, heredoc, python/node scripts, or touch to write files
 - A-share visualization dashboards must include real chart panels; for trend tasks include candlestick/OHLC or an explicit K-line error panel, volume, moving averages, and risk metrics
 - Prefer same-origin API routes in generated projects to proxy http://127.0.0.1:8000 instead of direct browser calls
@@ -237,6 +284,7 @@ export function buildQuantPilotSystemPrompt(): string {
 - Before finishing a quantitative dashboard, ensure data_file/final/dashboard-data.json exists, app/page.tsx reads real data or same-origin APIs, and /api/market/** proxies the local market backend
 - Keep .quantpilot/run_plan.json symbols as an array of ticker strings. Store rich resolved symbol objects elsewhere, not in symbols
 - Keep dashboard-data.json schema-compatible with quote, kline.bars, technicalIndicators.summary/computedMetrics, and assets[]/comparison for multi-symbol dashboards
+- Generated app/page.tsx must type-check under strict TypeScript. Treat dashboard-data.json as dynamic JSON via JsonRecord/asRecord/asArray/numeric helpers; explicitly type flatMap/map results that add fields as JsonRecord[] so properties like notice_date, report_date, correlation, or symbol remain accessible.
 - Once .quantpilot/run_plan.json, data_file/final/dashboard-data.json, evidence/sources.json, evidence/data_quality.json, and app/page.tsx are complete, immediately provide a concise Chinese execution summary and stop. Do not run unrelated Bash checks such as whoami, echo, hello-world scripts, temporary file writes, or ad-hoc process tests
 - Include loading, error, and empty states for market data
 - Display source, quote_time, and fetched_at when showing live stock data

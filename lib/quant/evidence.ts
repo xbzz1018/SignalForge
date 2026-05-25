@@ -205,6 +205,8 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
   } else if (capabilityId === 'backtest_review') {
     critical.add('kline');
     critical.add('backtest');
+  } else if (capabilityId === 'portfolio_risk') {
+    critical.add('kline');
   } else if (assetType === 'stock') {
     critical.add('kline');
     critical.add('financials');
@@ -220,12 +222,14 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
   const technicalIndicators = asRecord(data.technicalIndicators) ?? asRecord(data.indicators);
   const backtest = asRecord(data.backtest);
   const bars = firstArray(kline?.bars, kline?.data, data.bars, data.history);
+  const technicalSummary = asRecord(technicalIndicators?.summary);
   const indicatorPoints = firstArray(technicalIndicators?.points, technicalIndicators?.data);
   const equityCurve = firstArray(backtest?.equity_curve, backtest?.equityCurve);
   const trades = firstArray(backtest?.trades);
   const reports = firstArray(financials?.reports, financials?.data, data.reports);
   const fundamentalPoints = firstArray(fundamentalIndicators?.points, fundamentalIndicators?.data);
   const announcementRows = firstArray(announcements?.announcements, announcements?.data, data.announcements);
+  const technicalRowCount = indicatorPoints.length > 0 ? indicatorPoints.length : technicalSummary ? 1 : 0;
 
   const firstBar = asRecord(bars[0]);
   const period = pickString(kline?.period, 'daily') ?? 'daily';
@@ -343,14 +347,14 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
         id: 'technical_indicators',
         name: '技术指标',
         record: technicalIndicators,
-        rowCount: indicatorPoints.length,
+        rowCount: technicalRowCount,
         source: pickString(technicalIndicators?.source, rootSource) ?? rootSource,
         endpoint: `GET /api/v1/indicators/technical/${symbol}`,
         critical: critical.has('kline'),
         generatedAt,
         missingFields: [
           ...missingRequiredGroups(technicalIndicators, [{ label: 'fetched_at', keys: ['fetched_at', 'as_of'] }]),
-          ...missingRequiredGroups(asRecord(indicatorPoints.at(-1)), [
+          ...missingRequiredGroups(asRecord(indicatorPoints.at(-1)) ?? technicalSummary, [
             { label: 'date', keys: ['date'] },
             { label: 'ma5/ma20', keys: ['ma5', 'ma20'] },
           ]),

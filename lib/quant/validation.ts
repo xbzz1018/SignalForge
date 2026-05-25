@@ -508,6 +508,7 @@ async function checkFinalDataFile(
       const runPlan = await readRunPlan(projectPath);
       const plannedSymbols = extractPlannedSymbols(runPlan);
       const fetchedSymbols = extractFetchedSymbols(parsed);
+      const comparisonSymbols = extractComparisonSymbols(parsed);
       const missingSymbols = plannedSymbols.filter((symbol) => !fetchedSymbols.includes(symbol));
       const serialized = JSON.stringify(parsed);
       const hasDataShape =
@@ -544,6 +545,110 @@ async function checkFinalDataFile(
         continue;
       }
 
+      if (plannedSymbols.length > 1) {
+        const comparisonMissingSymbols = plannedSymbols.filter((symbol) => !comparisonSymbols.includes(symbol));
+        if (comparisonMissingSymbols.length > 0) {
+          errors.push(
+            `${normalizeRelativePath(projectPath, filePath)} 的 comparison.rows 未覆盖全部对比标的，缺少：${comparisonMissingSymbols.join('、')}。`
+          );
+          continue;
+        }
+      }
+
+      const runPlanVisualization = asRecord(runPlan?.visualization);
+      const plannedTemplateId = pickString(runPlanVisualization?.templateId);
+      const expectedTemplateId = inferExpectedTemplateFromTask(runPlan);
+      const visualization = asRecord(asRecord(parsed)?.visualization);
+      const finalTemplateId = pickString(visualization?.template_id ?? visualization?.templateId);
+      const requiredComponents = Array.isArray(visualization?.required_components)
+        ? visualization.required_components
+        : Array.isArray(runPlanVisualization?.panels)
+          ? runPlanVisualization.panels
+          : [];
+
+      if (expectedTemplateId && plannedTemplateId !== expectedTemplateId) {
+        errors.push(
+          `${normalizeRelativePath(projectPath, filePath)} 的任务语义需要 ${expectedTemplateId} 模板，但 run_plan.visualization.templateId=${plannedTemplateId ?? '未设置'}。`
+        );
+        continue;
+      }
+
+      if (expectedTemplateId && finalTemplateId && finalTemplateId !== expectedTemplateId) {
+        errors.push(
+          `${normalizeRelativePath(projectPath, filePath)} 的任务语义需要 ${expectedTemplateId} 模板，但 visualization.template_id=${finalTemplateId}。`
+        );
+        continue;
+      }
+
+      if (plannedTemplateId && !finalTemplateId) {
+        errors.push(
+          `${normalizeRelativePath(projectPath, filePath)} 缺少 visualization.template_id，无法验证场景化看板模板。`
+        );
+        continue;
+      }
+
+      if (plannedTemplateId && finalTemplateId && plannedTemplateId !== finalTemplateId) {
+        errors.push(
+          `${normalizeRelativePath(projectPath, filePath)} 的 visualization.template_id=${finalTemplateId} 与 run_plan=${plannedTemplateId} 不一致。`
+        );
+        continue;
+      }
+
+      if (plannedTemplateId && requiredComponents.length === 0) {
+        errors.push(
+          `${normalizeRelativePath(projectPath, filePath)} 缺少 visualization.required_components，无法确认页面是否覆盖场景痛点。`
+        );
+        continue;
+      }
+
+      if (plannedTemplateId === 'stock-selection') {
+        const record = asRecord(parsed);
+        const selectionRanking = asRecord(record?.selectionRanking);
+        const financialQuality = asRecord(record?.financialQuality);
+        const rankingRows = Array.isArray(selectionRanking?.rows) ? selectionRanking.rows : [];
+        const qualityRows = Array.isArray(financialQuality?.rows) ? financialQuality.rows : [];
+        const comparisonRows = Array.isArray(asRecord(record?.comparison)?.rows)
+          ? asRecord(record?.comparison)?.rows as unknown[]
+          : [];
+        const missingSelectionData = [
+          rankingRows.length === 0 ? 'selectionRanking.rows' : null,
+          qualityRows.length === 0 ? 'financialQuality.rows' : null,
+          comparisonRows.some((row) => {
+            const item = asRecord(row);
+            return !item || numeric(item.composite_score) === null || !pickString(item.selection_view);
+          }) ? 'comparison.rows[].composite_score/selection_view' : null,
+        ].filter((item): item is string => Boolean(item));
+
+        if (missingSelectionData.length > 0) {
+          errors.push(
+            `${normalizeRelativePath(projectPath, filePath)} 缺少选股模板数据字段：${missingSelectionData.join('、')}。`
+          );
+          continue;
+        }
+      }
+
+      if (plannedTemplateId === 'holding-analysis') {
+        const record = asRecord(parsed);
+        const holdings = Array.isArray(record?.holdings) ? record.holdings : [];
+        const assets = Array.isArray(record?.assets) ? record.assets : [];
+        const comparisonRows = Array.isArray(asRecord(record?.comparison)?.rows)
+          ? asRecord(record?.comparison)?.rows as unknown[]
+          : [];
+        const missingHoldingData = [
+          !asRecord(record?.portfolio) ? 'portfolio' : null,
+          holdings.length === 0 ? 'holdings[]' : null,
+          assets.length === 0 ? 'assets[]' : null,
+          comparisonRows.length === 0 ? 'comparison.rows' : null,
+        ].filter((item): item is string => Boolean(item));
+
+        if (missingHoldingData.length > 0) {
+          errors.push(
+            `${normalizeRelativePath(projectPath, filePath)} 缺少持仓分析模板数据字段：${missingHoldingData.join('、')}。`
+          );
+          continue;
+        }
+      }
+
       return {
         status: 'passed',
         summary: `已找到可用最终数据文件：${normalizeRelativePath(projectPath, filePath)}。`,
@@ -552,8 +657,10 @@ async function checkFinalDataFile(
           bytes: Buffer.byteLength(raw),
           plannedSymbols,
           fetchedSymbols,
+          comparisonSymbols,
           barCount: payloadInspection.barCount,
           hasQuote: payloadInspection.hasQuote,
+          visualizationTemplateId: finalTemplateId,
         },
       };
     } catch (error) {
@@ -593,6 +700,43 @@ function pickString(value: unknown): string | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return String(value);
   }
+  return null;
+}
+
+function normalizeTextForIntent(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.replace(/\s+/g, '');
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeTextForIntent(item)).join('');
+  }
+  const record = asRecord(value);
+  if (record) {
+    return Object.values(record).map((item) => normalizeTextForIntent(item)).join('');
+  }
+  return '';
+}
+
+function inferExpectedTemplateFromTask(runPlan: Record<string, unknown> | null): string | null {
+  if (!runPlan) {
+    return null;
+  }
+
+  const capabilityId = pickString(runPlan.capabilityId ?? runPlan.capability_id);
+  if (capabilityId === 'portfolio_risk') {
+    return 'holding-analysis';
+  }
+
+  const taskText = normalizeTextForIntent([
+    runPlan.question,
+    runPlan.task,
+    runPlan.instruction,
+    runPlan.clarification,
+  ]);
+  if (/持仓|仓位|组合|调仓|盈亏|成本|账户|总资产|可用资金|浮动盈亏|持仓截图/.test(taskText)) {
+    return 'holding-analysis';
+  }
+
   return null;
 }
 
@@ -667,6 +811,28 @@ function extractFetchedSymbols(data: unknown): string[] {
 
   return Array.from(
     new Set(candidates.filter((symbol): symbol is string => Boolean(symbol && /^(?:6|0|3|5)\d{5}$/.test(symbol))))
+  );
+}
+
+function extractComparisonSymbols(data: unknown): string[] {
+  const record = asRecord(data);
+  if (!record) {
+    return [];
+  }
+
+  const comparison = asRecord(record.comparison);
+  const rows = Array.isArray(comparison?.rows)
+    ? comparison.rows
+    : Array.isArray(record.comparison)
+      ? record.comparison
+      : [];
+
+  return Array.from(
+    new Set(
+      rows
+        .map((row) => pickSymbolCode(row))
+        .filter((symbol): symbol is string => Boolean(symbol && /^(?:6|0|3|5)\d{5}$/.test(symbol)))
+    )
   );
 }
 
@@ -830,7 +996,7 @@ async function checkEvidenceFiles(
     ].filter((error): error is string => Boolean(error));
     return {
       status: 'failed',
-      summary: '缺少数据来源或数据质量证据文件。',
+      summary: '缺少数据信源渠道或数据质量证据文件。',
       details: fileErrors.join('\n'),
     };
   }
@@ -842,7 +1008,7 @@ async function checkEvidenceFiles(
     return {
       status: 'failed',
       summary: 'evidence 文件疑似包含敏感信息。',
-      details: '请移除 token、cookie、authorization header、api key 等敏感内容，仅保留数据来源、端点、时间戳和质量摘要。',
+      details: '请移除 token、cookie、authorization header、api key 等敏感内容，仅保留数据信源渠道、端点、时间戳和质量摘要。',
     };
   }
 
@@ -872,7 +1038,7 @@ async function checkEvidenceFiles(
   if (errors.length > 0) {
     return {
       status: 'failed',
-      summary: '数据来源或质量证据不完整。',
+      summary: '数据信源渠道或质量证据不完整。',
       details: errors.join('\n'),
     };
   }
@@ -881,8 +1047,8 @@ async function checkEvidenceFiles(
   return {
     status: qualityStatus === 'error' ? 'failed' : qualityStatus === 'warning' ? 'warning' : 'passed',
     summary: baseline.created
-      ? `已根据最终数据自动生成数据来源和质量证据文件，状态：${qualityStatus}。`
-      : warningSummary ?? '已找到数据来源和质量证据文件。',
+      ? `已根据最终数据自动生成数据信源渠道和质量证据文件，状态：${qualityStatus}。`
+      : warningSummary ?? '已找到数据信源渠道和质量证据文件。',
     metadata: {
       sources: 'evidence/sources.json',
       dataQuality: 'evidence/data_quality.json',
@@ -949,6 +1115,12 @@ async function checkDashboardBinding(
   const fetchedSymbols = extractFetchedSymbols(finalData);
   const payloadInspection = inspectDashboardDataPayload(finalData);
   const isMultiSymbolTask = plannedSymbols.length > 1 || assetRows.length > 1;
+  const runPlanVisualization = asRecord(runPlan?.visualization);
+  const plannedTemplateId = pickString(runPlanVisualization?.templateId);
+  const expectedTemplateId = inferExpectedTemplateFromTask(runPlan);
+  const requiredPanels = Array.isArray(runPlanVisualization?.panels)
+    ? runPlanVisualization.panels.map((panel) => pickString(panel)).filter((panel): panel is string => Boolean(panel))
+    : [];
 
   if (!hasBindingSignal) {
     return {
@@ -985,6 +1157,31 @@ async function checkDashboardBinding(
     };
   }
 
+  if (expectedTemplateId && plannedTemplateId !== expectedTemplateId) {
+    return {
+      status: 'failed',
+      summary: `执行计划模板与任务语义不一致，应使用 ${expectedTemplateId}。`,
+      details: `当前 run_plan.visualization.templateId=${plannedTemplateId ?? '未设置'}。持仓、调仓、截图账户类任务必须走持仓分析模板，不能复用个股诊断模板。`,
+      metadata: {
+        expectedTemplateId,
+        plannedTemplateId,
+      },
+    };
+  }
+
+  const finalTemplateId = pickString(asRecord(finalDataRecord?.visualization)?.template_id ?? asRecord(finalDataRecord?.visualization)?.templateId);
+  if (expectedTemplateId && finalTemplateId && finalTemplateId !== expectedTemplateId) {
+    return {
+      status: 'failed',
+      summary: `最终数据模板与任务语义不一致，应使用 ${expectedTemplateId}。`,
+      details: `当前 data_file/final/dashboard-data.json visualization.template_id=${finalTemplateId}。`,
+      metadata: {
+        expectedTemplateId,
+        finalTemplateId,
+      },
+    };
+  }
+
   if (isMultiSymbolTask) {
     const dataDrivenCoverage =
       /requestedSymbols|assets|comparison/.test(page) &&
@@ -1010,6 +1207,78 @@ async function checkDashboardBinding(
     }
   }
 
+	  if (plannedTemplateId) {
+	    const serializedPage = page.toLowerCase();
+	    const serializedFinal = JSON.stringify(finalData ?? {}).toLowerCase();
+	    const templateChecks: Record<string, { label: string; patterns: RegExp[] }> = {
+      'holding-analysis': {
+        label: '持仓分析模板',
+        patterns: [/持仓|holding|portfolio|仓位|集中度/, /调仓|风险|相关性|流动性|回撤/],
+      },
+	      'stock-selection': {
+	        label: '选股分析模板',
+	        patterns: [
+	          /stock-selection|选股|候选|多标的|comparison|assets/,
+	          /selectionranking|financialquality|排名|相对强弱|研究优先级/,
+	          /收益对比|波动对比|回撤对比|财务质量|(?:数据来源|数据信源|信源渠道)逐项追踪/,
+	        ],
+	      },
+      'single-stock-diagnosis': {
+        label: '个股诊断模板',
+        patterns: [/个股|行情|最新价|quote|k\s*线|k线/, /财务|公告|(?:数据来源|数据信源|信源渠道)|质量/],
+      },
+      'technical-timing': {
+        label: '技术择时模板',
+        patterns: [/k\s*线|k线|均线|ma20|ma60|成交量/, /触发|失效|趋势|回撤|波动/],
+      },
+      'fundamental-research': {
+        label: '基本面研究模板',
+        patterns: [/财务|基本面|营收|净利润|roe|毛利率/, /报告期|现金流|公告|估值/],
+      },
+      'backtest-review': {
+        label: '回测复盘模板',
+        patterns: [/回测|净值|策略|胜率|交易/, /参数|回撤|样本|限制/],
+      },
+      'sector-rotation': {
+        label: '板块轮动模板',
+        patterns: [/板块|行业|指数|etf|轮动|相对强弱/, /收益|回撤|流动性|排名/],
+      },
+    };
+    const templateCheck = templateChecks[plannedTemplateId];
+    const missingSignals = templateCheck?.patterns
+      .filter((pattern) => !pattern.test(page) && !pattern.test(serializedPage) && !pattern.test(serializedFinal))
+      .map((pattern) => pattern.source) ?? [];
+
+	    if (templateCheck && missingSignals.length > 0) {
+	      return {
+	        status: 'failed',
+        summary: `页面未体现 ${templateCheck.label} 的关键组件。`,
+        details: [
+          `run_plan.visualization.templateId=${plannedTemplateId}`,
+          requiredPanels.length ? `必备组件：${requiredPanels.join('、')}` : null,
+          `缺少信号：${missingSignals.join('；')}`,
+        ].filter(Boolean).join('\n'),
+	      };
+	    }
+
+	    if (plannedTemplateId === 'stock-selection') {
+	      const holdingOnlySignals = [
+	        /持仓矩阵/,
+	        /仓位与集中度/,
+	        /调仓优先级/,
+	        /portfolio[_-]?risk/i,
+	        /holding-analysis/i,
+	      ];
+	      if (holdingOnlySignals.some((signal) => signal.test(page))) {
+	        return {
+	          status: 'failed',
+	          summary: '页面仍残留持仓分析模板，不符合选股/多股对比任务。',
+	          details: 'stock-selection 页面应展示候选覆盖、排名依据、财务质量、收益/波动/回撤对比和数据信源渠道逐项追踪。',
+	        };
+	      }
+	    }
+	  }
+
   return {
     status: 'passed',
     summary: '页面已检测到真实数据绑定入口。',
@@ -1033,17 +1302,32 @@ async function checkChartPresence(
 
   const hasGraphicElement = /<svg|<canvas|<polyline|<rect|<path|Chart|chart|candlestick|ohlc|K线|K 线|折线|柱状|趋势图/i.test(page);
   const hasFinanceOrMarketLanguage = /成交量|成交额|均线|MA5|MA10|MA20|K线|K 线|营收|净利润|ROE|毛利率|回撤|波动率|quote|history|financial/i.test(page);
+  const hasSemanticColoring = /red|green|up|down|candle-up|candle-down|volume-up|volume-down|bar-up|bar-down|quality-(?:ok|warning|error)|signal-(?:up|down)/i.test(page);
+  const hasChartReadingAid = /<title>|aria-label|chart-label|axis|grid|legend|tooltip|刻度|图例|坐标|日期/i.test(page);
   const runPlan = await readRunPlan(projectPath);
   const plannedSymbols = extractPlannedSymbols(runPlan);
   const finalDataRaw = await readTextFile(path.join(projectPath, 'data_file', 'final', 'dashboard-data.json'));
   const hasMultiFinalData = Boolean(finalDataRaw && /"assets"\s*:|"comparison"\s*:/.test(finalDataRaw));
   const isMultiSymbolTask = plannedSymbols.length > 1 || hasMultiFinalData;
+  const plannedTemplateId = pickString(asRecord(runPlan?.visualization)?.templateId);
 
   if (!hasGraphicElement || !hasFinanceOrMarketLanguage) {
     return {
       status: 'failed',
       summary: '未检测到有效金融图表实现。',
       details: '页面至少应包含 SVG/canvas/图表组件，并展示 K 线、成交量、均线、财务趋势或风险指标。',
+    };
+  }
+
+  if (!hasSemanticColoring || !hasChartReadingAid) {
+    return {
+      status: 'failed',
+      summary: '金融图表缺少语义染色或读图辅助。',
+      details: '页面需要为涨跌、风险、质量状态提供明确颜色，并给 SVG/canvas 图表提供坐标/图例/tooltip/title 等读图辅助。',
+      metadata: {
+        hasSemanticColoring,
+        hasChartReadingAid,
+      },
     };
   }
 
@@ -1054,6 +1338,21 @@ async function checkChartPresence(
       details: '页面需要展示多标的指标矩阵、收益对比、波动/回撤对比或相对强弱摘要。',
       metadata: {
         plannedSymbols,
+      },
+    };
+  }
+
+  if (
+    plannedTemplateId === 'stock-selection' &&
+    !/selectionRanking|financialQuality|stock-selection|相对强弱与排名依据|财务质量|收益对比图|波动对比图|回撤对比图/.test(page)
+  ) {
+    return {
+      status: 'failed',
+      summary: '选股任务未检测到场景化选股图表组件。',
+      details: '页面需要展示相对强弱/排名依据、财务质量、收益对比图、波动对比图或回撤对比图。',
+      metadata: {
+        plannedSymbols,
+        plannedTemplateId,
       },
     };
   }
@@ -1222,8 +1521,9 @@ ${failedSummary || '无失败项，但验证报告状态为失败，请重新检
 6. 必须创建 app/api/market/[...path]/route.ts，将 /api/market/** 转发到 http://127.0.0.1:8000/api/v1/**，并保留 query 参数。
 7. 保留或增强金融图表：K 线/量价/均线/财务趋势/公告事件至少覆盖当前用户问题所需内容。
 8. 如果 final 数据包含 assets[] 或 comparison，必须生成多标的对比页面：展示全部标的、指标矩阵、收益对比、波动/回撤对比和相对强弱摘要，不能只展示主标的。
-9. 修复后确保 npm run build、预览 HTTP 200、数据文件、evidence、页面数据绑定、图表存在性和 /api/market 代理都能通过平台验证。
-10. 不要启动开发服务器，QuantPilot 会统一管理预览。`;
+9. 如果失败细节提示 run_plan 或 visualization.template_id 与任务语义不一致，必须同步修复 .quantpilot/run_plan.json、data_file/final/dashboard-data.json 的 visualization.template_id 和 app/page.tsx 的页面结构。
+10. 修复后确保 npm run build、预览 HTTP 200、数据文件、evidence、页面数据绑定、图表存在性和 /api/market 代理都能通过平台验证。
+11. 不要启动开发服务器，QuantPilot 会统一管理预览。`;
 }
 
 async function publishValidationSummary(

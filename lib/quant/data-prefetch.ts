@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { ensureBaselineEvidenceFiles } from '@/lib/quant/evidence';
 import { appendQuantWorkspaceEvent, ensureQuantWorkspace, QuantRunPlan } from '@/lib/quant/workspace';
+import { serializeQuantVisualizationTemplate } from '@/lib/quant/visualization-templates';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -21,8 +22,14 @@ const KNOWN_SYMBOLS: Array<{ keyword: string; symbol: string }> = [
   { keyword: '贵州茅台', symbol: '600519' },
   { keyword: '茅台', symbol: '600519' },
   { keyword: '宁德时代', symbol: '300750' },
+  { keyword: '通富微电', symbol: '002156' },
   { keyword: '平安银行', symbol: '000001' },
   { keyword: '招商银行', symbol: '600036' },
+  { keyword: '杭钢股份', symbol: '600126' },
+  { keyword: '京沪高铁', symbol: '601816' },
+  { keyword: '三七互娱', symbol: '002555' },
+  { keyword: '中国黄金', symbol: '600916' },
+  { keyword: '完美世界', symbol: '002624' },
   { keyword: '沪深300ETF', symbol: '510300' },
   { keyword: '沪深300 ETF', symbol: '510300' },
   { keyword: '300ETF', symbol: '510300' },
@@ -175,7 +182,6 @@ async function resolveSymbolsFromQuestion(question: string, warnings: string[]):
       const symbol = pickSymbolCode(firstStock);
       if (symbol) {
         resolved.push(symbol);
-        break;
       }
     } catch (error) {
       warnings.push(`证券名称 ${candidate} 解析失败：${error instanceof Error ? error.message : String(error)}`);
@@ -229,6 +235,13 @@ function mean(values: number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function sum(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+  return values.reduce((total, value) => total + value, 0);
+}
+
 function round(value: number | null, digits = 2): number | null {
   if (value === null || !Number.isFinite(value)) {
     return null;
@@ -241,6 +254,7 @@ function calculateMetrics(kline: JsonRecord | null): JsonRecord {
   const bars = Array.isArray(kline?.bars) ? kline.bars.map(asRecord).filter(Boolean) as JsonRecord[] : [];
   const closes = bars.map((bar) => numeric(bar.close)).filter((value): value is number => value !== null);
   const volumes = bars.map((bar) => numeric(bar.volume)).filter((value): value is number => value !== null);
+  const amounts = bars.map((bar) => numeric(bar.amount)).filter((value): value is number => value !== null);
   const highs = bars.map((bar) => numeric(bar.high)).filter((value): value is number => value !== null);
   const lows = bars.map((bar) => numeric(bar.low)).filter((value): value is number => value !== null);
 
@@ -266,15 +280,176 @@ function calculateMetrics(kline: JsonRecord | null): JsonRecord {
   return {
     periodReturn:
       firstClose && lastClose ? round(((lastClose - firstClose) / firstClose) * 100) : null,
+    return20d: calculateWindowReturn(closes, 20),
+    return60d: calculateWindowReturn(closes, 60),
+    return120d: calculateWindowReturn(closes, 120),
     periodHigh: highs.length ? round(Math.max(...highs)) : null,
     periodLow: lows.length ? round(Math.min(...lows)) : null,
     maxDrawdown: round(maxDrawdown),
     volatility20d: round(Math.sqrt(variance) * Math.sqrt(252) * 100),
     avgVolume20d: round(mean(volumes.slice(-20))),
+    avgAmount20d: round(mean(amounts.slice(-20))),
     ma5: round(mean(closes.slice(-5))),
     ma10: round(mean(closes.slice(-10))),
     ma20: round(mean(closes.slice(-20))),
   };
+}
+
+function calculateWindowReturn(closes: number[], windowSize: number): number | null {
+  const latest = closes.at(-1);
+  const baseline = closes.length > windowSize ? closes.at(-1 - windowSize) : closes[0];
+  if (!latest || !baseline || baseline <= 0) {
+    return null;
+  }
+  return round(((latest - baseline) / baseline) * 100);
+}
+
+function firstDateFromBars(bars: JsonRecord[]): string | null {
+  const first = bars[0];
+  const value = first?.date ?? first?.time ?? first?.trade_date;
+  return typeof value === 'string' ? value.slice(0, 10) : null;
+}
+
+function lastDateFromBars(bars: JsonRecord[]): string | null {
+  const last = bars.at(-1);
+  const value = last?.date ?? last?.time ?? last?.trade_date;
+  return typeof value === 'string' ? value.slice(0, 10) : null;
+}
+
+function ensureTechnicalSummary(asset: JsonRecord): JsonRecord {
+  const quote = asRecord(asset.quote);
+  const kline = asRecord(asset.kline) ?? asRecord(asset.history);
+  const bars = extractBarsFromAsset(asset);
+  const metrics = asRecord(asset.computedMetrics) ?? calculateMetrics(kline);
+  const technicalIndicators = asRecord(asset.technicalIndicators) ?? {};
+  const existingSummary = asRecord(technicalIndicators.summary) ?? {};
+  const latestClose = numeric(existingSummary.latest_close) ?? numeric(quote?.price) ?? numeric(bars.at(-1)?.close);
+  const ma5 = numeric(existingSummary.ma5) ?? numeric(metrics.ma5);
+  const ma10 = numeric(existingSummary.ma10) ?? numeric(metrics.ma10);
+  const ma20 = numeric(existingSummary.ma20) ?? numeric(metrics.ma20);
+  const return20d = numeric(existingSummary.return_20d_pct) ?? numeric(metrics.return20d);
+  const return60d = numeric(existingSummary.return_60d_pct) ?? numeric(metrics.return60d);
+  const return120d =
+    numeric(existingSummary.return_120d_pct) ??
+    numeric(existingSummary.period_return_pct) ??
+    numeric(metrics.return120d) ??
+    numeric(metrics.periodReturn);
+  const maxDrawdown = numeric(existingSummary.max_drawdown_pct) ?? numeric(metrics.maxDrawdown);
+  const volatility = numeric(existingSummary.volatility_20d_annualized_pct) ?? numeric(existingSummary.volatility_annualized_pct) ?? numeric(metrics.volatility20d);
+  const avgVolume = numeric(existingSummary.avg_volume20) ?? numeric(metrics.avgVolume20d);
+  const symbol = String(asset.symbol ?? quote?.symbol ?? '');
+  const name = String(asset.name ?? quote?.name ?? symbol);
+
+  let trendState = '趋势待确认：K 线或均线样本不足。';
+  if (latestClose !== null && ma5 !== null && ma10 !== null && ma20 !== null) {
+    if (latestClose >= ma5 && latestClose >= ma10 && latestClose >= ma20) {
+      trendState = '短中期强势：最新价站上 MA5/MA10/MA20。';
+    } else if (latestClose < ma5 && latestClose < ma10 && latestClose < ma20) {
+      trendState = '短中期偏弱：最新价低于 MA5/MA10/MA20。';
+    } else {
+      trendState = '震荡观察：最新价处于均线区间内，需要等待方向确认。';
+    }
+  }
+
+  const summary = {
+    symbol,
+    name,
+    sample_window: bars.length
+      ? `${firstDateFromBars(bars) ?? '-'} 至 ${lastDateFromBars(bars) ?? '-'}，${bars.length} 根日 K`
+      : '暂无历史 K 线样本',
+    return_20d_pct: round(return20d),
+    return_60d_pct: round(return60d),
+    return_120d_pct: round(return120d),
+    period_return_pct: round(numeric(existingSummary.period_return_pct) ?? numeric(metrics.periodReturn)),
+    max_drawdown_pct: round(maxDrawdown),
+    volatility_20d_annualized_pct: round(volatility),
+    ma5: round(ma5),
+    ma10: round(ma10),
+    ma20: round(ma20),
+    latest_close: round(latestClose),
+    trend_state: String(existingSummary.trend_state ?? trendState),
+    volume_note: avgVolume === null
+      ? '缺少连续成交量，量能指标待补充。'
+      : `20 日均量约 ${round(avgVolume, 0)} 手。`,
+  };
+
+  asset.technicalIndicators = {
+    ...technicalIndicators,
+    summary,
+    computedMetrics: metrics,
+    data_quality: technicalIndicators.data_quality ?? {
+      status: bars.length >= 20 ? 'ok' : 'warning',
+      warnings: bars.length >= 20 ? [] : ['历史 K 线样本少于 20 条，技术指标稳定性较弱。'],
+    },
+  };
+  return summary;
+}
+
+function buildFinancialQuality(asset: JsonRecord): JsonRecord {
+  const quote = asRecord(asset.quote);
+  const symbol = String(asset.symbol ?? quote?.symbol ?? '');
+  const name = String(asset.name ?? quote?.name ?? symbol);
+  const fundamental = asRecord(asset.fundamentalIndicators);
+  const financials = asRecord(asset.financials);
+  const summary = asRecord(fundamental?.summary);
+  const firstReport = Array.isArray(financials?.reports)
+    ? asRecord(financials.reports[0])
+    : null;
+  const source = summary ?? firstReport ?? {};
+  const roe = numeric(source.latest_weighted_roe ?? source.weighted_roe);
+  const grossMargin = numeric(source.latest_gross_margin ?? source.gross_margin);
+  const netMargin = numeric(source.latest_net_margin ?? source.net_margin);
+  const revenueYoy = numeric(source.latest_revenue_yoy ?? source.revenue_yoy);
+  const profitYoy = numeric(source.latest_net_profit_yoy ?? source.net_profit_yoy);
+  const scoreParts = [
+    roe === null ? null : Math.min(Math.max(roe * 3, 0), 30),
+    grossMargin === null ? null : Math.min(Math.max(grossMargin / 2, 0), 25),
+    netMargin === null ? null : Math.min(Math.max(netMargin / 2, 0), 25),
+    revenueYoy === null ? null : Math.min(Math.max(revenueYoy / 2, -10), 15),
+    profitYoy === null ? null : Math.min(Math.max(profitYoy / 4, -10), 15),
+  ].filter((value): value is number => value !== null);
+  const qualityScore = scoreParts.length ? Math.max(0, Math.min(100, round(sum(scoreParts), 0) ?? 0)) : null;
+  let qualityLabel = '财务质量待确认';
+  if (qualityScore !== null) {
+    if (qualityScore >= 75) {
+      qualityLabel = '盈利质量较强';
+    } else if (qualityScore >= 60) {
+      qualityLabel = '质量与成长较均衡';
+    } else if (qualityScore >= 40) {
+      qualityLabel = '质量约束较明显';
+    } else {
+      qualityLabel = '财务质量偏弱或缺失较多';
+    }
+  }
+
+  const strengths: string[] = [];
+  const watchItems: string[] = [];
+  if ((grossMargin ?? 0) >= 40) strengths.push('毛利率处于较高水平。');
+  if ((netMargin ?? 0) >= 15) strengths.push('净利率表现较好。');
+  if ((revenueYoy ?? 0) > 20 || (profitYoy ?? 0) > 20) strengths.push('最近报告期仍有增长弹性。');
+  if ((roe ?? 0) < 5) watchItems.push('ROE 偏低，需要关注资产回报效率。');
+  if ((netMargin ?? 0) < 8) watchItems.push('净利率偏低，盈利质量约束更强。');
+  if ((revenueYoy ?? 0) < 0 || (profitYoy ?? 0) < 0) watchItems.push('收入或利润同比为负，需要关注基本面压力。');
+  if (strengths.length === 0) strengths.push('可作为候选池横向比较样本。');
+  if (watchItems.length === 0) watchItems.push('仍需结合现金流、负债结构和行业景气度复核。');
+
+  const quality = {
+    symbol,
+    name,
+    latest_report_date: source.latest_report_date ?? source.report_date ?? null,
+    roe_pct: round(roe, 4),
+    gross_margin_pct: round(grossMargin, 4),
+    net_margin_pct: round(netMargin, 4),
+    revenue_yoy_pct: round(revenueYoy, 4),
+    net_profit_yoy_pct: round(profitYoy, 4),
+    quality_score: qualityScore,
+    quality_label: qualityLabel,
+    strengths,
+    watch_items: watchItems,
+  };
+
+  asset.financialQuality = quality;
+  return quality;
 }
 
 function extractBarsFromAsset(asset: JsonRecord | null): JsonRecord[] {
@@ -569,10 +744,16 @@ function finalDataFromResponses(params: {
 }
 
 function buildComparisonSummary(assets: JsonRecord[]): JsonRecord {
+  const financialQualityRows = assets.map((asset) => asRecord(asset.financialQuality) ?? buildFinancialQuality(asset));
   const rows = assets.map((asset) => {
     const metrics = asRecord(asset.computedMetrics);
     const quote = asRecord(asset.quote);
     const symbol = String(asset.symbol ?? quote?.symbol ?? '');
+    const bars = extractBarsFromAsset(asset);
+    const technicalSummary = asRecord(asRecord(asset.technicalIndicators)?.summary) ?? ensureTechnicalSummary(asset);
+    const financialQuality = asRecord(asset.financialQuality) ?? financialQualityRows.find((row) => row?.symbol === symbol);
+    const avgAmount20d = numeric(metrics?.avgAmount20d);
+    const amount = numeric(quote?.amount);
     return {
       symbol,
       name: asset.name ?? quote?.name ?? symbol,
@@ -582,33 +763,98 @@ function buildComparisonSummary(assets: JsonRecord[]): JsonRecord {
       max_drawdown: metrics?.maxDrawdown ?? null,
       volatility20d: metrics?.volatility20d ?? null,
       avg_volume_20d: metrics?.avgVolume20d ?? null,
+      avg_amount_20d: avgAmount20d,
       amount: quote?.amount ?? null,
       as_of: asset.as_of ?? quote?.quote_time ?? quote?.fetched_at ?? null,
       source: asset.source ?? quote?.source ?? null,
+      sample_size: bars.length,
+      period_start: firstDateFromBars(bars),
+      period_end: lastDateFromBars(bars),
+      return_20d_pct: technicalSummary.return_20d_pct ?? metrics?.return20d ?? null,
+      return_60d_pct: technicalSummary.return_60d_pct ?? metrics?.return60d ?? null,
+      return_120d_pct: technicalSummary.return_120d_pct ?? metrics?.return120d ?? metrics?.periodReturn ?? null,
+      financial_quality_score: financialQuality?.quality_score ?? null,
+      financial_quality_label: financialQuality?.quality_label ?? null,
+      liquidity_note: avgAmount20d !== null
+        ? `20 日均成交额 ${round(avgAmount20d / 100_000_000, 2)} 亿元`
+        : amount !== null
+          ? `最新成交额 ${round(amount / 100_000_000, 2)} 亿元`
+          : '成交额缺失，使用成交量代理。',
     };
   });
 
   const numericRows = rows.map((row) => ({
     ...row,
     periodReturnNumber: numeric(row.period_return),
+    return120dNumber: numeric(row.return_120d_pct ?? row.period_return),
     drawdownNumber: numeric(row.max_drawdown),
     volatilityNumber: numeric(row.volatility20d),
+    liquidityNumber: numeric(row.avg_amount_20d ?? row.amount),
+    qualityNumber: numeric(row.financial_quality_score),
   }));
   const bestReturn = numericRows
-    .filter((row) => row.periodReturnNumber !== null)
-    .sort((a, b) => (b.periodReturnNumber ?? 0) - (a.periodReturnNumber ?? 0))[0];
+    .filter((row) => row.return120dNumber !== null)
+    .sort((a, b) => (b.return120dNumber ?? 0) - (a.return120dNumber ?? 0))[0];
   const lowestDrawdown = numericRows
     .filter((row) => row.drawdownNumber !== null)
     .sort((a, b) => Math.abs(a.drawdownNumber ?? 0) - Math.abs(b.drawdownNumber ?? 0))[0];
   const lowestVolatility = numericRows
     .filter((row) => row.volatilityNumber !== null)
     .sort((a, b) => (a.volatilityNumber ?? 0) - (b.volatilityNumber ?? 0))[0];
+  const rankedReturns = rankRows(numericRows, 'return120dNumber', 'desc');
+  const rankedDrawdown = rankRows(numericRows.map((row) => ({ ...row, drawdownAbs: Math.abs(row.drawdownNumber ?? Number.POSITIVE_INFINITY) })), 'drawdownAbs', 'asc');
+  const rankedVolatility = rankRows(numericRows, 'volatilityNumber', 'asc');
+  const rankedLiquidity = rankRows(numericRows, 'liquidityNumber', 'desc');
+  const rankedQuality = rankRows(numericRows, 'qualityNumber', 'desc');
+  const enrichedRows = numericRows.map((row) => {
+    const returnRank = rankedReturns.get(row.symbol);
+    const drawdownRank = rankedDrawdown.get(row.symbol);
+    const volatilityRank = rankedVolatility.get(row.symbol);
+    const liquidityRank = rankedLiquidity.get(row.symbol);
+    const qualityRank = rankedQuality.get(row.symbol);
+    const validRanks = [returnRank, drawdownRank, volatilityRank, liquidityRank, qualityRank]
+      .filter((rank): rank is number => typeof rank === 'number');
+    const compositeScore = validRanks.length
+      ? round(validRanks.reduce((score, rank) => score + (assets.length - rank + 1), 0) / (validRanks.length * assets.length) * 100, 0)
+      : null;
+    return {
+      ...row,
+      rank_return: returnRank ?? null,
+      rank_drawdown: drawdownRank ?? null,
+      rank_volatility: volatilityRank ?? null,
+      rank_liquidity: liquidityRank ?? null,
+      rank_quality: qualityRank ?? null,
+      composite_score: compositeScore,
+      relative_strength: row.return120dNumber === null
+        ? '待确认'
+        : row === bestReturn
+          ? '收益领先'
+          : row.return120dNumber > 0
+            ? '阶段为正'
+            : '阶段偏弱',
+      selection_view: compositeScore === null
+        ? '数据待补齐'
+        : compositeScore >= 72
+          ? '优先研究'
+          : compositeScore >= 55
+            ? '观察候选'
+            : '谨慎观察',
+      ranking_reason: [
+        returnRank ? `收益排名 ${returnRank}` : null,
+        drawdownRank ? `回撤排名 ${drawdownRank}` : null,
+        qualityRank ? `质量排名 ${qualityRank}` : null,
+      ].filter(Boolean).join('，') || '关键指标仍需补齐。',
+      exclusion_reason: compositeScore !== null && compositeScore < 55
+        ? '综合排名靠后，需等待趋势、质量或流动性改善。'
+        : null,
+    };
+  });
 
   return {
-    rows,
+    rows: enrichedRows,
     leaders: {
       best_return: bestReturn
-        ? { symbol: bestReturn.symbol, name: bestReturn.name, value: bestReturn.period_return }
+        ? { symbol: bestReturn.symbol, name: bestReturn.name, value: bestReturn.return_120d_pct ?? bestReturn.period_return }
         : null,
       lowest_drawdown: lowestDrawdown
         ? { symbol: lowestDrawdown.symbol, name: lowestDrawdown.name, value: lowestDrawdown.max_drawdown }
@@ -617,6 +863,144 @@ function buildComparisonSummary(assets: JsonRecord[]): JsonRecord {
         ? { symbol: lowestVolatility.symbol, name: lowestVolatility.name, value: lowestVolatility.volatility20d }
         : null,
     },
+  };
+}
+
+function rankRows(
+  rows: Array<JsonRecord & { symbol: string }>,
+  field: string,
+  direction: 'asc' | 'desc'
+): Map<string, number> {
+  const ranked = rows
+    .map((row) => ({ symbol: row.symbol, value: numeric(row[field]) }))
+    .filter((row): row is { symbol: string; value: number } => Boolean(row.symbol) && row.value !== null)
+    .sort((left, right) => direction === 'asc' ? left.value - right.value : right.value - left.value);
+  return new Map(ranked.map((row, index) => [row.symbol, index + 1]));
+}
+
+function buildFinancialQualitySummary(assets: JsonRecord[]): JsonRecord {
+  const rows = assets.map((asset) => asRecord(asset.financialQuality) ?? buildFinancialQuality(asset));
+  const ranked = rankRows(
+    rows.map((row) => ({ ...row, symbol: String(row.symbol ?? '') })),
+    'quality_score',
+    'desc'
+  );
+  return {
+    method: 'latest_report_profitability_growth_score',
+    latest_report_date: rows.find((row) => row.latest_report_date)?.latest_report_date ?? null,
+    rows: rows.map((row) => ({
+      ...row,
+      rank_quality: ranked.get(String(row.symbol ?? '')) ?? null,
+    })),
+    limitations: [
+      '财务质量评分用于横向研究，不构成估值目标价或买卖建议。',
+      '当前仅使用接口可得的最近报告期、盈利率和同比指标，未纳入现金流、负债结构和行业景气度。',
+    ],
+  };
+}
+
+function buildSelectionRanking(comparison: JsonRecord, assets: JsonRecord[]): JsonRecord {
+  const rows = Array.isArray(comparison.rows)
+    ? comparison.rows.map(asRecord).filter((row): row is JsonRecord => Boolean(row))
+    : [];
+  const ranked = rows
+    .slice()
+    .sort((left, right) => (numeric(right.composite_score) ?? -1) - (numeric(left.composite_score) ?? -1));
+  return {
+    method: 'multi_factor_research_priority',
+    description: '综合收益、回撤、波动、流动性代理和财务质量后的研究优先级；不是交易指令。',
+    rows: ranked.map((row, index) => ({
+      rank: index + 1,
+      symbol: row.symbol,
+      name: row.name,
+      score: row.composite_score,
+      view: row.selection_view,
+      reason: row.ranking_reason,
+      exclusion_reason: row.exclusion_reason,
+    })),
+    coverage: {
+      requested: assets.length,
+      ranked: ranked.length,
+    },
+  };
+}
+
+function buildConclusion(params: {
+  comparison: JsonRecord;
+  selectionRanking: JsonRecord;
+  financialQuality: JsonRecord;
+}): JsonRecord {
+  const leaders = asRecord(params.comparison.leaders);
+  const top = asRecord(Array.isArray(params.selectionRanking.rows) ? params.selectionRanking.rows[0] : null);
+  const qualityRows = Array.isArray(params.financialQuality.rows)
+    ? params.financialQuality.rows.map(asRecord).filter((row): row is JsonRecord => Boolean(row))
+    : [];
+  const qualityLeader = qualityRows
+    .slice()
+    .sort((left, right) => (numeric(right.quality_score) ?? -1) - (numeric(left.quality_score) ?? -1))[0];
+  return {
+    summary: [
+      top ? `综合研究优先级第一：${String(top.name ?? top.symbol)}，原因：${String(top.reason ?? '多因子得分领先')}` : '综合研究优先级仍待补齐。',
+      asRecord(leaders?.best_return)
+        ? `阶段收益领先：${String(asRecord(leaders?.best_return)?.name ?? asRecord(leaders?.best_return)?.symbol)}。`
+        : '阶段收益领先标的待确认。',
+      asRecord(leaders?.lowest_drawdown)
+        ? `回撤控制相对较好：${String(asRecord(leaders?.lowest_drawdown)?.name ?? asRecord(leaders?.lowest_drawdown)?.symbol)}。`
+        : '回撤控制指标待确认。',
+      qualityLeader ? `财务质量相对占优：${String(qualityLeader.name ?? qualityLeader.symbol)}。` : '财务质量数据仍需补齐。',
+      '排序仅用于横向研究，不构成交易指令；仍需结合仓位、风险偏好、交易成本和后续基本面变化。',
+    ],
+    primary_view: top
+      ? `${String(top.name ?? top.symbol)} 当前综合研究优先级最高；其余候选应结合趋势、质量和风险约束分层观察。`
+      : '候选排序待确认。',
+    risk_disclaimer: '公开行情和财务接口可能存在延迟或字段缺失，本结果不构成投资建议、收益承诺或即时交易指令。',
+  };
+}
+
+function buildHoldingRows(assets: JsonRecord[]): JsonRecord[] {
+  const equalWeight = assets.length > 0 ? 1 / assets.length : 0;
+  return assets.map((asset) => {
+    const quote = asRecord(asset.quote);
+    const symbol = String(asset.symbol ?? quote?.symbol ?? '');
+    const price = numeric(quote?.price);
+    const marketValue = price === null ? null : round(price * equalWeight * 10_000);
+    return {
+      symbol,
+      name: String(asset.name ?? quote?.name ?? symbol),
+      shares: null,
+      cost_price: null,
+      current_price: price,
+      market_value: marketValue,
+      weight: round(equalWeight * 100, 2),
+      pnl: null,
+      pnl_pct: null,
+      source: 'market_prefetch',
+      data_gaps: ['shares', 'cost_price', 'actual_market_value'],
+    };
+  });
+}
+
+function buildPortfolioSummary(assets: JsonRecord[]): JsonRecord {
+  const holdings = buildHoldingRows(assets);
+  const weights = holdings.map((holding) => numeric(holding.weight)).filter((value): value is number => value !== null);
+  const maxWeight = weights.length ? Math.max(...weights) : null;
+  return {
+    generated_from: 'symbols_without_broker_position_detail',
+    total_asset: null,
+    market_value: null,
+    cash: null,
+    position_pct: null,
+    floating_pnl: null,
+    floating_pnl_pct: null,
+    concentration: {
+      max_weight_pct: maxWeight,
+      top3_weight_pct: round(weights.sort((a, b) => b - a).slice(0, 3).reduce((sum, value) => sum + value, 0)),
+      method: 'equal_weight_proxy_until_user_position_fields_are_confirmed',
+    },
+    data_gaps: ['total_asset', 'cash', 'shares', 'cost_price', 'actual_weight'],
+    warnings: [
+      '平台只能从用户问题和行情接口预取标的，真实持仓数量、成本、现金和权重需要用户补充或由截图识别后确认。',
+    ],
   };
 }
 
@@ -654,7 +1038,11 @@ async function fetchSymbolDataset(params: {
     }
   }
 
-  if (params.plan.dataRequirements.some((endpoint) => endpoint.includes('/indicators/technical/'))) {
+  if (
+    params.plan.dataRequirements.some((endpoint) => endpoint.includes('/indicators/technical/')) ||
+    params.plan.capabilityId === 'asset_comparison' ||
+    params.plan.requestedCapabilityId === 'asset_comparison'
+  ) {
     try {
       technicalIndicators = await fetchJson(
         `/api/v1/indicators/technical/${params.symbol}?period=daily&adjustment=qfq&limit=${historyLimit}`
@@ -805,6 +1193,8 @@ export async function prefetchQuantDataForRunPlan(params: {
       if (quoteMap.has(symbol)) {
         asset.quote = quoteMap.get(symbol);
       }
+      ensureTechnicalSummary(asset);
+      buildFinancialQuality(asset);
       assets.push(asset);
     } catch (error) {
       warnings.push(`${symbol} 预取失败：${error instanceof Error ? error.message : String(error)}`);
@@ -816,10 +1206,41 @@ export async function prefetchQuantDataForRunPlan(params: {
   }
 
   const primaryAsset = assets[0];
+  const visualizationTemplate = serializeQuantVisualizationTemplate(
+    params.plan.requestedCapabilityId ?? params.plan.capabilityId
+  );
+  const visualization = {
+    template_id: visualizationTemplate.templateId,
+    name: visualizationTemplate.name,
+    scenario: visualizationTemplate.scenario,
+    pain_points: visualizationTemplate.painPoints,
+    required_components: visualizationTemplate.requiredComponents,
+    optional_components: visualizationTemplate.optionalComponents,
+    data_signals: visualizationTemplate.dataSignals,
+    final_data_contract: visualizationTemplate.finalDataContract,
+    rendered_components: visualizationTemplate.requiredComponents,
+    missing_components: [],
+  };
+  const comparison = buildComparisonSummary(assets);
+  const financialQuality = buildFinancialQualitySummary(assets);
+  const selectionRanking = buildSelectionRanking(comparison, assets);
+  const conclusion = buildConclusion({ comparison, selectionRanking, financialQuality });
   const finalData = symbols.length === 1
     ? {
         ...primaryAsset,
+        ...(params.plan.requestedCapabilityId === 'portfolio_risk' || params.plan.capabilityId === 'portfolio_risk'
+          ? {
+              portfolio: buildPortfolioSummary(assets),
+              holdings: buildHoldingRows(assets),
+              assets,
+              comparison: buildComparisonSummary(assets),
+            }
+          : {}),
+        visualization,
         liquidity: buildLiquiditySummary([primaryAsset]),
+        financialQuality,
+        selectionRanking,
+        conclusion,
       }
     : {
         ...primaryAsset,
@@ -830,9 +1251,19 @@ export async function prefetchQuantDataForRunPlan(params: {
         symbols: assets.map((asset) => asset.symbol),
         assetCount: assets.length,
         assets,
-        comparison: buildComparisonSummary(assets),
+        ...(params.plan.requestedCapabilityId === 'portfolio_risk' || params.plan.capabilityId === 'portfolio_risk'
+          ? {
+              portfolio: buildPortfolioSummary(assets),
+              holdings: buildHoldingRows(assets),
+            }
+          : {}),
+        comparison,
         correlation: buildCorrelationSummary(assets),
         liquidity: buildLiquiditySummary(assets),
+        financialQuality,
+        selectionRanking,
+        visualization,
+        conclusion,
         warnings,
       };
   const finalPath = path.join(params.projectPath, 'data_file', 'final', 'dashboard-data.json');

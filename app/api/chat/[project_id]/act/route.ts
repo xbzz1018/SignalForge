@@ -24,6 +24,7 @@ import {
   markUserRequestAsProcessing,
   markUserRequestAsCompleted,
   markUserRequestAsFailed,
+  isUserRequestCancelled,
 } from '@/lib/services/user-requests';
 import { readQuantRunPlan, writeInitialRunPlan } from '@/lib/quant/workspace';
 import { prefetchQuantDataForRunPlan } from '@/lib/quant/data-prefetch';
@@ -32,6 +33,7 @@ import {
   validateQuantProject,
 } from '@/lib/quant/validation';
 import { buildClarificationContinuation, buildQuantClarificationMessage } from '@/lib/quant/intent';
+import { ensureQuantDashboardTemplate } from '@/lib/utils/scaffold';
 
 interface RouteContext {
   params: Promise<{ project_id: string }>;
@@ -51,7 +53,8 @@ type CliRuntime = {
     instruction: string,
     model?: string,
     sessionId?: string,
-    requestId?: string
+    requestId?: string,
+    images?: ProcessedImageAttachment[]
   ) => Promise<void>;
 };
 
@@ -126,6 +129,10 @@ function runValidationAfterExecution(params: {
   cliSource?: string | null;
 }) {
   const validateAndRepair = async (executionError?: unknown) => {
+    if (await isUserRequestCancelled(params.requestId)) {
+      return;
+    }
+
     const firstReport = await validateQuantProject({
       projectId: params.projectId,
       projectPath: params.projectPath,
@@ -135,6 +142,9 @@ function runValidationAfterExecution(params: {
     });
 
     if (firstReport.passed) {
+      if (await isUserRequestCancelled(params.requestId)) {
+        return;
+      }
       await markUserRequestAsCompleted(params.requestId);
       if (executionError) {
         streamManager.publish(params.projectId, {
@@ -150,6 +160,9 @@ function runValidationAfterExecution(params: {
     }
 
     if (executionError) {
+      if (await isUserRequestCancelled(params.requestId)) {
+        return;
+      }
       const message =
         executionError instanceof Error
           ? executionError.message
@@ -193,6 +206,10 @@ function runValidationAfterExecution(params: {
       console.error('[API] Failed to record validation repair request:', error);
     }
 
+    if (await isUserRequestCancelled(params.requestId)) {
+      return;
+    }
+
     try {
       await params.repairExecutor(
         params.projectId,
@@ -214,6 +231,10 @@ function runValidationAfterExecution(params: {
       });
     }
 
+    if (await isUserRequestCancelled(params.requestId)) {
+      return;
+    }
+
     const finalReport = await validateQuantProject({
       projectId: params.projectId,
       projectPath: params.projectPath,
@@ -223,6 +244,9 @@ function runValidationAfterExecution(params: {
     });
 
     if (finalReport.passed) {
+      if (await isUserRequestCancelled(params.requestId)) {
+        return;
+      }
       await markUserRequestAsCompleted(params.requestId);
       return;
     }
@@ -335,12 +359,22 @@ async function materializeBase64Image(
 
 type RawImageAttachment = Record<string, unknown>;
 
+type ProcessedImageAttachment = {
+  name: string;
+  path: string;
+  url: string;
+  publicUrl?: string;
+  originalName?: string;
+  mimeType?: string;
+  size?: number;
+};
+
 async function normalizeImageAttachment(
   projectId: string,
   projectRoot: string,
   raw: RawImageAttachment,
   index: number,
-): Promise<{ name: string; path: string; url: string; publicUrl?: string } | null> {
+): Promise<ProcessedImageAttachment | null> {
   const name = typeof raw.name === 'string' && raw.name.trim().length > 0 ? raw.name.trim() : `Image ${index + 1}`;
   const providedUrl = typeof raw.url === 'string' && raw.url.trim().length > 0 ? raw.url.trim() : undefined;
   const providedPublicUrl =
@@ -369,7 +403,7 @@ async function normalizeImageAttachment(
 
   if (pathValue) {
     try {
-      await fs.stat(pathValue);
+      const stat = await fs.stat(pathValue);
       const filename = path.basename(pathValue);
       let effectivePublicUrl = providedPublicUrl;
       if (!effectivePublicUrl) {
@@ -381,6 +415,9 @@ async function normalizeImageAttachment(
         path: pathValue,
         url: providedUrl ?? `/api/assets/${projectId}/${filename}`,
         publicUrl: effectivePublicUrl,
+        originalName: typeof raw.original_name === 'string' ? raw.original_name : undefined,
+        mimeType: typeof raw.mime_type === 'string' ? raw.mime_type : typeof raw.mimeType === 'string' ? raw.mimeType : undefined,
+        size: stat.size,
       };
     } catch {
       // fall through and try to materialize if base64 present
@@ -401,6 +438,7 @@ async function normalizeImageAttachment(
         path: materialized.absolutePath,
         url: providedUrl ?? `/api/assets/${projectId}/${materialized.filename}`,
         publicUrl: providedPublicUrl ?? materialized.publicUrl ?? undefined,
+        mimeType: mimeTypeCandidate,
       };
     } catch (error) {
       console.error('[API] Failed to materialize base64 image:', error);
@@ -409,6 +447,94 @@ async function normalizeImageAttachment(
   }
 
   return null;
+}
+
+async function writeAttachmentContext(params: {
+  projectRoot: string;
+  projectId: string;
+  requestId: string;
+  images: ProcessedImageAttachment[];
+}): Promise<string | null> {
+  if (params.images.length === 0) {
+    return null;
+  }
+
+  const quantDir = path.join(params.projectRoot, '.quantpilot');
+  const relativePath = '.quantpilot/attachments.json';
+  const absolutePath = path.join(params.projectRoot, relativePath);
+  const payload = {
+    schemaVersion: 1,
+    projectId: params.projectId,
+    requestId: params.requestId,
+    createdAt: new Date().toISOString(),
+    instruction: '这些图片由用户随本次问题上传。Agent 必须先读取本文件并检查图片，再解析其中的股票、持仓、成本、现金、盈亏、仓位等字段。',
+    attachments: params.images.map((image, index) => ({
+      id: `image-${index + 1}`,
+      name: image.name,
+      absolutePath: image.path,
+      path: path.relative(params.projectRoot, image.path).replaceAll(path.sep, '/'),
+      url: image.url,
+      publicUrl: image.publicUrl ?? null,
+      mimeType: image.mimeType ?? null,
+      size: image.size ?? null,
+    })),
+    extractionContract: {
+      requiredSkill: 'quant-image-extraction',
+      requiredTool: 'mcp__QuantPilotImage__quant_extract_uploaded_image',
+      optionalVisionTool: 'mcp__MiniMax__understand_image',
+      portfolioScreenshotFields: [
+        'account_total_asset',
+        'cash_available',
+        'market_value',
+        'daily_pnl',
+        'total_pnl',
+        'position_ratio',
+        'holdings[].name',
+        'holdings[].symbol_if_visible_or_resolved',
+        'holdings[].quantity',
+        'holdings[].cost_price',
+        'holdings[].current_price',
+        'holdings[].market_value',
+        'holdings[].pnl',
+        'holdings[].pnl_percent',
+      ],
+      rule: '无法确定的截图字段必须写 null，并在 evidence/data_quality.json 说明不确定性，不允许编造。',
+    },
+  };
+
+  await fs.mkdir(quantDir, { recursive: true });
+  await fs.writeFile(absolutePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  return relativePath;
+}
+
+function buildImageAttachmentInstruction(params: {
+  attachmentContextPath: string | null;
+  images: ProcessedImageAttachment[];
+}): string {
+  if (params.images.length === 0) {
+    return '';
+  }
+
+  const imageList = params.images
+    .map((image, index) => {
+      const relativeHint = image.path;
+      return `${index + 1}. ${image.name}：${relativeHint}`;
+    })
+    .join('\n');
+
+  return `
+
+图片附件处理要求：
+- 本次用户上传了 ${params.images.length} 张图片。先读取 ${params.attachmentContextPath ?? '.quantpilot/attachments.json'}，再检查图片内容，不要忽略附件。
+- 先使用 \`quant-image-extraction\` skill，并调用 \`mcp__QuantPilotImage__quant_extract_uploaded_image\` 读取附件清单、校验图片文件、生成 imageExtraction 初始结构。不要只说“我看不到图片”。
+- 如果 MiniMax MCP 的 \`mcp__MiniMax__understand_image\` 可用，再用它识别截图中的股票名称、数量、成本价、现价、市值、盈亏、仓位、现金和总资产；识别不确定的字段写 null 并在证据文件中说明。
+- 对识别出的股票名称必须使用 quant-symbol-resolver 或 /api/v1/symbols/resolve 解析代码，再获取真实行情、K 线、指标和必要的基本面数据。
+- 必须把图片提取结果写入 evidence/image_extraction.json；没有 OCR/视觉结果时也要写明 visualRecognition.status 和 needs_manual_confirmation。
+- 最终 dashboard-data.json 必须保留 portfolio、holdings、assets、comparison 和 imageExtraction 字段；imageExtraction 要说明哪些字段来自截图识别、哪些来自行情接口补全。
+- 如果兼容层无法直接读取图片视觉内容，也必须基于附件清单和文件路径继续处理，并明确列出需要人工确认的截图字段。
+
+图片路径：
+${imageList}`;
 }
 
 /**
@@ -442,13 +568,21 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       .replace(/\n*Image #\d+ path: [^\n]+/g, '')
       .trim();
 
+    const conversationId =
+      coerceString(body.conversationId) ?? coerceString(legacyBody['conversation_id']);
+
+    const requestId =
+      coerceString(body.requestId) ??
+      coerceString(legacyBody['request_id']) ??
+      generateProjectId();
+
     const rawImages: RawImageAttachment[] = Array.isArray((body as Record<string, unknown>).images)
       ? ((body as Record<string, unknown>).images as RawImageAttachment[])
       : Array.isArray(legacyBody['images'])
       ? (legacyBody['images'] as RawImageAttachment[])
       : [];
 
-    const processedImages: { name: string; path: string; url: string; publicUrl?: string }[] = [];
+    const processedImages: ProcessedImageAttachment[] = [];
     for (let index = 0; index < rawImages.length; index += 1) {
       const normalized = await normalizeImageAttachment(project_id, projectRoot, rawImages[index], index);
       if (normalized) {
@@ -456,15 +590,27 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       }
     }
 
+    const attachmentContextPath = await writeAttachmentContext({
+      projectRoot,
+      projectId: project_id,
+      requestId,
+      images: processedImages,
+    });
+    const imageAttachmentInstruction = buildImageAttachmentInstruction({
+      attachmentContextPath,
+      images: processedImages,
+    });
     const imageLines = processedImages.map((image, idx) => `Image #${idx + 1} path: ${image.path}`);
-    const finalInstruction = [instructionWithoutLegacyPaths, imageLines.join('\n')]
+    const finalInstruction = [
+      instructionWithoutLegacyPaths || (processedImages.length > 0 ? '请分析用户上传的图片附件。' : ''),
+      imageAttachmentInstruction || imageLines.join('\n'),
+    ]
       .filter((segment) => segment && segment.trim().length > 0)
       .join('\n\n')
       .trim();
-    const displayInstruction = [visibleInstructionWithoutLegacyPaths, imageLines.join('\n')]
-      .filter((segment) => segment && segment.trim().length > 0)
-      .join('\n\n')
-      .trim();
+    const displayInstruction =
+      visibleInstructionWithoutLegacyPaths ||
+      (processedImages.length > 0 ? '请分析上传的图片附件' : finalInstruction);
 
     if (!finalInstruction) {
       return NextResponse.json(
@@ -499,16 +645,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       displayInstruction,
       capabilityId: quantCapabilityId,
     });
-    const effectiveInstruction = clarificationContinuation?.resolvedInstruction ?? finalInstruction;
+    const effectiveInstruction = clarificationContinuation
+      ? `${clarificationContinuation.resolvedInstruction}${imageAttachmentInstruction}`
+      : finalInstruction;
     const effectiveDisplayInstruction = clarificationContinuation?.displayInstruction ?? displayInstruction;
-
-    const conversationId =
-      coerceString(body.conversationId) ?? coerceString(legacyBody['conversation_id']);
-
-    const requestId =
-      coerceString(body.requestId) ??
-      coerceString(legacyBody['request_id']) ??
-      generateProjectId();
 
     const isInitialPrompt =
       body.isInitialPrompt === true ||
@@ -526,6 +666,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
                     publicUrl: image.publicUrl,
                     path: image.path,
                   })),
+                  attachmentContextPath,
                 }
               : {}),
             ...(clarificationContinuation
@@ -604,6 +745,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         instruction: effectiveInstruction,
         requestId,
         capabilityId: quantCapabilityId,
+        hasImageAttachments: processedImages.length > 0,
       });
 
       if (runPlan.status === 'needs_clarification' && runPlan.clarification?.required) {
@@ -657,6 +799,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         projectPath,
         plan: runPlan,
       });
+      if (!prefetch.skipped) {
+        await ensureQuantDashboardTemplate(projectPath);
+      }
       if (!prefetch.skipped) {
         streamManager.publish(project_id, {
           type: 'status',
@@ -736,7 +881,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         effectiveInstruction,
         selectedModel,
         sessionId,
-        requestId
+        requestId,
+        processedImages
       );
       runValidationAfterExecution({
         execution,

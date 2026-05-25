@@ -228,6 +228,12 @@ async function readJsonRecord(filePath: string): Promise<Record<string, unknown>
   }
 }
 
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 function comparisonPageTemplate() {
   return `import fs from 'fs/promises';
 import path from 'path';
@@ -235,6 +241,7 @@ import path from 'path';
 type JsonRecord = Record<string, unknown>;
 
 const DATA_FILE = 'data_file/final/dashboard-data.json';
+const SOURCES_FILE = 'evidence/sources.json';
 
 function asRecord(value: unknown): JsonRecord | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -272,6 +279,24 @@ function formatMoney(value: unknown): string {
   if (Math.abs(number) >= 100000000) return formatNumber(number / 100000000, 2) + ' 亿';
   if (Math.abs(number) >= 10000) return formatNumber(number / 10000, 2) + ' 万';
   return formatNumber(number);
+}
+
+function sourceDisplayName(source: unknown, datasetType?: unknown): string {
+  const normalized = String(source ?? '').toLowerCase();
+  const type = String(datasetType ?? '').toLowerCase();
+  if (normalized.includes('eastmoney')) {
+    if (/kline|history|历史/.test(type)) return '东方财富历史 K 线接口';
+    if (/financial|fundamental|财务/.test(type)) return '东方财富财务数据接口';
+    if (/announcement|event|公告/.test(type)) return '东方财富公告事件接口';
+    return '东方财富实时行情接口';
+  }
+  if (normalized.includes('uploaded_image')) return '用户上传截图';
+  if (normalized.includes('market_prefetch')) return 'QuantPilot 后端预取';
+  if (normalized.includes('tencent')) return '腾讯证券行情接口';
+  if (normalized.includes('sina')) return '新浪财经行情接口';
+  if (normalized.includes('akshare')) return 'AKShare 免费数据接口';
+  if (normalized.includes('local')) return '本地计算结果';
+  return String(source ?? '未知信源');
 }
 
 async function readDashboardData(): Promise<JsonRecord | null> {
@@ -317,6 +342,44 @@ function getLeaders(data: JsonRecord | null): JsonRecord | null {
 function getCorrelationPairs(data: JsonRecord | null): JsonRecord[] {
   const correlation = asRecord(data?.correlation);
   return asArray(correlation?.top_pairs).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+}
+
+function getValuationRows(data: JsonRecord | null): JsonRecord[] {
+  const valuation = asRecord(data?.valuation);
+  const rows = asArray(valuation?.assets).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+  if (rows.length > 0) {
+    return rows;
+  }
+  const scenarios = asArray(valuation?.scenarios).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+  if (scenarios.length === 0) {
+    return [];
+  }
+  return [{
+    symbol: data?.symbol,
+    name: data?.name,
+    base_metrics: valuation?.base_metrics ?? valuation?.baseMetrics,
+    scenarios,
+    warnings: valuation?.warnings,
+  }];
+}
+
+function getTrendTemplateRows(data: JsonRecord | null): JsonRecord[] {
+  const trendTemplate = asRecord(data?.trendTemplate) ?? asRecord(data?.trend_template);
+  return asArray(trendTemplate?.rows).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+}
+
+function getVisualization(data: JsonRecord | null): JsonRecord | null {
+  return asRecord(data?.visualization);
+}
+
+function getVisualizationRows(visualization: JsonRecord | null): JsonRecord[] {
+  const required = asArray(visualization?.required_components).map(String);
+  const rendered = new Set(asArray(visualization?.rendered_components).map(String));
+  const missing = new Set(asArray(visualization?.missing_components).map(String));
+  return required.map((name) => ({
+    name,
+    status: missing.has(name) ? '待补充' : rendered.has(name) ? '已渲染' : '按模板渲染',
+  }));
 }
 
 function getLiquidityRows(data: JsonRecord | null): JsonRecord[] {
@@ -447,6 +510,140 @@ function LiquidityPanel({ rows }: { rows: JsonRecord[] }) {
   );
 }
 
+function ValuationPanel({ rows }: { rows: JsonRecord[] }) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="comparison-matrix">
+      <div className="panel-heading">
+        <div>
+          <h2>估值情景</h2>
+          <p>基于 PE/EPS 的防守、中性、进攻三档情景；仅用于研究，不构成收益承诺。</p>
+        </div>
+        <span>{rows.length} 项</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>标的</th>
+              <th>当前价</th>
+              <th>PE</th>
+              <th>EPS</th>
+              <th>中性情景价</th>
+              <th>中性空间</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => {
+              const metrics = asRecord(row.base_metrics) ?? asRecord(row.baseMetrics) ?? {};
+              const scenarios = asArray(row.scenarios).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+              const baseScenario = scenarios.find((item) => item.case === 'base') ?? scenarios[1] ?? scenarios[0];
+              return (
+                <tr key={String(row.symbol ?? index)}>
+                  <td><strong>{String(row.name ?? row.symbol)}</strong><small>{String(row.symbol ?? '-')}</small></td>
+                  <td>{formatNumber(metrics.price)}</td>
+                  <td>{formatNumber(metrics.pe_ttm ?? metrics.pe)}</td>
+                  <td>{formatNumber(metrics.eps, 4)}</td>
+                  <td>{formatNumber(baseScenario?.implied_price)}</td>
+                  <td className={tone(baseScenario?.upside_pct)}>{formatPercent(baseScenario?.upside_pct)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function TrendTemplatePanel({ rows }: { rows: JsonRecord[] }) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="comparison-matrix">
+      <div className="panel-heading">
+        <div>
+          <h2>趋势模板</h2>
+          <p>MA20/MA60、阶段回撤和量能比，辅助生成确认、减仓和观察条件。</p>
+        </div>
+        <span>{rows.length} 项</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>标的</th>
+              <th>状态</th>
+              <th>分数</th>
+              <th>MA20</th>
+              <th>MA60</th>
+              <th>20 日收益</th>
+              <th>120 日回撤</th>
+              <th>量能比</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => {
+              const metrics = asRecord(row.metrics) ?? {};
+              return (
+                <tr key={String(row.symbol ?? index)}>
+                  <td><strong>{String(row.name ?? row.symbol)}</strong><small>{String(row.symbol ?? '-')}</small></td>
+                  <td>{String(row.state ?? '-')}</td>
+                  <td>{formatNumber(row.score, 0)}</td>
+                  <td>{formatNumber(metrics.ma20)}</td>
+                  <td>{formatNumber(metrics.ma60)}</td>
+                  <td className={tone(metrics.return_20d_pct)}>{formatPercent(metrics.return_20d_pct)}</td>
+                  <td className="down">{formatPercent(metrics.max_drawdown_120d_pct)}</td>
+                  <td>{formatNumber(metrics.volume_ratio_20d, 2)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function VisualizationPlanPanel({ visualization }: { visualization: JsonRecord | null }) {
+  const rows = getVisualizationRows(visualization);
+  if (!visualization || rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="comparison-matrix">
+      <div className="panel-heading">
+        <div>
+          <h2>场景模板</h2>
+          <p>{String(visualization.name ?? visualization.template_id ?? 'QuantPilot 场景化看板')}</p>
+        </div>
+        <span>{String(visualization.template_id ?? '-')}</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>必备组件</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 8).map((row, index) => (
+              <tr key={String(row.name ?? index)}>
+                <td>{String(row.name ?? '-')}</td>
+                <td>{String(row.status ?? '-')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export default async function Home() {
   const data = await readDashboardData();
   const rows = getComparisonRows(data);
@@ -454,6 +651,9 @@ export default async function Home() {
   const leaders = getLeaders(data);
   const correlationPairs = getCorrelationPairs(data);
   const liquidityRows = getLiquidityRows(data);
+  const valuationRows = getValuationRows(data);
+  const trendTemplateRows = getTrendTemplateRows(data);
+  const visualization = getVisualization(data);
   const requestedSymbols = asArray(data?.requestedSymbols ?? data?.symbols).map(String);
   const bestReturn = asRecord(leaders?.best_return);
   const lowestDrawdown = asRecord(leaders?.lowest_drawdown);
@@ -469,8 +669,8 @@ export default async function Home() {
         </div>
         <div className="hero-meta">
           <span>样本：最近 60 个交易日</span>
-          <span>数据：{String(data?.source ?? 'eastmoney')}</span>
-          <span>文件：{DATA_FILE}</span>
+          <span>信源：{sourceDisplayName(data?.source ?? 'eastmoney')}</span>
+          <span>证据：{SOURCES_FILE}</span>
         </div>
       </section>
 
@@ -541,11 +741,18 @@ export default async function Home() {
         <LiquidityPanel rows={liquidityRows} />
       </section>
 
+      <section className="comparison-two-column">
+        <ValuationPanel rows={valuationRows} />
+        <TrendTemplatePanel rows={trendTemplateRows} />
+      </section>
+
+      <VisualizationPlanPanel visualization={visualization} />
+
       <section className="comparison-matrix">
         <div className="panel-heading">
           <div>
-            <h2>数据来源与质量</h2>
-            <p>逐只标的展示来源、时间和样本量；公开行情接口可能存在延迟。</p>
+            <h2>数据信源渠道与质量</h2>
+            <p>逐只标的展示行情、K 线、财务等渠道和样本覆盖；公开行情接口可能存在延迟。</p>
           </div>
         </div>
         <div className="table-wrap">
@@ -553,7 +760,7 @@ export default async function Home() {
             <thead>
               <tr>
                 <th>标的</th>
-                <th>来源</th>
+                <th>信源渠道</th>
                 <th>行情时间</th>
                 <th>K 线样本</th>
                 <th>质量提示</th>
@@ -567,7 +774,7 @@ export default async function Home() {
                 return (
                   <tr key={String(asset.symbol ?? index)}>
                     <td><strong>{String(asset.name ?? quote?.name ?? asset.symbol)}</strong><small>{String(asset.symbol ?? quote?.symbol ?? '-')}</small></td>
-                    <td>{String(asset.source ?? quote?.source ?? '-')}</td>
+                    <td>{sourceDisplayName(asset.source ?? quote?.source ?? 'eastmoney')}</td>
                     <td>{String(asset.as_of ?? quote?.quote_time ?? quote?.fetched_at ?? '-')}</td>
                     <td>{asArray(kline?.bars).length}</td>
                     <td>{String(quality?.status ?? 'ok')}</td>
@@ -578,6 +785,424 @@ export default async function Home() {
           </table>
         </div>
       </section>
+    </main>
+  );
+}
+`;
+}
+
+function stockSelectionPageTemplate() {
+  return `import fs from 'fs/promises';
+import path from 'path';
+
+type JsonRecord = Record<string, unknown>;
+
+const DATA_FILE = 'data_file/final/dashboard-data.json';
+const SOURCES_FILE = 'evidence/sources.json';
+
+function asRecord(value: unknown): JsonRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as JsonRecord;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function numeric(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatNumber(value: unknown, digits = 2): string {
+  const number = numeric(value);
+  if (number === null) return '-';
+  return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: digits }).format(number);
+}
+
+function formatPercent(value: unknown): string {
+  const number = numeric(value);
+  if (number === null) return '-';
+  return (number > 0 ? '+' : '') + number.toFixed(2) + '%';
+}
+
+function formatMoney(value: unknown): string {
+  const number = numeric(value);
+  if (number === null) return '-';
+  if (Math.abs(number) >= 100000000) return formatNumber(number / 100000000, 2) + ' 亿';
+  if (Math.abs(number) >= 10000) return formatNumber(number / 10000, 2) + ' 万';
+  return formatNumber(number);
+}
+
+function sourceDisplayName(source: unknown, datasetType?: unknown): string {
+  const normalized = String(source ?? '').toLowerCase();
+  const type = String(datasetType ?? '').toLowerCase();
+  if (normalized.includes('eastmoney')) {
+    if (/kline|history|历史/.test(type)) return '东方财富历史 K 线接口';
+    if (/financial|fundamental|财务/.test(type)) return '东方财富财务数据接口';
+    if (/announcement|event|公告/.test(type)) return '东方财富公告事件接口';
+    return '东方财富实时行情接口';
+  }
+  if (normalized.includes('uploaded_image')) return '用户上传截图';
+  if (normalized.includes('market_prefetch')) return 'QuantPilot 后端预取';
+  if (normalized.includes('tencent')) return '腾讯证券行情接口';
+  if (normalized.includes('sina')) return '新浪财经行情接口';
+  if (normalized.includes('akshare')) return 'AKShare 免费数据接口';
+  if (normalized.includes('local')) return '本地计算结果';
+  return String(source ?? '未知信源');
+}
+
+function tone(value: unknown): 'up' | 'down' | 'neutral' {
+  const number = numeric(value);
+  if (number === null || number === 0) return 'neutral';
+  return number > 0 ? 'up' : 'down';
+}
+
+async function readDashboardData(): Promise<JsonRecord | null> {
+  try {
+    const content = await fs.readFile(path.join(process.cwd(), DATA_FILE), 'utf8');
+    return asRecord(JSON.parse(content));
+  } catch {
+    return null;
+  }
+}
+
+function getAssets(data: JsonRecord | null): JsonRecord[] {
+  return asArray(data?.assets).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+}
+
+function getComparisonRows(data: JsonRecord | null): JsonRecord[] {
+  const comparison = asRecord(data?.comparison);
+  const rows = asArray(comparison?.rows).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+  if (rows.length > 0) return rows;
+  return getAssets(data).map((asset) => {
+    const quote = asRecord(asset.quote);
+    const metrics = asRecord(asset.computedMetrics);
+    const technical = asRecord(asRecord(asset.technicalIndicators)?.summary);
+    const financialQuality = asRecord(asset.financialQuality);
+    return {
+      symbol: asset.symbol ?? quote?.symbol,
+      name: asset.name ?? quote?.name ?? asset.symbol,
+      price: quote?.price,
+      change_percent: quote?.change_percent,
+      return_120d_pct: technical?.return_120d_pct ?? metrics?.return120d ?? metrics?.periodReturn,
+      max_drawdown: technical?.max_drawdown_pct ?? metrics?.maxDrawdown,
+      volatility20d: technical?.volatility_20d_annualized_pct ?? metrics?.volatility20d,
+      amount: quote?.amount,
+      composite_score: financialQuality?.quality_score,
+      selection_view: financialQuality?.quality_label,
+      financial_quality_label: financialQuality?.quality_label,
+    };
+  });
+}
+
+function getRowsFrom(data: JsonRecord | null, key: string): JsonRecord[] {
+  const record = asRecord(data?.[key]);
+  return asArray(record?.rows).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+}
+
+function getConclusion(data: JsonRecord | null): string[] {
+  const conclusion = asRecord(data?.conclusion);
+  return asArray(conclusion?.summary).map(String).filter(Boolean);
+}
+
+function barWidth(value: unknown, rows: JsonRecord[], field: string): number {
+  const number = Math.abs(numeric(value) ?? 0);
+  const max = Math.max(0.01, ...rows.map((row) => Math.abs(numeric(row[field]) ?? 0)));
+  return Math.max(4, Math.min(100, (number / max) * 100));
+}
+
+function RankingPanel({ rows }: { rows: JsonRecord[] }) {
+  return (
+    <section className="selection-panel ranking-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>相对强弱与排名依据</h2>
+          <p>综合收益、回撤、波动、流动性和财务质量后的研究优先级</p>
+        </div>
+        <span>{rows.length} 项</span>
+      </div>
+      <div className="ranking-list">
+        {rows.map((row, index) => (
+          <article key={String(row.symbol ?? index)} className="ranking-row">
+            <span className="rank-badge">{String(row.rank ?? index + 1)}</span>
+            <div>
+              <strong>{String(row.name ?? row.symbol ?? '-')}</strong>
+              <small>{String(row.symbol ?? '-')} · {String(row.view ?? row.selection_view ?? '观察候选')}</small>
+            </div>
+            <em>{formatNumber(row.score ?? row.composite_score, 0)}</em>
+            <p>{String(row.reason ?? row.ranking_reason ?? row.exclusion_reason ?? '等待更多指标确认。')}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ComparisonTable({ rows }: { rows: JsonRecord[] }) {
+  return (
+    <section className="selection-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>多标的指标矩阵</h2>
+          <p>统一窗口下的行情、收益、风险、流动性和质量对比</p>
+        </div>
+        <span>{rows.length} 项</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>标的</th>
+              <th>最新价</th>
+              <th>涨跌幅</th>
+              <th>120 日收益</th>
+              <th>最大回撤</th>
+              <th>波动率</th>
+              <th>成交额</th>
+              <th>综合分</th>
+              <th>候选视图</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={String(row.symbol ?? index)}>
+                <td><strong>{String(row.name ?? row.symbol)}</strong><small>{String(row.symbol ?? '-')}</small></td>
+                <td>{formatNumber(row.price)}</td>
+                <td className={tone(row.change_percent)}>{formatPercent(row.change_percent)}</td>
+                <td className={tone(row.return_120d_pct ?? row.period_return)}>{formatPercent(row.return_120d_pct ?? row.period_return)}</td>
+                <td className="down">{formatPercent(row.max_drawdown)}</td>
+                <td>{formatPercent(row.volatility20d)}</td>
+                <td>{formatMoney(row.amount ?? row.avg_amount_20d)}</td>
+                <td>{formatNumber(row.composite_score, 0)}</td>
+                <td>{String(row.selection_view ?? row.relative_strength ?? '-')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function BarCompare({ rows, field, title, subtitle, inverse = false }: {
+  rows: JsonRecord[];
+  field: string;
+  title: string;
+  subtitle: string;
+  inverse?: boolean;
+}) {
+  return (
+    <section className="selection-panel chart-card">
+      <div className="panel-heading">
+        <div>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
+        </div>
+      </div>
+      <div className="bar-list">
+        {rows.map((row, index) => {
+          const value = numeric(row[field]) ?? 0;
+          const favorable = inverse ? value <= 0 : value >= 0;
+          return (
+            <div key={String(row.symbol ?? index)} className="bar-row">
+              <span>{String(row.name ?? row.symbol ?? '-')}</span>
+              <div><i className={favorable ? 'bar-up' : 'bar-down'} style={{ width: barWidth(value, rows, field) + '%' }} /></div>
+              <strong className={favorable ? 'up' : 'down'}>{formatPercent(value)}</strong>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Sparkline({ asset }: { asset: JsonRecord }) {
+  const bars = asArray(asRecord(asset.kline)?.bars).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+  const visible = bars.slice(-50);
+  const closes = visible.map((bar) => numeric(bar.close)).filter((value): value is number => value !== null);
+  const min = closes.length ? Math.min(...closes) : 0;
+  const max = closes.length ? Math.max(...closes) : 1;
+  const range = Math.max(max - min, 0.000001);
+  const points = closes.map((value, index) => {
+    const x = (index / Math.max(closes.length - 1, 1)) * 100;
+    const y = 34 - ((value - min) / range) * 28;
+    return x.toFixed(2) + ',' + y.toFixed(2);
+  }).join(' ');
+  return (
+    <svg className="sparkline" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={String(asset.name ?? asset.symbol ?? 'K 线迷你趋势')}>
+      <line x1="0" y1="34" x2="100" y2="34" className="axis" />
+      {points ? <polyline points={points} fill="none" /> : null}
+    </svg>
+  );
+}
+
+function AssetCards({ assets }: { assets: JsonRecord[] }) {
+  return (
+    <section className="asset-grid">
+      {assets.map((asset, index) => {
+        const quote = asRecord(asset.quote);
+        const technical = asRecord(asRecord(asset.technicalIndicators)?.summary);
+        const quality = asRecord(asset.financialQuality);
+        return (
+          <article className="asset-card" key={String(asset.symbol ?? index)}>
+            <div>
+              <strong>{String(asset.name ?? quote?.name ?? asset.symbol)}</strong>
+              <small>{String(asset.symbol ?? quote?.symbol ?? '-')} · {String(quality?.quality_label ?? '质量待确认')}</small>
+            </div>
+            <Sparkline asset={asset} />
+            <dl>
+              <div><dt>最新价</dt><dd>{formatNumber(quote?.price)}</dd></div>
+              <div><dt>120 日</dt><dd className={tone(technical?.return_120d_pct)}>{formatPercent(technical?.return_120d_pct)}</dd></div>
+              <div><dt>MA20</dt><dd>{formatNumber(technical?.ma20)}</dd></div>
+              <div><dt>质量分</dt><dd>{formatNumber(quality?.quality_score, 0)}</dd></div>
+            </dl>
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
+function FinancialQualityPanel({ rows }: { rows: JsonRecord[] }) {
+  return (
+    <section className="selection-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>财务质量</h2>
+          <p>最近报告期的 ROE、利润率、同比增长和质量标签</p>
+        </div>
+        <span>{rows.length} 项</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>标的</th><th>ROE</th><th>毛利率</th><th>净利率</th><th>收入同比</th><th>利润同比</th><th>质量分</th><th>标签</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={String(row.symbol ?? index)}>
+                <td><strong>{String(row.name ?? row.symbol)}</strong><small>{String(row.symbol ?? '-')}</small></td>
+                <td>{formatPercent(row.roe_pct)}</td>
+                <td>{formatPercent(row.gross_margin_pct)}</td>
+                <td>{formatPercent(row.net_margin_pct)}</td>
+                <td className={tone(row.revenue_yoy_pct)}>{formatPercent(row.revenue_yoy_pct)}</td>
+                <td className={tone(row.net_profit_yoy_pct)}>{formatPercent(row.net_profit_yoy_pct)}</td>
+                <td>{formatNumber(row.quality_score, 0)}</td>
+                <td>{String(row.quality_label ?? '-')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function DataQualityPanel({ data, assets }: { data: JsonRecord | null; assets: JsonRecord[] }) {
+  const visualization = asRecord(data?.visualization);
+  const components = asArray(visualization?.required_components).map(String);
+  return (
+    <section className="selection-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>数据信源渠道逐项追踪</h2>
+          <p>逐只标的展示实际使用的行情、K 线、财务渠道和样本覆盖。</p>
+        </div>
+        <span>{String(visualization?.template_id ?? 'stock-selection')}</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>标的</th><th>信源渠道</th><th>行情时间</th><th>K 线样本</th><th>报告期</th></tr></thead>
+          <tbody>
+            {assets.map((asset, index) => {
+              const quote = asRecord(asset.quote);
+              const kline = asRecord(asset.kline);
+              const quality = asRecord(asset.financialQuality);
+              return (
+                <tr key={String(asset.symbol ?? index)}>
+                  <td><strong>{String(asset.name ?? quote?.name ?? asset.symbol)}</strong><small>{String(asset.symbol ?? quote?.symbol ?? '-')}</small></td>
+                  <td>{sourceDisplayName(asset.source ?? quote?.source ?? 'eastmoney')}</td>
+                  <td>{String(asset.as_of ?? quote?.quote_time ?? quote?.fetched_at ?? '-')}</td>
+                  <td>{asArray(kline?.bars).length}</td>
+                  <td>{String(quality?.latest_report_date ?? '-').slice(0, 10)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="component-line">模板组件：{components.join(' / ') || '按 stock-selection 标准模板渲染'} · 技术证据：{DATA_FILE}</p>
+    </section>
+  );
+}
+
+export default async function Home() {
+  const data = await readDashboardData();
+  const assets = getAssets(data);
+  const rows = getComparisonRows(data);
+  const rankingRows = getRowsFrom(data, 'selectionRanking');
+  const financialRows = getRowsFrom(data, 'financialQuality');
+  const conclusion = getConclusion(data);
+  const leaders = asRecord(asRecord(data?.comparison)?.leaders);
+  const requestedSymbols = asArray(data?.requestedSymbols ?? data?.symbols).map(String);
+  const topRanking = rankingRows[0] ?? rows.slice().sort((left, right) => (numeric(right.composite_score) ?? -1) - (numeric(left.composite_score) ?? -1))[0];
+
+  return (
+    <main className="selection-shell" data-market-proxy="/api/market" data-source-file={DATA_FILE} data-template="stock-selection">
+      <section className="selection-hero">
+        <div>
+          <p className="eyebrow">QuantPilot 选股分析</p>
+          <h1>{topRanking ? String(topRanking.name ?? topRanking.symbol) + ' 暂列研究优先级第一' : '多标的选股看板'}</h1>
+          <p>覆盖 {requestedSymbols.length || rows.length} 个候选：{requestedSymbols.join('、') || rows.map((row) => String(row.symbol)).join('、')}。以下排序仅用于研究，不构成交易指令。</p>
+        </div>
+        <aside>
+          <span>模板</span>
+          <strong>stock-selection</strong>
+          <em>读取最终数据并关联信源证据</em>
+        </aside>
+      </section>
+
+      <section className="summary-grid">
+        <article><span>收益领先</span><strong>{String(asRecord(leaders?.best_return)?.name ?? '-')}</strong><em>{formatPercent(asRecord(leaders?.best_return)?.value)}</em></article>
+        <article><span>回撤较小</span><strong>{String(asRecord(leaders?.lowest_drawdown)?.name ?? '-')}</strong><em>{formatPercent(asRecord(leaders?.lowest_drawdown)?.value)}</em></article>
+        <article><span>波动较低</span><strong>{String(asRecord(leaders?.lowest_volatility)?.name ?? '-')}</strong><em>{formatPercent(asRecord(leaders?.lowest_volatility)?.value)}</em></article>
+        <article><span>候选数量</span><strong>{rows.length}</strong><em>{assets.length} 只已绑定数据</em></article>
+      </section>
+
+      <AssetCards assets={assets} />
+
+      <section className="main-grid">
+        <RankingPanel rows={rankingRows.length ? rankingRows : rows} />
+        <section className="selection-panel conclusion-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>结论摘要</h2>
+              <p>事实、计算和限制分层呈现</p>
+            </div>
+          </div>
+          <ul>
+            {(conclusion.length ? conclusion : ['真实数据已绑定，等待 Agent 补充更详细的研究解释。']).map((item, index) => (
+              <li key={index}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      </section>
+
+      <ComparisonTable rows={rows} />
+
+      <section className="chart-grid">
+        <BarCompare rows={rows} field="return_120d_pct" title="收益对比图" subtitle="统一样本窗口下的阶段收益" />
+        <BarCompare rows={rows} field="max_drawdown" title="回撤对比图" subtitle="回撤越小越稳健" inverse />
+        <BarCompare rows={rows} field="volatility20d" title="波动对比图" subtitle="20 日年化波动率口径" inverse />
+      </section>
+
+      <FinancialQualityPanel rows={financialRows} />
+      <DataQualityPanel data={data} assets={assets} />
     </main>
   );
 }
@@ -608,7 +1233,7 @@ function comparisonCss() {
 
 .comparison-hero h1 {
   margin: 6px 0 8px;
-  font-size: clamp(28px, 4vw, 48px);
+  font-size: clamp(26px, 3vw, 40px);
   letter-spacing: 0;
 }
 
@@ -845,10 +1470,325 @@ td small {
 `;
 }
 
+function stockSelectionCss() {
+  return `
+
+.selection-shell {
+  min-height: 100vh;
+  background: #f7f8fb;
+  color: #111827;
+  padding: 28px;
+}
+
+.selection-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 24px;
+  align-items: stretch;
+  padding: 28px;
+  border: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #ffffff 0%, #fff7f5 100%);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.selection-hero h1 {
+  margin: 8px 0;
+  font-size: clamp(28px, 3.2vw, 48px);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.selection-hero p,
+.selection-hero em,
+.panel-heading p,
+.asset-card small,
+.component-line,
+td small {
+  color: #6b7280;
+}
+
+.selection-hero aside,
+.selection-panel,
+.asset-card,
+.summary-grid article {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.selection-hero aside {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 22px;
+}
+
+.selection-hero aside span,
+.summary-grid span {
+  color: #6b7280;
+}
+
+.selection-hero aside strong {
+  color: #c7352f;
+  font-size: 26px;
+}
+
+.summary-grid,
+.asset-grid,
+.chart-grid,
+.main-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.asset-grid,
+.chart-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.main-grid {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+}
+
+.summary-grid article,
+.asset-card,
+.selection-panel {
+  padding: 20px;
+}
+
+.summary-grid strong,
+.summary-grid em,
+.asset-card strong,
+.asset-card dd,
+.ranking-row strong,
+.ranking-row em {
+  display: block;
+}
+
+.summary-grid strong {
+  margin-top: 8px;
+  font-size: 24px;
+}
+
+.summary-grid em {
+  margin-top: 6px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.asset-card {
+  display: grid;
+  gap: 14px;
+}
+
+.asset-card dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.asset-card dt {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.asset-card dd {
+  margin: 2px 0 0;
+  font-weight: 800;
+}
+
+.sparkline {
+  width: 100%;
+  height: 68px;
+}
+
+.sparkline polyline {
+  stroke: #2f6fed;
+  stroke-width: 2.4;
+}
+
+.selection-panel {
+  margin-top: 18px;
+}
+
+.main-grid .selection-panel {
+  margin-top: 0;
+}
+
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.panel-heading h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.ranking-list {
+  display: grid;
+  gap: 12px;
+}
+
+.ranking-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 64px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+}
+
+.ranking-row p {
+  grid-column: 2 / -1;
+  margin: 0;
+  color: #4b5563;
+}
+
+.rank-badge {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #111827;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.conclusion-panel ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.conclusion-panel li + li {
+  margin-top: 10px;
+}
+
+.bar-list {
+  display: grid;
+  gap: 12px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 74px;
+  gap: 12px;
+  align-items: center;
+}
+
+.bar-row div {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.bar-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.bar-up {
+  background: #d33b32;
+}
+
+.bar-down {
+  background: #16a36a;
+}
+
+.axis {
+  stroke: #d1d5db;
+  stroke-width: 0.7;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 12px;
+  border-bottom: 1px solid #edf0f5;
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+td strong,
+td small {
+  display: block;
+}
+
+.component-line {
+  margin: 14px 0 0;
+}
+
+.up {
+  color: #d33b32;
+}
+
+.down {
+  color: #16a36a;
+}
+
+.neutral {
+  color: #374151;
+}
+
+@media (max-width: 980px) {
+  .selection-shell {
+    padding: 16px;
+  }
+
+  .selection-hero,
+  .summary-grid,
+  .asset-grid,
+  .chart-grid,
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+`;
+}
+
 async function ensureComparisonDashboardTemplate(projectPath: string) {
   const finalData = await readJsonRecord(path.join(projectPath, 'data_file', 'final', 'dashboard-data.json'));
   const dashboardKind = typeof finalData?.dashboardKind === 'string' ? finalData.dashboardKind : null;
+  const visualization = readRecord(finalData?.visualization);
+  const templateId =
+    typeof visualization?.template_id === 'string'
+      ? visualization.template_id
+      : typeof visualization?.templateId === 'string'
+        ? visualization.templateId
+        : null;
   if (dashboardKind === 'portfolio_rebalance' || dashboardKind === 'portfolio_risk') {
+    return;
+  }
+  if (templateId && templateId !== 'stock-selection' && templateId !== 'sector-rotation') {
     return;
   }
   const assets = Array.isArray(finalData?.assets) ? finalData.assets : [];
@@ -858,17 +1798,38 @@ async function ensureComparisonDashboardTemplate(projectPath: string) {
 
   const pagePath = path.join(projectPath, 'app', 'page.tsx');
   const page = await fs.readFile(pagePath, 'utf8').catch(() => '');
-  if (/多标的相对强弱看板|指标矩阵|收益对比|回撤对比|波动率对比|流动性与可交易性/.test(page)) {
+  if (
+    templateId === 'stock-selection' &&
+    /data-template="stock-selection"|相对强弱与排名依据|财务质量|selectionRanking|financialQuality/.test(page)
+  ) {
+    return;
+  }
+  if (
+    templateId !== 'stock-selection' &&
+    /多标的相对强弱看板|指标矩阵|收益对比|回撤对比|波动率对比|流动性与可交易性/.test(page)
+  ) {
     return;
   }
 
-  await fs.writeFile(pagePath, comparisonPageTemplate(), 'utf8');
+  await fs.writeFile(
+    pagePath,
+    templateId === 'stock-selection' ? stockSelectionPageTemplate() : comparisonPageTemplate(),
+    'utf8'
+  );
 
   const cssPath = path.join(projectPath, 'app', 'globals.css');
   const css = await fs.readFile(cssPath, 'utf8').catch(() => '');
   if (!css.includes('.comparison-shell')) {
     await fs.writeFile(cssPath, `${css.trimEnd()}\n${comparisonCss()}`, 'utf8');
   }
+  const nextCss = await fs.readFile(cssPath, 'utf8').catch(() => '');
+  if (templateId === 'stock-selection' && !nextCss.includes('.selection-shell')) {
+    await fs.writeFile(cssPath, `${nextCss.trimEnd()}\n${stockSelectionCss()}`, 'utf8');
+  }
+}
+
+export async function ensureQuantDashboardTemplate(projectPath: string) {
+  await ensureComparisonDashboardTemplate(projectPath);
 }
 
 export async function scaffoldBasicNextApp(
@@ -1011,6 +1972,7 @@ import path from 'path';
 type JsonRecord = Record<string, unknown>;
 
 const DATA_FILE = 'data_file/final/dashboard-data.json';
+const SOURCES_FILE = 'evidence/sources.json';
 
 function asRecord(value: unknown): JsonRecord | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -1059,6 +2021,18 @@ async function readDashboardData(): Promise<JsonRecord | null> {
     return asRecord(parsed);
   } catch {
     return null;
+  }
+}
+
+async function readSourcesEvidence(): Promise<JsonRecord[]> {
+  try {
+    const content = await fs.readFile(path.join(process.cwd(), SOURCES_FILE), 'utf8');
+    const parsed = asRecord(JSON.parse(content));
+    return asArray(parsed?.sources)
+      .map(asRecord)
+      .filter((item): item is JsonRecord => Boolean(item));
+  } catch {
+    return [];
   }
 }
 
@@ -1152,6 +2126,14 @@ function formatDate(value: unknown): string {
   return value.slice(0, 10);
 }
 
+function qualityTone(status: unknown): 'quality-ok' | 'quality-warning' | 'quality-error' | 'quality-muted' {
+  const normalized = String(status ?? '').toLowerCase();
+  if (normalized === 'ok' || normalized.includes('pass')) return 'quality-ok';
+  if (normalized === 'warning' || normalized.includes('warn')) return 'quality-warning';
+  if (normalized === 'error' || normalized.includes('fail')) return 'quality-error';
+  return 'quality-muted';
+}
+
 function getComputedMetrics(data: JsonRecord | null): JsonRecord | null {
   const assets = asArray(data?.assets).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
   if (assets.length > 0) {
@@ -1173,6 +2155,143 @@ function getLiquidityRows(data: JsonRecord | null): JsonRecord[] {
 function getCorrelationPairs(data: JsonRecord | null): JsonRecord[] {
   const correlation = asRecord(data?.correlation);
   return asArray(correlation?.top_pairs).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+}
+
+function getValuationRows(data: JsonRecord | null): JsonRecord[] {
+  const valuation = asRecord(data?.valuation);
+  const rows = asArray(valuation?.assets).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+  if (rows.length > 0) {
+    return rows;
+  }
+  const scenarios = asArray(valuation?.scenarios).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+  if (scenarios.length === 0) {
+    return [];
+  }
+  return [{
+    symbol: data?.symbol,
+    name: data?.name,
+    base_metrics: valuation?.base_metrics ?? valuation?.baseMetrics,
+    scenarios,
+    warnings: valuation?.warnings,
+  }];
+}
+
+function getTrendTemplateRows(data: JsonRecord | null): JsonRecord[] {
+  const trendTemplate = asRecord(data?.trendTemplate) ?? asRecord(data?.trend_template);
+  return asArray(trendTemplate?.rows).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+}
+
+function getVisualization(data: JsonRecord | null): JsonRecord | null {
+  return asRecord(data?.visualization);
+}
+
+function getVisualizationRows(visualization: JsonRecord | null): JsonRecord[] {
+  const required = asArray(visualization?.required_components).map(String);
+  const rendered = new Set(asArray(visualization?.rendered_components).map(String));
+  const missing = new Set(asArray(visualization?.missing_components).map(String));
+  return required.map((name) => ({
+    name,
+    status: missing.has(name) ? '待补充' : rendered.has(name) ? '已渲染' : '按模板渲染',
+  }));
+}
+
+function sourceDisplayName(source: unknown, datasetType?: unknown): string {
+  const normalized = String(source ?? '').toLowerCase();
+  const type = String(datasetType ?? '').toLowerCase();
+  if (normalized.includes('eastmoney')) {
+    if (/kline|history|历史/.test(type)) return '东方财富历史 K 线接口';
+    if (/financial|fundamental|财务/.test(type)) return '东方财富财务数据接口';
+    if (/announcement|event|公告/.test(type)) return '东方财富公告事件接口';
+    return '东方财富实时行情接口';
+  }
+  if (normalized.includes('uploaded_image')) return '用户上传持仓截图';
+  if (normalized.includes('market_prefetch')) return 'QuantPilot 后端行情预取';
+  if (normalized.includes('tencent')) return '腾讯证券行情接口';
+  if (normalized.includes('sina')) return '新浪财经行情接口';
+  if (normalized.includes('akshare')) return 'AKShare 免费数据接口';
+  if (normalized.includes('local')) return '本地计算结果';
+  return String(source ?? '未知信源');
+}
+
+function endpointLabel(endpoint: unknown): string {
+  const value = String(endpoint ?? '');
+  if (!value) return '-';
+  if (value.includes('/quotes/realtime')) return '实时行情';
+  if (value.includes('/quotes/history')) return '历史 K 线';
+  if (value.includes('/fundamentals/financials')) return '财务报表';
+  if (value.includes('/announcements')) return '公告事件';
+  if (value.includes('/indicators')) return '指标计算';
+  if (value.includes('/symbols/resolve')) return '标的解析';
+  return value.replace(/^https?:\\/\\/127\\.0\\.0\\.1:8000\\/api\\/v1\\//, '/api/market/');
+}
+
+function inferSourceChannels(data: JsonRecord | null, sourceEvidence: JsonRecord[]): JsonRecord[] {
+  if (sourceEvidence.length > 0) {
+    const unique = new Map<string, JsonRecord>();
+    for (const source of sourceEvidence) {
+      const datasetType = source.dataset_type ?? source.type ?? source.dataset ?? source.name;
+      const channel = sourceDisplayName(source.source, datasetType);
+      const endpoint = endpointLabel(source.endpoint ?? source.url ?? source.route);
+      const key = [channel, endpoint, String(source.symbol ?? source.name ?? '')].join('|');
+      if (!unique.has(key)) {
+        unique.set(key, {
+          channel,
+          dataset: String(datasetType ?? '数据集'),
+          endpoint,
+          as_of: source.as_of ?? source.quote_time ?? source.fetched_at ?? source.updated_at,
+          sample_count: source.sample_count ?? source.rows ?? source.count ?? source.records,
+          limitation: source.limitation ?? source.note ?? source.warning,
+        });
+      }
+    }
+    return Array.from(unique.values()).slice(0, 8);
+  }
+
+  const channels: JsonRecord[] = [];
+  const rootSource = data?.source ?? asRecord(data?.quote)?.source ?? 'eastmoney';
+  if (asRecord(data?.quote)) {
+    const quote = asRecord(data?.quote);
+    channels.push({
+      channel: sourceDisplayName(rootSource, 'realtime'),
+      dataset: '实时行情',
+      endpoint: '/api/market/quotes/realtime',
+      as_of: quote?.quote_time ?? quote?.fetched_at ?? data?.as_of,
+    });
+  }
+  if (asArray(asRecord(data?.kline)?.bars).length > 0 || getBars(data).length > 0) {
+    channels.push({
+      channel: sourceDisplayName(rootSource, 'history'),
+      dataset: '历史 K 线',
+      endpoint: '/api/market/quotes/history',
+      as_of: data?.as_of,
+      sample_count: getBars(data).length,
+    });
+  }
+  if (asRecord(data?.financials) || asRecord(data?.fundamentalIndicators)) {
+    channels.push({
+      channel: sourceDisplayName(rootSource, 'financials'),
+      dataset: '财务与基本面',
+      endpoint: '/api/market/fundamentals/financials',
+      as_of: asRecord(data?.financials)?.as_of ?? data?.as_of,
+    });
+  }
+  if (asRecord(data?.announcements)) {
+    channels.push({
+      channel: sourceDisplayName(rootSource, 'announcements'),
+      dataset: '公告事件',
+      endpoint: '/api/market/announcements',
+      as_of: asRecord(data?.announcements)?.as_of ?? data?.as_of,
+    });
+  }
+  if (asRecord(data?.imageExtraction)) {
+    channels.push({
+      channel: sourceDisplayName('uploaded_image', 'portfolio'),
+      dataset: '截图识别',
+      endpoint: '上传附件',
+      as_of: asRecord(data?.imageExtraction)?.extracted_at ?? data?.as_of,
+    });
+  }
+  return channels;
 }
 
 function movingAverage(values: Array<number | null>, windowSize: number, index: number): number | null {
@@ -1224,6 +2343,14 @@ function TrendChart({ bars }: { bars: JsonRecord[] }) {
   const ma5 = closes.map((_, index) => movingAverage(closes, 5, index));
   const ma10 = closes.map((_, index) => movingAverage(closes, 10, index));
   const ma20 = closes.map((_, index) => movingAverage(closes, 20, index));
+  const priceTicks = [maxPrice, minPrice + (maxPrice - minPrice) / 2, minPrice];
+  const dateLabels = visibleBars.length > 0
+    ? [
+        String(visibleBars[0]?.date ?? '').slice(5) || '-',
+        String(visibleBars[Math.floor(visibleBars.length / 2)]?.date ?? '').slice(5) || '-',
+        String(visibleBars[visibleBars.length - 1]?.date ?? '').slice(5) || '-',
+      ]
+    : ['-', '-', '-'];
 
   return (
     <div className="chart-panel">
@@ -1241,8 +2368,22 @@ function TrendChart({ bars }: { bars: JsonRecord[] }) {
         <span className="legend-ma20">MA20</span>
       </div>
       <svg className="trend-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="K 线 OHLC 趋势图">
+        <rect x="0" y="0" width="100" height="100" className="chart-bg" />
         <line x1="0" y1="86" x2="100" y2="86" className="axis" />
         <line x1="0" y1="16" x2="100" y2="16" className="axis muted" />
+        <line x1="0" y1="51" x2="100" y2="51" className="axis grid" />
+        <line x1="33.33" y1="16" x2="33.33" y2="86" className="axis grid" />
+        <line x1="66.66" y1="16" x2="66.66" y2="86" className="axis grid" />
+        {priceTicks.map((tick, index) => (
+          <text key={index} x="1.2" y={(18 + index * 34).toFixed(1)} className="chart-label">
+            {formatNumber(tick)}
+          </text>
+        ))}
+        {dateLabels.map((label, index) => (
+          <text key={index} x={(index * 50).toFixed(1)} y="97" className="chart-label chart-date">
+            {label}
+          </text>
+        ))}
         {visibleBars.map((bar, index) => {
           const open = numeric(bar.open) ?? numeric(bar.close);
           const close = numeric(bar.close) ?? open;
@@ -1264,6 +2405,7 @@ function TrendChart({ bars }: { bars: JsonRecord[] }) {
               key={String(bar.date ?? index)}
               className={up ? 'candle-up' : 'candle-down'}
             >
+              <title>{String(bar.date ?? '-')} 开 {formatNumber(open)} 高 {formatNumber(high)} 低 {formatNumber(low)} 收 {formatNumber(close)}</title>
               <line x1={x.toFixed(2)} x2={x.toFixed(2)} y1={yHigh.toFixed(2)} y2={yLow.toFixed(2)} />
               <rect x={(x - 0.55).toFixed(2)} y={candleTop.toFixed(2)} width="1.1" height={candleHeight.toFixed(2)} />
             </g>
@@ -1275,7 +2417,9 @@ function TrendChart({ bars }: { bars: JsonRecord[] }) {
       </svg>
 
       <svg className="volume-chart" viewBox="0 0 100 36" preserveAspectRatio="none" role="img" aria-label="成交量柱状图">
+        <rect x="0" y="0" width="100" height="36" className="chart-bg" />
         <line x1="0" y1="32" x2="100" y2="32" className="axis" />
+        <line x1="0" y1="16" x2="100" y2="16" className="axis grid" />
         {visibleBars.map((bar, index) => {
           const open = numeric(bar.open) ?? numeric(bar.close) ?? 0;
           const close = numeric(bar.close) ?? open;
@@ -1290,7 +2434,9 @@ function TrendChart({ bars }: { bars: JsonRecord[] }) {
               width="1.1"
               height={height.toFixed(2)}
               className={close >= open ? 'volume-up' : 'volume-down'}
-            />
+            >
+              <title>{String(bar.date ?? '-')} 成交量 {formatNumber(volume, 0)}</title>
+            </rect>
           );
         })}
       </svg>
@@ -1562,6 +2708,123 @@ function CorrelationPanel({ pairs }: { pairs: JsonRecord[] }) {
   );
 }
 
+function ValuationPanel({ rows }: { rows: JsonRecord[] }) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <article className="data-panel">
+      <div className="panel-heading compact">
+        <div>
+          <h2>估值情景</h2>
+          <p>防守、中性、进攻三档假设；用于研究，不构成收益承诺</p>
+        </div>
+        <span>{rows.length} 项</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>标的</th><th>当前价</th><th>PE</th><th>EPS</th><th>中性情景价</th><th>中性空间</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => {
+              const metrics = asRecord(row.base_metrics) ?? asRecord(row.baseMetrics) ?? {};
+              const scenarios = asArray(row.scenarios).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
+              const baseScenario = scenarios.find((item) => item.case === 'base') ?? scenarios[1] ?? scenarios[0];
+              return (
+                <tr key={String(row.symbol ?? index)}>
+                  <td><strong>{String(row.name ?? row.symbol ?? '-')}</strong><small>{String(row.symbol ?? '-')}</small></td>
+                  <td>{formatNumber(metrics.price)}</td>
+                  <td>{formatNumber(metrics.pe_ttm ?? metrics.pe)}</td>
+                  <td>{formatNumber(metrics.eps, 4)}</td>
+                  <td>{formatNumber(baseScenario?.implied_price)}</td>
+                  <td className={(numeric(baseScenario?.upside_pct) ?? 0) >= 0 ? 'red' : 'green'}>{formatPercent(baseScenario?.upside_pct)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  );
+}
+
+function TrendTemplatePanel({ rows }: { rows: JsonRecord[] }) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <article className="data-panel">
+      <div className="panel-heading compact">
+        <div>
+          <h2>趋势模板</h2>
+          <p>MA20/MA60、阶段回撤、量能比和样本长度</p>
+        </div>
+        <span>{rows.length} 项</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>标的</th><th>状态</th><th>分数</th><th>MA20</th><th>MA60</th><th>20 日收益</th><th>120 日回撤</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => {
+              const metrics = asRecord(row.metrics) ?? {};
+              return (
+                <tr key={String(row.symbol ?? index)}>
+                  <td><strong>{String(row.name ?? row.symbol ?? '-')}</strong><small>{String(row.symbol ?? '-')}</small></td>
+                  <td>{String(row.state ?? '-')}</td>
+                  <td>{formatNumber(row.score, 0)}</td>
+                  <td>{formatNumber(metrics.ma20)}</td>
+                  <td>{formatNumber(metrics.ma60)}</td>
+                  <td className={(numeric(metrics.return_20d_pct) ?? 0) >= 0 ? 'red' : 'green'}>{formatPercent(metrics.return_20d_pct)}</td>
+                  <td className="green">{formatPercent(metrics.max_drawdown_120d_pct)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  );
+}
+
+function VisualizationPlanPanel({ visualization }: { visualization: JsonRecord | null }) {
+  const rows = getVisualizationRows(visualization);
+  if (!visualization || rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <article className="data-panel">
+      <div className="panel-heading compact">
+        <div>
+          <h2>场景模板</h2>
+          <p>{String(visualization.name ?? visualization.template_id ?? 'QuantPilot 场景化看板')}</p>
+        </div>
+        <span>{String(visualization.template_id ?? '-')}</span>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>必备组件</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 8).map((row, index) => (
+              <tr key={String(row.name ?? index)}>
+                <td>{String(row.name ?? '-')}</td>
+                <td>{String(row.status ?? '-')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  );
+}
+
 function SignalPanel({
   quote,
   latestBar,
@@ -1584,6 +2847,7 @@ function SignalPanel({
   const maTrend = ma5 !== null && ma20 !== null ? ma5 >= ma20 : null;
   const volumeSignal = volume !== null && avgVolume !== null ? volume / Math.max(avgVolume, 1) : null;
   const dataQuality = asRecord(data?.data_quality) ?? asRecord(asRecord(data?.kline)?.data_quality);
+  const dataQualityStatus = String(dataQuality?.status ?? 'ok');
   const warnings = asArray(dataQuality?.warnings).map(String);
 
   return (
@@ -1593,22 +2857,22 @@ function SignalPanel({
           <h2>量化信号摘要</h2>
           <p>价格位置、均线结构、量能和数据质量</p>
         </div>
-        <span>{String(dataQuality?.status ?? 'ok')}</span>
+        <span className={'quality-pill ' + qualityTone(dataQualityStatus)}>{dataQualityStatus}</span>
       </div>
       <div className="signal-list">
-        <div>
+        <div className={aboveMa20 === null ? 'signal-neutral' : aboveMa20 ? 'signal-up' : 'signal-down'}>
           <span>价格位置</span>
           <strong className={aboveMa20 === null ? '' : aboveMa20 ? 'red' : 'green'}>
             {aboveMa20 === null ? '待确认' : aboveMa20 ? '站上 MA20' : '低于 MA20'}
           </strong>
         </div>
-        <div>
+        <div className={maTrend === null ? 'signal-neutral' : maTrend ? 'signal-up' : 'signal-down'}>
           <span>均线结构</span>
           <strong className={maTrend === null ? '' : maTrend ? 'red' : 'green'}>
             {maTrend === null ? '待确认' : maTrend ? '短多排列' : '短线偏弱'}
           </strong>
         </div>
-        <div>
+        <div className={volumeSignal === null ? 'signal-neutral' : volumeSignal >= 1.2 ? 'signal-up' : volumeSignal <= 0.8 ? 'signal-down' : 'signal-neutral'}>
           <span>量能状态</span>
           <strong>{volumeSignal === null ? '待确认' : volumeSignal >= 1.2 ? '放量' : volumeSignal <= 0.8 ? '缩量' : '常态'}</strong>
         </div>
@@ -1628,6 +2892,7 @@ function SignalPanel({
 
 export default async function Home() {
   const data = await readDashboardData();
+  const sourceEvidence = await readSourcesEvidence();
   const assets = asArray(data?.assets).map(asRecord).filter((item): item is JsonRecord => Boolean(item));
   const primaryAsset = assets[0] ?? data;
   const quote = asRecord(primaryAsset?.quote) ?? asRecord(data?.quote);
@@ -1640,6 +2905,10 @@ export default async function Home() {
   const backtest = getBacktest(data);
   const liquidityRows = getLiquidityRows(data);
   const correlationPairs = getCorrelationPairs(data);
+  const valuationRows = getValuationRows(data);
+  const trendTemplateRows = getTrendTemplateRows(data);
+  const visualization = getVisualization(data);
+  const sourceChannels = inferSourceChannels(data, sourceEvidence);
   const latestBar = bars.at(-1);
   const name = String(primaryAsset?.name ?? quote?.name ?? primaryAsset?.symbol ?? data?.name ?? 'QuantPilot');
   const symbol = String(primaryAsset?.symbol ?? quote?.symbol ?? data?.symbol ?? '-');
@@ -1718,12 +2987,27 @@ export default async function Home() {
 
       <section className="detail-grid">
         <article className="data-panel">
-          <h2>数据来源</h2>
-          <dl>
-            <div><dt>时间</dt><dd>{String(data?.as_of ?? quote?.quote_time ?? quote?.fetched_at ?? '-')}</dd></div>
-            <div><dt>缓存</dt><dd>{String(asRecord(quote?.fetch)?.cache_status ?? '-')}</dd></div>
-            <div><dt>文件</dt><dd>{DATA_FILE}</dd></div>
-          </dl>
+          <div className="panel-heading compact">
+            <div>
+              <h2>数据信源渠道</h2>
+              <p>展示本次看板实际使用的外部或本地数据渠道。</p>
+            </div>
+          </div>
+          {sourceChannels.length > 0 ? (
+            <div className="source-channel-list">
+              {sourceChannels.map((source, index) => (
+                <div key={index} className="source-channel">
+                  <strong>{String(source.channel)}</strong>
+                  <span>{String(source.dataset ?? '数据集')}</span>
+                  <small>{String(source.endpoint ?? '-')}</small>
+                  <em>时间：{formatDate(source.as_of)}{source.sample_count ? ' · 样本 ' + String(source.sample_count) : ''}</em>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-state">暂无可展示的信源渠道，需检查 evidence/sources.json。</p>
+          )}
+          <p className="evidence-note">技术证据：{SOURCES_FILE} · {DATA_FILE}</p>
         </article>
         <article className="data-panel">
           <h2>最近 K 线</h2>
@@ -1760,6 +3044,15 @@ export default async function Home() {
         <LiquidityPanel rows={liquidityRows} />
         <CorrelationPanel pairs={correlationPairs} />
       </section>
+
+      <section className="detail-grid wide">
+        <ValuationPanel rows={valuationRows} />
+        <TrendTemplatePanel rows={trendTemplateRows} />
+      </section>
+
+      <section className="detail-grid wide">
+        <VisualizationPlanPanel visualization={visualization} />
+      </section>
     </main>
   );
 }
@@ -1779,6 +3072,11 @@ export default async function Home() {
   --green: #15945b;
   --blue: #2f6fed;
   --gold: #b88719;
+  --purple: #7c3aed;
+  --amber-bg: #fff8e5;
+  --red-bg: #fff1f0;
+  --green-bg: #edf9f2;
+  --blue-bg: #eef4ff;
 }
 
 *,
@@ -1837,8 +3135,8 @@ p {
 
 h1 {
   margin-bottom: 14px;
-  font-size: clamp(30px, 5vw, 56px);
-  line-height: 1;
+  font-size: clamp(26px, 3vw, 42px);
+  line-height: 1.12;
   letter-spacing: 0;
 }
 
@@ -1909,6 +3207,7 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.045);
 }
 
 .metric-grid article {
@@ -1987,12 +3286,18 @@ h2 {
   width: 100%;
   height: 330px;
   overflow: visible;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcff;
 }
 
 .volume-chart {
   width: 100%;
   height: 96px;
   margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcff;
 }
 
 .chart-legend {
@@ -2031,7 +3336,24 @@ h2 {
 }
 
 .legend-ma20 {
-  color: #7c3aed;
+  color: var(--purple);
+}
+
+.chart-bg {
+  fill: #fbfcff;
+}
+
+.chart-label {
+  fill: var(--muted);
+  font-size: 3.1px;
+  paint-order: stroke;
+  stroke: #fbfcff;
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-date {
+  text-anchor: middle;
 }
 
 .axis {
@@ -2041,6 +3363,11 @@ h2 {
 
 .axis.muted {
   opacity: 0.55;
+}
+
+.axis.grid {
+  opacity: 0.45;
+  stroke-dasharray: 1.5 1.5;
 }
 
 .equity-line {
@@ -2054,7 +3381,7 @@ h2 {
 .candle-up rect {
   fill: color-mix(in srgb, var(--red) 86%, white);
   stroke: var(--red);
-  stroke-width: 0.7;
+  stroke-width: 0.85;
   vector-effect: non-scaling-stroke;
 }
 
@@ -2062,13 +3389,14 @@ h2 {
 .candle-down rect {
   fill: color-mix(in srgb, var(--green) 86%, white);
   stroke: var(--green);
-  stroke-width: 0.7;
+  stroke-width: 0.85;
   vector-effect: non-scaling-stroke;
 }
 
 .ma-line {
   fill: none;
-  stroke-width: 1.2;
+  stroke-width: 1.45;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.12));
   vector-effect: non-scaling-stroke;
 }
 
@@ -2081,15 +3409,21 @@ h2 {
 }
 
 .ma20 {
-  stroke: #7c3aed;
+  stroke: var(--purple);
 }
 
 .volume-up {
   fill: color-mix(in srgb, var(--red) 72%, white);
+  stroke: var(--red);
+  stroke-width: 0.15;
+  vector-effect: non-scaling-stroke;
 }
 
 .volume-down {
   fill: color-mix(in srgb, var(--green) 72%, white);
+  stroke: var(--green);
+  stroke-width: 0.15;
+  vector-effect: non-scaling-stroke;
 }
 
 .detail-grid {
@@ -2125,6 +3459,21 @@ h2 {
   background: #fbfcff;
 }
 
+.signal-list .signal-up {
+  border-color: color-mix(in srgb, var(--red) 28%, var(--line));
+  background: var(--red-bg);
+}
+
+.signal-list .signal-down {
+  border-color: color-mix(in srgb, var(--green) 28%, var(--line));
+  background: var(--green-bg);
+}
+
+.signal-list .signal-neutral {
+  border-color: var(--line);
+  background: #fbfcff;
+}
+
 .signal-list span {
   color: var(--muted);
   font-size: 12px;
@@ -2147,8 +3496,80 @@ h2 {
   border: 1px solid color-mix(in srgb, var(--gold) 38%, white);
   border-radius: 8px;
   color: #805600;
-  background: #fff8e5;
+  background: var(--amber-bg);
   font-size: 13px;
+}
+
+.quality-pill {
+  font-weight: 700;
+}
+
+.quality-ok {
+  border-color: color-mix(in srgb, var(--green) 28%, var(--line)) !important;
+  color: var(--green) !important;
+  background: var(--green-bg);
+}
+
+.quality-warning {
+  border-color: color-mix(in srgb, var(--gold) 34%, var(--line)) !important;
+  color: #805600 !important;
+  background: var(--amber-bg);
+}
+
+.quality-error {
+  border-color: color-mix(in srgb, var(--red) 32%, var(--line)) !important;
+  color: var(--red) !important;
+  background: var(--red-bg);
+}
+
+.quality-muted {
+  color: var(--muted) !important;
+  background: #f8fafc;
+}
+
+.source-channel-list {
+  display: grid;
+  gap: 10px;
+}
+
+.source-channel {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.source-channel strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.source-channel span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.source-channel small {
+  overflow: hidden;
+  color: var(--blue);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-channel em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.evidence-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .mini-metric-grid {

@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { assessQuantIntentForClarification, QuantIntentClarification } from '@/lib/quant/intent';
 import { buildQuantProjectSettings, getExecutionQuantCapability, getQuantCapability } from '@/lib/quant/capabilities';
+import { serializeQuantVisualizationTemplate } from '@/lib/quant/visualization-templates';
 
 type QuantManifest = {
   schemaVersion?: number;
@@ -36,7 +37,14 @@ export interface QuantRunPlan {
   analysisSteps: string[];
   visualization: {
     required: boolean;
+    templateId?: string;
+    name?: string;
+    scenario?: string;
     panels: string[];
+    painPoints?: string[];
+    optionalPanels?: string[];
+    dataSignals?: string[];
+    finalDataContract?: string[];
   };
   clarification?: QuantIntentClarification;
   expectedArtifacts: string[];
@@ -60,8 +68,14 @@ const KNOWN_SYMBOLS: Array<{ keyword: string; symbol: string; name: string }> = 
   { keyword: '贵州茅台', symbol: '600519', name: '贵州茅台' },
   { keyword: '茅台', symbol: '600519', name: '贵州茅台' },
   { keyword: '宁德时代', symbol: '300750', name: '宁德时代' },
+  { keyword: '通富微电', symbol: '002156', name: '通富微电' },
   { keyword: '平安银行', symbol: '000001', name: '平安银行' },
   { keyword: '招商银行', symbol: '600036', name: '招商银行' },
+  { keyword: '杭钢股份', symbol: '600126', name: '杭钢股份' },
+  { keyword: '京沪高铁', symbol: '601816', name: '京沪高铁' },
+  { keyword: '三七互娱', symbol: '002555', name: '三七互娱' },
+  { keyword: '中国黄金', symbol: '600916', name: '中国黄金' },
+  { keyword: '完美世界', symbol: '002624', name: '完美世界' },
   { keyword: '沪深300ETF', symbol: '510300', name: '沪深300ETF' },
   { keyword: '沪深300 ETF', symbol: '510300', name: '沪深300ETF' },
   { keyword: '300ETF', symbol: '510300', name: '沪深300ETF' },
@@ -115,7 +129,28 @@ function wantsVisualization(instruction: string): boolean {
 }
 
 function isQuantAnalysisTask(instruction: string): boolean {
-  return /股票|个股|行情|走势|K线|K 线|财务|基本面|公告|指数|对比|量化|分析|回测|策略/i.test(instruction);
+  return /股票|个股|行情|走势|K线|K 线|财务|基本面|公告|指数|对比|量化|分析|回测|策略|持仓|仓位|组合|调仓|盈亏|成本|账户|截图/i.test(instruction);
+}
+
+function inferCapabilityId(params: {
+  requestedCapabilityId?: string | null;
+  manifestCapabilityId?: string | null;
+  instruction: string;
+  hasImageAttachments?: boolean;
+}) {
+  const normalized = params.instruction.replace(/\s+/g, '');
+  if (
+    /持仓|仓位|组合|调仓|盈亏|成本|账户|总资产|可用资金|浮动盈亏/.test(normalized) ||
+    (params.hasImageAttachments && /截图|图片|持仓|账户|交易|证券|盈亏|成本|仓位|调仓/.test(normalized))
+  ) {
+    return 'portfolio_risk';
+  }
+
+  if (params.requestedCapabilityId) {
+    return params.requestedCapabilityId;
+  }
+
+  return params.manifestCapabilityId;
 }
 
 function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean): string[] {
@@ -131,7 +166,7 @@ function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean): string[]
       '标准化收益、波动、回撤、成交量和相对强弱口径。',
       '检查每个标的数据质量并写入 evidence/sources.json 与 evidence/data_quality.json。',
       '生成包含 assets[] 和 comparison 的最终数据文件。',
-      '生成多标的对比看板并验证标的覆盖率、图表和数据来源。',
+      '生成多标的对比看板并验证标的覆盖率、图表和数据信源渠道。',
     ];
   }
 
@@ -142,7 +177,7 @@ function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean): string[]
       '计算区间涨跌、均线、波动率、最大回撤等技术指标。',
       '检查数据质量并写入 evidence/sources.json 与 evidence/data_quality.json。',
       '生成技术分析数据文件和可视化页面。',
-      '验证页面、图表和数据来源。',
+      '验证页面、图表和数据信源渠道。',
     ];
   }
 
@@ -153,7 +188,7 @@ function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean): string[]
       '分析营收、利润、ROE、毛利率、现金流质量和增长变化。',
       '检查数据质量并写入 evidence/sources.json 与 evidence/data_quality.json。',
       '生成基本面分析数据文件和可视化页面。',
-      '验证页面、报告期、数据来源和缺失字段说明。',
+      '验证页面、报告期、数据信源渠道和缺失字段说明。',
     ];
   }
 
@@ -164,7 +199,18 @@ function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean): string[]
       '调用后端均线突破回测，生成净值曲线、回撤和交易明细。',
       '检查回测样本、参数、费用和限制，并写入 evidence/sources.json 与 evidence/data_quality.json。',
       '生成回测复盘数据文件和可视化页面。',
-      '验证页面、净值曲线、交易明细和数据来源。',
+      '验证页面、净值曲线、交易明细和数据信源渠道。',
+    ];
+  }
+
+  if (capabilityId === 'portfolio_risk') {
+    return [
+      ...common,
+      '把用户持仓、截图或口述信息整理为持仓结构，标注数量、成本、现价、现金和缺失字段。',
+      '逐只获取实时行情和历史 K 线，计算收益、波动、回撤、流动性和相关性。',
+      '检查每个持仓的数据质量并写入 evidence/sources.json 与 evidence/data_quality.json。',
+      '生成包含 portfolio、holdings、assets[]、comparison、correlation 和 liquidity 的最终数据文件。',
+      '生成持仓分析看板并验证持仓矩阵、仓位集中度、风险提示和调仓优先级。',
     ];
   }
 
@@ -174,24 +220,12 @@ function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean): string[]
     '综合分析价格趋势、量价、财务质量和事件风险。',
     '检查数据质量并写入 evidence/sources.json 与 evidence/data_quality.json。',
     '生成个股诊断数据文件和可视化页面。',
-    '验证页面、图表、数据来源和更新时间。',
+    '验证页面、图表、数据信源渠道和更新时间。',
   ];
 }
 
 function buildVisualizationPanels(capabilityId: string): string[] {
-  if (capabilityId === 'asset_comparison') {
-    return ['多标的指标矩阵', '收益对比图', '波动与回撤对比', '成交量/成交额对比', '相对强弱摘要'];
-  }
-  if (capabilityId === 'technical_analysis') {
-    return ['实时行情卡片', 'K 线与均线', '成交量', '波动率与最大回撤', '最近 K 线表格'];
-  }
-  if (capabilityId === 'fundamental_analysis') {
-    return ['实时行情卡片', '营收与利润趋势', 'ROE/毛利率趋势', '公告事件摘要', '报告期数据表'];
-  }
-  if (capabilityId === 'backtest_review') {
-    return ['策略参数卡片', '净值曲线', '回撤指标', '交易明细', '样本与限制说明'];
-  }
-  return ['实时行情卡片', 'K 线与成交量', '财务摘要', '公告事件时间线', '数据明细表'];
+  return serializeQuantVisualizationTemplate(capabilityId).requiredComponents;
 }
 
 function plannedCapabilityNotice(requestedCapabilityId: string, executionCapabilityId: string): string[] {
@@ -234,11 +268,18 @@ export async function writeInitialRunPlan(params: {
   instruction: string;
   requestId: string;
   capabilityId?: string | null;
+  hasImageAttachments?: boolean;
 }) {
   await ensureQuantWorkspace(params.projectPath);
   const manifest = await readManifest(params.projectPath);
   const manifestQuant = manifest?.quant;
-  const capability = getQuantCapability(params.capabilityId ?? manifestQuant?.capabilityId);
+  const inferredCapabilityId = inferCapabilityId({
+    requestedCapabilityId: params.capabilityId,
+    manifestCapabilityId: manifestQuant?.capabilityId,
+    instruction: params.instruction,
+    hasImageAttachments: params.hasImageAttachments,
+  });
+  const capability = getQuantCapability(inferredCapabilityId);
   const executionCapability = capability.id === 'asset_comparison'
     ? capability
     : getExecutionQuantCapability(capability.id);
@@ -248,21 +289,23 @@ export async function writeInitialRunPlan(params: {
   const timeRange = inferTimeRange(params.instruction);
   const clarification = assessQuantIntentForClarification({
     instruction: params.instruction,
-    capabilityId: executionCapability.id,
+    capabilityId: capability.id,
     symbols,
     timeRange,
+    hasImageAttachments: params.hasImageAttachments,
   });
+  const shouldInheritManifest = !params.capabilityId || manifestQuant?.capabilityId === capability.id;
   const dataRequirements = Array.from(
     new Set([
       ...executionCapability.dataEndpoints,
-      ...(manifestQuant?.dataEndpoints ?? []),
+      ...(shouldInheritManifest ? manifestQuant?.dataEndpoints ?? [] : []),
       ...(quantSettings.dataEndpoints ?? []),
     ])
   );
   const expectedArtifacts = Array.from(
     new Set([
       ...capability.expectedArtifacts,
-      ...(manifestQuant?.expectedArtifacts ?? []),
+      ...(shouldInheritManifest ? manifestQuant?.expectedArtifacts ?? [] : []),
       ...(quantSettings.expectedArtifacts ?? []),
     ])
   );
@@ -270,16 +313,17 @@ export async function writeInitialRunPlan(params: {
     new Set([
       ...capability.validationRules,
       ...plannedCapabilityNotice(capability.id, executionCapability.id),
-      ...(manifestQuant?.validationRules ?? []),
+      ...(shouldInheritManifest ? manifestQuant?.validationRules ?? [] : []),
       ...(quantSettings.validationRules ?? []),
     ])
   );
+  const visualizationTemplate = serializeQuantVisualizationTemplate(capability.id);
 
   const plan: QuantRunPlan = {
     schemaVersion: 1,
     runId: params.requestId,
     status: clarification.required ? 'needs_clarification' : 'planned',
-    capabilityId: executionCapability.id,
+    capabilityId: capability.id,
     requestedCapabilityId: capability.id,
     executionCapabilityId: executionCapability.id,
     question: params.instruction,
@@ -294,13 +338,20 @@ export async function writeInitialRunPlan(params: {
         ]
       : [
           ...plannedCapabilityNotice(capability.id, executionCapability.id),
-          ...buildAnalysisSteps(executionCapability.id, symbols.length > 0),
+          ...buildAnalysisSteps(capability.id, symbols.length > 0),
         ],
     visualization: {
       required:
         !clarification.required &&
         (wantsVisualization(params.instruction) || isQuantAnalysisTask(params.instruction)),
-      panels: buildVisualizationPanels(executionCapability.id),
+      templateId: visualizationTemplate.templateId,
+      name: visualizationTemplate.name,
+      scenario: visualizationTemplate.scenario,
+      panels: buildVisualizationPanels(capability.id),
+      painPoints: visualizationTemplate.painPoints,
+      optionalPanels: visualizationTemplate.optionalComponents,
+      dataSignals: visualizationTemplate.dataSignals,
+      finalDataContract: visualizationTemplate.finalDataContract,
     },
     clarification: clarification.required ? clarification : undefined,
     expectedArtifacts: clarification.required ? ['.quantpilot/run_plan.json', '.quantpilot/events.jsonl'] : expectedArtifacts,

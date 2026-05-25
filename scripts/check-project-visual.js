@@ -133,8 +133,8 @@ async function main() {
       if (frameInfo.svgCount + frameInfo.canvasCount === 0 && frameInfo.rectCount < 20) {
         problems.push('预览页面缺少可识别图表元素');
       }
-      if (!/dashboard-data\.json|数据来源|source/i.test(frameInfo.text)) {
-        problems.push('预览页面缺少数据来源或最终数据文件说明');
+      if (!/dashboard-data\.json|数据来源|数据信源|信源渠道|source/i.test(frameInfo.text)) {
+        problems.push('预览页面缺少数据信源渠道或最终数据文件说明');
       }
     }
     problems.push(...failedResources.map((item) => `静态资源失败：${item}`));

@@ -18,6 +18,7 @@ interface AssessQuantIntentParams {
   capabilityId?: string | null;
   symbols?: string[];
   timeRange?: string | null;
+  hasImageAttachments?: boolean;
 }
 
 interface PreviousClarificationPlan {
@@ -47,6 +48,11 @@ const KNOWN_SYMBOL_KEYWORDS: Array<{ keyword: string; symbol: string }> = [
   { keyword: '平安银行', symbol: '000001' },
   { keyword: '招商银行', symbol: '600036' },
   { keyword: '通富微电', symbol: '002156' },
+  { keyword: '杭钢股份', symbol: '600126' },
+  { keyword: '京沪高铁', symbol: '601816' },
+  { keyword: '三七互娱', symbol: '002555' },
+  { keyword: '中国黄金', symbol: '600916' },
+  { keyword: '完美世界', symbol: '002624' },
   { keyword: '沪深300', symbol: '000300' },
   { keyword: '沪深 300', symbol: '000300' },
   { keyword: '创业板指', symbol: '399006' },
@@ -118,6 +124,8 @@ const COMPARISON_PATTERN = /对比|比较|相比|相对|哪个|哪只|谁更|强
 const RECOMMENDATION_PATTERN = /推荐|买什么|买入|卖出|持有|能不能买|能买吗|值得买吗|可以买|要不要/i;
 const INVESTMENT_CONSTRAINT_PATTERN =
   /短线|中线|长线|日内|波段|价值|成长|稳健|激进|保守|风险|回撤|仓位|周期|一周|一个月|三个月|半年|一年|预算|资金|偏好|低风险|高风险|A股|港股|美股|ETF|指数/i;
+const IMAGE_CONTEXT_TARGET_PATTERN =
+  /图片|截图|持仓|账户|仓位|组合|调仓|证券|交易|盈亏|成本|可用|现金|总资产|市值/i;
 
 function normalizeInstruction(instruction: string): string {
   return instruction.replace(/\s+/g, ' ').trim();
@@ -262,7 +270,10 @@ export function assessQuantIntentForClarification(
   const hasBroadMarketTarget = BROAD_MARKET_TARGET_PATTERN.test(instruction);
   const explicitTargetCount = new Set([...symbols, ...codes, ...knownTargetSymbols]).size;
   const targetCount = Math.max(explicitTargetCount, targetCandidates.length);
-  const hasTarget = targetCount > 0 || hasBroadMarketTarget;
+  const canInferTargetFromImage =
+    params.hasImageAttachments === true &&
+    (IMAGE_CONTEXT_TARGET_PATTERN.test(instruction) || params.capabilityId === 'portfolio_risk');
+  const hasTarget = targetCount > 0 || hasBroadMarketTarget || canInferTargetFromImage;
   const isComparison = COMPARISON_PATTERN.test(instruction) || params.capabilityId === 'asset_comparison';
   const isRecommendation = RECOMMENDATION_PATTERN.test(instruction);
   const hasGoal = GOAL_KEYWORD_PATTERN.test(instruction);
@@ -277,7 +288,7 @@ export function assessQuantIntentForClarification(
     missing.push('comparison_universe');
   }
 
-  if (isRecommendation && !hasInvestmentConstraints) {
+  if (isRecommendation && !hasInvestmentConstraints && !canInferTargetFromImage) {
     missing.push('investment_constraints');
   }
 
@@ -301,6 +312,9 @@ export function assessQuantIntentForClarification(
       : [
           params.timeRange ? `使用时间范围：${params.timeRange}` : '未指定时间范围时默认使用最近 120 个交易日或最近报告期。',
           '未指定输出形式时默认生成可验证的量化看板。',
+          ...(canInferTargetFromImage
+            ? ['图片/截图任务会先识别附件中的标的、持仓、成本、现金和盈亏字段，再进入取数分析；识别不确定的字段必须在结果中标注。']
+            : []),
         ],
   };
 }

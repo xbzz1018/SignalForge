@@ -27,6 +27,8 @@ description: Use this skill to generate a real visual Next.js/HTML quantitative 
 8. 生成项目默认已有金融看板模板时，必须在模板上增强，不要推倒重写成营销页、说明页或只有指标卡的静态页。
 9. 如果 `dashboard-data.json` 包含 `assets[]` 或 `comparison`，这是多标的任务；页面必须展示全部标的的对比矩阵和图表，不能只展示根字段中的主标的 `quote/kline`。
 10. 修改 `app/page.tsx`、`app/globals.css`、JSON 或 evidence 文件必须使用 Write/Edit 工具，不要用 Bash 的 `cat >`、`tee`、`echo >`、`printf >`、heredoc、python/node 脚本或 `touch` 写文件。
+11. 必须按具体分析场景选择可视化模板，不能把持仓、选股、技术、基本面、回测都生成成同一种通用金融页面。
+12. 页面必须通过 TypeScript/Next.js build。`dashboard-data.json` 是动态 JSON，读取后统一用 `JsonRecord`、`asRecord()`、`asArray()`、`numeric()` 这类守卫函数处理；不要让 `flatMap/map` 推断出过窄对象类型后再访问额外字段。
 
 ## 标准工作流
 
@@ -38,12 +40,70 @@ description: Use this skill to generate a real visual Next.js/HTML quantitative 
    - 公告事件：`quant-announcement-events`
    - 不确定数据源：`quant-data-registry`
 3. 先读取现有 `app/page.tsx`、`app/globals.css` 和 `data_file/final/dashboard-data.json`，确认模板已有组件和数据字段。
-4. 设计看板信息架构：先展示结论和核心指标，再展示图表、数据表、数据质量和来源。
-5. 实现页面文件并确保有加载、错误、空数据、刷新状态。
-6. 页面刷新数据时优先复用或创建同源 API route 代理到 `http://127.0.0.1:8000`，避免浏览器 CORS 或网络策略影响。
-7. 使用 `quant-data-quality` 写入 `evidence/sources.json` 与 `evidence/data_quality.json`，记录来源、接口、时间戳、样本长度、缺失字段、警告和限制。
-8. 将最终看板数据写入 `data_file/final/dashboard-data.json`，字段中保留 `symbol`、`source`、`fetched_at`、`quote_time` 或对应数据源时间。
-9. 完成后简短说明修改了哪些页面和看板现在包含哪些数据视图。
+4. 读取 `.quantpilot/run_plan.json`，按 `visualization.templateId` 选择场景模板；模板说明见 `references/scenario_templates.md`。
+5. 设计看板信息架构：先展示结论和核心指标，再展示图表、数据表、数据质量和来源。
+   - 投研/量化看板不要使用营销落地页式巨型 hero。顶部应是紧凑的报告摘要栏或工具栏：小标题、核心判断、关键指标和数据状态并排展示。
+   - 首屏应尽快露出核心指标、图表或持仓矩阵；`h1` 只用于页面主题，桌面端建议不超过 40px，移动端不超过 32px。
+   - 结论句应放在摘要卡或状态条中，不要做成占据半屏的大字口号。
+6. 实现页面文件并确保有加载、错误、空数据、刷新状态。
+7. 页面刷新数据时优先复用或创建同源 API route 代理到 `http://127.0.0.1:8000`，避免浏览器 CORS 或网络策略影响。
+8. 使用 `quant-data-quality` 写入 `evidence/sources.json` 与 `evidence/data_quality.json`，记录来源、接口、时间戳、样本长度、缺失字段、警告和限制。
+9. 将最终看板数据写入 `data_file/final/dashboard-data.json`，字段中保留 `symbol`、`source`、`fetched_at`、`quote_time` 或对应数据源时间。
+10. 完成后简短说明修改了哪些页面和看板现在包含哪些数据视图。
+
+## TypeScript 稳定性规则
+
+生成 `app/page.tsx` 时必须按严格 TypeScript 写法处理动态金融数据：
+
+- 所有从 JSON 读取的数据先进入 `JsonRecord | null` 或 `JsonRecord[]`，不要直接把 `unknown` 当作具体对象访问。
+- `assets[]`、`comparison.rows[]`、`announcements.announcements[]`、`financials.reports[]` 等动态数组必须写成 `JsonRecord[]`：
+
+```ts
+const assets = asArray(data?.assets)
+  .map(asRecord)
+  .filter((item): item is JsonRecord => Boolean(item));
+```
+
+- 对 `flatMap()` 里新增字段的对象必须显式标注为 `JsonRecord`，避免 TypeScript 推断成 `{ symbol: unknown; name: unknown }` 这类窄类型：
+
+```ts
+const rows: JsonRecord[] = assets.flatMap((asset) => {
+  const announcements = asRecord(asset.announcements);
+  return asArray(announcements?.announcements)
+    .map(asRecord)
+    .filter((item): item is JsonRecord => Boolean(item))
+    .map((item): JsonRecord => ({
+      ...item,
+      symbol: item.symbol ?? asset.symbol,
+      name: item.name ?? asset.name,
+    }));
+});
+```
+
+- 排序、格式化和渲染时一律使用 `row['field']` 或 `row.field` 的 `unknown` 值进入 `String()`、`numeric()`、`formatDate()`、`formatNumber()`，不要声明不完整的结构类型。
+- 不能用 `as any` 扫过类型错误；如果字段不确定，增加守卫函数或把数组显式标注为 `JsonRecord[]`。
+- 如果页面新增公告、财务、估值、相关性、流动性等模块，必须保证 `npm run build` 不会出现 “Property does not exist on type ...”。
+
+## 场景模板选择
+
+每次生成页面前必须读取：
+
+```text
+.quantpilot/run_plan.json
+references/scenario_templates.md
+```
+
+按 `run_plan.visualization.templateId` 选择模板；如果缺失，按 final 数据字段推断：
+
+- `holding-analysis`：持仓、调仓、组合风险、截图持仓。
+- `stock-selection`：选股、多标的横向比较、候选排序。
+- `single-stock-diagnosis`：单只股票综合诊断。
+- `technical-timing`：K 线、均线、突破、技术择时。
+- `fundamental-research`：财务、基本面、盈利质量、公告。
+- `backtest-review`：策略回测、净值、交易明细。
+- `sector-rotation`：指数、ETF、行业和板块轮动。
+
+选择模板后，页面必须覆盖该模板的 `required_components`。如果数据不足，组件仍要以“缺数据/待补充”的形式出现，不能直接删除。
 
 ## 标准数据契约
 
@@ -57,6 +117,7 @@ description: Use this skill to generate a real visual Next.js/HTML quantitative 
   - `technicalIndicators.summary` 或 `computedMetrics`
   - 可选 `financials.reports[]`、`fundamentalIndicators.summary`、`announcements.announcements[]`
 - 多标的 final 数据必须包含 `requestedSymbols`、`assets[]`、`comparison.rows[]`；每个 `assets[]` 元素继续使用同样的单标的结构。
+- final 数据应包含 `visualization.template_id`、`visualization.required_components`、`visualization.rendered_components`、`visualization.missing_components`、`visualization.pain_points`。
 - 页面优先保留平台标准模板的 `DATA_FILE`、`readDashboardData()`、`getBars()`、`TrendChart` 和 `data-source-file={DATA_FILE}` 结构，只在其上增强展示。
 - 如果平台已经预取出 `dashboard-data.json`，不要再用空对象覆盖它，也不要把 `kline.bars` 改成只有模型自己知道的字段名。
 
@@ -69,8 +130,8 @@ description: Use this skill to generate a real visual Next.js/HTML quantitative 
 - 成交量副图：与 K 线共用日期维度，涨跌颜色遵循 A 股习惯。
 - 量化指标区：区间涨跌幅、最大回撤、年化/区间波动率、均线多空状态、放量/缩量提示、突破/跌破提示。
 - 数据明细表：至少展示最近 10 根 K 线的日期、开高低收、成交额、涨跌幅、换手率。
-- 数据来源：展示 `source`、`quote_time`、`fetched_at`、周期和复权方式。
-- 数据质量：展示 evidence 或 final 数据中的 `data_quality`、`warnings`、缓存状态和样本长度。
+- 数据信源渠道：展示本次使用的外部或本地渠道，例如东方财富实时行情接口、东方财富历史 K 线接口、东方财富财务数据接口、公告事件接口、用户上传截图或 QuantPilot 后端预取；不要把 `cache_status`、`dashboard-data.json` 路径、内部文件路径当成主要“数据来源”展示。
+- 数据质量：展示 evidence 或 final 数据中的 `data_quality`、`warnings`、样本长度、更新时间和限制说明；缓存状态只可作为技术证据附注，不作为核心信源。
 
 ## 多标的对比看板最低标准
 
@@ -80,7 +141,7 @@ description: Use this skill to generate a real visual Next.js/HTML quantitative 
 - 指标矩阵：每个标的展示最新价、涨跌幅、区间收益、最大回撤、波动、成交额或成交量。
 - 对比图表：至少一个 SVG/canvas 图表比较区间收益；另一个图表或矩阵比较波动/回撤。
 - 相对强弱摘要：展示收益领先、回撤较小、波动较低等结果，结果必须来自 `comparison.rows[]` 或 `assets[].computedMetrics`。
-- 数据来源：逐只标的展示 `source`、`as_of/quote_time`、`fetched_at` 或 evidence 中对应来源。
+- 数据信源渠道：逐只标的展示渠道名称、数据集类型、接口类型、行情时间和样本量，例如“东方财富实时行情接口 / 实时行情 / 行情时间 ...”。技术文件路径只放到证据附注，不要作为用户可读的来源卡片主信息。
 
 ## 财务看板最低标准
 
@@ -93,12 +154,12 @@ description: Use this skill to generate a real visual Next.js/HTML quantitative 
 
 ## 推荐页面结构
 
-- 顶部工具栏：标的名称、代码、刷新按钮、数据状态。
-- 左上：实时行情指标卡。
-- 右上：量化信号摘要。
-- 中部大图：K 线 + 均线。
-- 中部副图：成交量 / 成交额。
-- 下部：财务趋势、公告事件、最近 K 线表格或报告期表格。
+通用结构只作为兜底。优先使用 `references/scenario_templates.md` 中对应场景的组件矩阵：
+
+- 顶部：紧凑报告摘要、数据状态和场景结论。
+- 中上：该场景最关键的痛点组件，例如持仓矩阵、候选矩阵、K 线主图、财务趋势或回测净值。
+- 中部：图表、指标矩阵、风险或质量解释。
+- 下部：明细表、数据信源渠道、缺失字段、限制和非投资建议声明。
 
 ## 图表实现建议
 
@@ -108,7 +169,11 @@ description: Use this skill to generate a real visual Next.js/HTML quantitative 
 - 用 CSS grid/table 实现数据明细和指标矩阵。
 - 尺寸必须响应式，图表容器要有稳定高度，避免数据加载后布局跳动。
 - A 股颜色：上涨红色，下跌绿色，中性灰色。
-- 图表必须有坐标/日期/价格标签或 tooltip/悬浮信息中的至少一种。
+- 所有涨跌、收益、回撤、风险和质量状态必须使用语义染色，不允许只靠文字表达。A 股涨跌使用红涨绿跌；回撤、风险暴露、亏损、缺失和失败要用绿色/红色/琥珀色等明确区分，且颜色含义在同一页面保持一致。
+- K 线/OHLC 图必须有背景网格、价格刻度、日期刻度、MA 图例和 hover `title` 或等效 tooltip；成交量副图必须和 K 线共用涨跌颜色。
+- 多标的柱状/横向对比图必须按正负或有利/不利分色，并展示数值标签，不能只给灰色进度条。
+- 数据质量、信源、缺失字段和限制说明要有状态色：`ok`/可用为绿色，`warning`/缺失为琥珀色，`error`/失败为红色。
+- 图表必须有坐标/日期/价格标签或 tooltip/悬浮信息中的至少一种；金融主图建议同时具备坐标标签和 tooltip。
 
 ## Next.js 代理示例
 
@@ -149,7 +214,7 @@ await fetch('/api/market/quotes/history/600519?period=daily&adjustment=qfq&limit
 
 1. 优先保留 `data_file/final/dashboard-data.json` 的读取逻辑。
 2. 可以扩展 `TrendChart`、指标卡片、数据表和来源说明，但不要退回静态样例页。
-3. 如果任务涉及指数或 ETF，保留 `asset_type`、缓存状态、K 线、成交量和技术指标展示。
+3. 如果任务涉及指数或 ETF，保留 `asset_type`、信源渠道、K 线、成交量和技术指标展示。
 4. 如果任务涉及个股基本面，再补充财务趋势、ROE/毛利率和公告列表。
 5. 如果任务涉及多标的，优先读取 `assets[]` 和 `comparison`，保留单标的主图作为可选细节，不要把多标的页面降级成主标的页面。
 6. 页面最终仍需通过平台自动验证：build、HTTP 200、final 数据、evidence、图表和 `/api/market`。
@@ -164,7 +229,10 @@ await fetch('/api/market/quotes/history/600519?period=daily&adjustment=qfq&limit
 - 财务类任务包含财务趋势、报告期表格和指标卡。
 - 回测类任务包含净值曲线、回撤/收益/胜率、交易明细和参数假设。
 - 多标的、组合或风控类任务如果 final 数据包含 `correlation`，页面必须展示相关性矩阵或 Top pairs；如果包含 `liquidity`，页面必须展示成交额、换手代理、Amihud 或流动性等级。
-- 页面展示数据来源、更新时间、缓存状态或数据质量限制。
+- 如果 final 数据包含 `valuation`，页面必须展示防守/中性/进攻估值情景、核心假设和缺失字段 warning，不要把情景价包装成承诺收益。
+- 如果 final 数据包含 `trendTemplate`，页面必须展示趋势状态、样本长度、MA20/MA60、回撤、量能比和确认/减仓/观察触发条件。
+- 页面必须展示或隐式覆盖 `visualization.required_components`，并把无法渲染的组件写入数据质量或缺口说明。
+- 页面展示数据信源渠道、更新时间、样本量或数据质量限制；缓存状态和文件路径只作为证据附注。
 - 没有 Next.js 默认页文案，没有 `SAMPLE_DATA`、`MOCK_DATA`、`STATIC_QUOTES` 等静态样例数据。
 - 不修改父级 QuantPilot 平台工程，只修改当前生成项目。
 
