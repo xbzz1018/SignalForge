@@ -1,193 +1,357 @@
 "use client";
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useMemo, useState } from "react";
 import {
-  Boxes,
+  ArrowRight,
+  Building2,
   CheckCircle2,
   Database,
-  Gauge,
-  GitBranch,
-  LineChart,
   Layers3,
   RefreshCcw,
   Search,
   Server,
   ShieldCheck,
   Sparkles,
-  TriangleAlert,
-  Wrench,
-  XCircle,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { EmptyState } from '@/components/ui/empty-state';
-import { PageHeader } from '@/components/layout/PageHeader';
+  Zap,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  ConsolePanel as Panel,
-  ConsoleStatCard as StatCard,
-  formatCompactDate as formatDate,
-} from '@/components/quant/console-primitives';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { SubNav, type SubNavItem } from "@/components/layout/SubNav";
+import { formatCompactDate as formatDate } from "@/components/quant/console-primitives";
+import { cn } from "@/lib/utils";
 import type {
   CapabilityCenterData,
   CapabilityCenterDataProvider,
   CapabilityCenterItem,
-} from '@/lib/quant/capability-center';
+} from "@/lib/quant/capability-center";
 
-type ViewMode = 'capabilities' | 'data';
+type Props = { initialData: CapabilityCenterData };
+type TabId = "capabilities" | "sources" | "lakehouse" | "doris";
 
-type Props = {
-  initialData: CapabilityCenterData;
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+
+// ─── Status helpers ────────────────────────────────────────────
+function readinessLabel(s: CapabilityCenterItem["readiness"]["status"]) {
+  return s === "ready" ? "可用" : s === "warning" ? "风险" : s === "blocked" ? "阻断" : "规划中";
+}
+function readinessStyle(s: CapabilityCenterItem["readiness"]["status"]) {
+  if (s === "ready") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (s === "warning") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (s === "blocked") return "bg-red-50 text-red-700 border-red-200";
+  return "bg-blue-50 text-blue-700 border-blue-200";
+}
+function readinessDot(s: CapabilityCenterItem["readiness"]["status"]) {
+  if (s === "ready") return "bg-emerald-500";
+  if (s === "warning") return "bg-amber-500";
+  if (s === "blocked") return "bg-red-500";
+  return "bg-blue-400";
+}
+function providerStyle(s: string) {
+  if (s === "available") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (s === "degraded") return "bg-amber-50 text-amber-700 border-amber-200";
+  return "bg-slate-50 text-slate-600 border-slate-200";
+}
+function providerLabel(s: string) {
+  if (s === "available") return "可用";
+  if (s === "degraded") return "降级";
+  if (s === "planned") return "规划中";
+  return s;
+}
+const CATEGORY_LABELS: Record<string, string> = {
+  "market-data": "行情数据",
+  symbol: "证券搜索",
+  indicator: "技术指标",
+  backtest: "策略回测",
+  fundamental: "基本面",
+  event: "公告事件",
+  "index-etf": "指数/ETF",
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
+// ─── Sub‑nav definition ────────────────────────────────────────
+const SUB_NAV_ITEMS: SubNavItem[] = [
+  { id: "capabilities", label: "能力矩阵", icon: <Sparkles className="h-4 w-4" /> },
+  { id: "sources", label: "数据源", icon: <Database className="h-4 w-4" /> },
+  { id: "lakehouse", label: "湖仓", icon: <Building2 className="h-4 w-4" />, disabled: true, tooltip: "即将推出" },
+  { id: "doris", label: "Doris", icon: <Server className="h-4 w-4" />, disabled: true, tooltip: "即将推出" },
+];
 
-function readinessLabel(status: CapabilityCenterItem['readiness']['status']) {
-  if (status === 'ready') return '可用';
-  if (status === 'warning') return '风险';
-  if (status === 'blocked') return '阻断';
-  return '规划中';
+// ─── Status Bar ────────────────────────────────────────────────
+function StatusBar({ data }: { data: CapabilityCenterData }) {
+  const items = [
+    {
+      label: "市场 API",
+      value: data.marketApi.reachable ? "在线" : "离线",
+      dot: data.marketApi.reachable ? "bg-emerald-500" : "bg-red-500",
+      sub: data.marketApi.baseUrl,
+      icon: <Server className="h-3.5 w-3.5" />,
+    },
+    {
+      label: "能力模块",
+      value: `${data.summary.readyCapabilities}/${data.summary.capabilities}`,
+      sub: data.summary.blockedCapabilities > 0 ? `${data.summary.blockedCapabilities} 阻断` : "全部就绪",
+      icon: <Sparkles className="h-3.5 w-3.5" />,
+      warn: data.summary.blockedCapabilities > 0,
+    },
+    {
+      label: "数据源",
+      value: `${data.summary.availableProviders}/${data.summary.dataProviders}`,
+      sub: data.summary.degradedProviders > 0 ? `${data.summary.degradedProviders} 降级` : "全部可用",
+      icon: <Database className="h-3.5 w-3.5" />,
+      warn: data.summary.degradedProviders > 0,
+    },
+    {
+      label: "Skills",
+      value: data.summary.skills,
+      sub: data.summary.skillErrors > 0 ? `${data.summary.skillErrors} 异常` : "全部正常",
+      icon: <Layers3 className="h-3.5 w-3.5" />,
+      warn: data.summary.skillErrors > 0,
+    },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="flex min-w-[140px] flex-1 items-center gap-3 rounded-md border border-slate-100 bg-slate-50/50 px-3 py-2.5"
+        >
+          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white", item.warn ? "text-amber-600" : "text-slate-500")}>
+            {item.icon}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              {item.dot && <span className={cn("h-2 w-2 rounded-full", item.dot)} />}
+              <p className="text-sm font-semibold text-slate-900">{item.value}</p>
+            </div>
+            <p className="truncate text-[11px] text-slate-500">{item.sub}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function readinessClass(status: CapabilityCenterItem['readiness']['status']) {
-  if (status === 'ready') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-  if (status === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700';
-  if (status === 'blocked') return 'border-red-200 bg-red-50 text-red-700';
-  return 'border-blue-200 bg-blue-50 text-blue-700';
-}
+// ─── Capability Row ────────────────────────────────────────────
+function CapabilityRow({ cap, onClick }: { cap: CapabilityCenterItem; onClick: () => void }) {
+  const ready = cap.readiness.status === "ready";
+  const warning = cap.readiness.status === "warning";
+  const blocked = cap.readiness.status === "blocked";
 
-function providerClass(status: string) {
-  if (status === 'available') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-  if (status === 'degraded') return 'border-amber-200 bg-amber-50 text-amber-700';
-  if (status === 'planned') return 'border-blue-200 bg-blue-50 text-blue-700';
-  return 'border-slate-200 bg-slate-50 text-slate-600';
-}
-
-function CapabilityListItem({
-  capability,
-  active,
-  onSelect,
-}: {
-  capability: CapabilityCenterItem;
-  active: boolean;
-  onSelect: () => void;
-}) {
   return (
     <button
       type="button"
-      onClick={onSelect}
-      className={`w-full rounded-md border px-3 py-3 text-left transition-colors ${
-        active ? 'border-blue-200 bg-blue-50' : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
-      }`}
+      onClick={onClick}
+      className={cn(
+        "group flex w-full items-center gap-4 rounded-md border px-4 py-3 text-left transition-colors hover:bg-slate-50",
+        "border-transparent hover:border-slate-200"
+      )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-950">{capability.name}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{capability.description}</p>
-        </div>
-        <Badge variant="outline" className={`${readinessClass(capability.readiness.status)} shrink-0`}>
-          {readinessLabel(capability.readiness.status)}
-        </Badge>
+      <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", readinessDot(cap.readiness.status))} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-slate-900">{cap.name}</p>
+        <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{cap.description}</p>
       </div>
-      <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500">
-        <span>{capability.requiredSkills.length} Skills</span>
-        <span>{capability.dataEndpoints.length} 端点</span>
+      <div className="hidden shrink-0 items-center gap-4 text-xs text-slate-500 md:flex">
+        <span className="flex items-center gap-1"><Layers3 className="h-3 w-3" />{cap.requiredSkills.length}{cap.missingSkills.length > 0 && <span className="text-red-500">(-{cap.missingSkills.length})</span>}</span>
+        <span className="flex items-center gap-1"><Database className="h-3 w-3" />{cap.dataEndpoints.length}</span>
+        <span className="w-12 truncate text-right text-[11px]">{cap.groupId}</span>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className={cn("hidden rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums sm:inline-block", ready ? "bg-emerald-50 text-emerald-700" : warning ? "bg-amber-50 text-amber-700" : blocked ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600")}>
+          {cap.readiness.score}%
+        </span>
+        <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium", readinessStyle(cap.readiness.status))}>
+          {readinessLabel(cap.readiness.status)}
+        </span>
+        <ArrowRight className="h-4 w-4 text-slate-300 transition-colors group-hover:text-slate-500" />
       </div>
     </button>
   );
 }
 
+// ─── Provider Card ─────────────────────────────────────────────
 function ProviderCard({ provider }: { provider: CapabilityCenterDataProvider }) {
+  const available = provider.status === "available";
+  const degraded = provider.status === "degraded";
+  const cat = CATEGORY_LABELS[provider.category] || provider.category;
+
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-950">{provider.name}</p>
-          <p className="mt-1 text-xs text-slate-500">{provider.id} · {provider.category}</p>
+          <p className="text-sm font-semibold text-slate-900">{provider.name}</p>
+          <p className="mt-0.5 text-xs text-slate-500">{cat}</p>
         </div>
-        <Badge variant="outline" className={providerClass(provider.status)}>{provider.status}</Badge>
+        <span className={cn("flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium", providerStyle(provider.status))}>
+          <span className={cn("h-1.5 w-1.5 rounded-full", available ? "bg-emerald-500" : degraded ? "bg-amber-500" : "bg-slate-400")} />
+          {providerLabel(provider.status)}
+        </span>
       </div>
-      <p className="mt-3 text-sm leading-6 text-slate-600">{provider.description}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {provider.endpoints.map((endpoint) => (
-          <span key={endpoint} className="rounded bg-slate-50 px-2 py-1 font-mono text-xs text-slate-600">{endpoint}</span>
-        ))}
-      </div>
+      <p className="mt-3 text-xs leading-5 text-slate-600 line-clamp-2">{provider.description}</p>
+      {provider.endpoints.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {provider.endpoints.slice(0, 4).map((ep) => (
+            <code key={ep} className="max-w-[200px] truncate rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">{ep}</code>
+          ))}
+          {provider.endpoints.length > 4 && <span className="text-[11px] text-slate-400">+{provider.endpoints.length - 4}</span>}
+        </div>
+      )}
       {provider.limitations.length > 0 && (
-        <div className="mt-3 space-y-1 text-xs leading-5 text-amber-700">
-          {provider.limitations.map((item) => <p key={item}>{item}</p>)}
+        <div className="mt-3 space-y-1 rounded-md border border-amber-100 bg-amber-50/50 px-2.5 py-2">
+          {provider.limitations.map((item) => <p key={item} className="text-[11px] leading-5 text-amber-700">{item}</p>)}
         </div>
       )}
     </div>
   );
 }
 
+// ─── Capability Sheet ──────────────────────────────────────────
+function CapabilitySheet({ cap, open, onOpenChange }: { cap: CapabilityCenterItem | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  if (!cap) return null;
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-[480px] max-w-[92vw] flex-col gap-0 p-0 sm:max-w-[560px]">
+        <SheetHeader className="border-b px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <SheetTitle className="text-base">{cap.name}</SheetTitle>
+              <SheetDescription className="mt-1">{cap.description}</SheetDescription>
+            </div>
+            <span className={cn("shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold", readinessStyle(cap.readiness.status))}>
+              {readinessLabel(cap.readiness.status)} · {cap.readiness.score}%
+            </span>
+          </div>
+        </SheetHeader>
+        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          <div className="grid grid-cols-4 gap-2">
+            {[{ label: "分组", value: cap.groupId }, { label: "Agent", value: cap.agentType }, { label: "Skills", value: cap.requiredSkills.length }, { label: "端点", value: cap.dataEndpoints.length }].map((item) => (
+              <div key={item.label} className="rounded-md border border-slate-200 bg-slate-50 p-2.5 text-center">
+                <p className="text-[11px] text-slate-500">{item.label}</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={cn("rounded-md border px-3 py-2.5 text-sm leading-6", cap.readiness.status === "ready" ? "border-emerald-100 bg-emerald-50 text-emerald-800" : cap.readiness.status === "warning" ? "border-amber-100 bg-amber-50 text-amber-800" : cap.readiness.status === "blocked" ? "border-red-100 bg-red-50 text-red-800" : "border-blue-100 bg-blue-50 text-blue-800")}>
+            {cap.readiness.summary}
+          </div>
+          <section>
+            <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><Layers3 className="h-4 w-4 text-slate-500" />依赖 Skills</h4>
+            {cap.requiredSkills.length === 0 && cap.missingSkills.length === 0 ? <p className="text-xs text-slate-500">无依赖</p> : (
+              <div className="divide-y divide-slate-100 rounded-md border border-slate-200">
+                {cap.requiredSkills.map((skill) => (
+                  <div key={skill.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-900">{skill.name}</p>
+                      <p className="truncate text-xs text-slate-500">{skill.requestedId === skill.id ? skill.id : `${skill.requestedId} → ${skill.id}`} · v{skill.version}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {skill.viaAlias && <Badge variant="outline" className="text-[10px]">alias</Badge>}
+                      <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", skill.health === "ok" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700")}>{skill.health}</span>
+                    </div>
+                  </div>
+                ))}
+                {cap.missingSkills.map((id) => (
+                  <div key={id} className="flex items-center justify-between gap-3 bg-red-50/30 px-3 py-2.5">
+                    <p className="text-sm font-medium text-red-700">{id}</p>
+                    <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700 text-[10px]">missing</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+          <section>
+            <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><Database className="h-4 w-4 text-slate-500" />数据端点</h4>
+            {cap.dataEndpoints.length === 0 ? <p className="text-xs text-slate-500">未声明端点</p> : (
+              <div className="space-y-1.5">{cap.dataEndpoints.map((ep) => <code key={ep} className="block rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">{ep}</code>)}</div>
+            )}
+          </section>
+          {cap.expectedArtifacts.length > 0 && (
+            <section>
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><ShieldCheck className="h-4 w-4 text-slate-500" />产物契约</h4>
+              <div className="flex flex-wrap gap-1.5">{cap.expectedArtifacts.map((a) => <Badge key={a} variant="outline" className="bg-slate-50 text-xs text-slate-600">{a}</Badge>)}</div>
+            </section>
+          )}
+          {cap.validationRules.length > 0 && (
+            <section>
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><CheckCircle2 className="h-4 w-4 text-slate-500" />验证规则</h4>
+              <div className="space-y-1.5">{cap.validationRules.map((rule) => <div key={rule} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">{rule}</div>)}</div>
+            </section>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ─── Placeholder tab for future features ───────────────────────
+function ComingSoonTab({ title, description, icon }: { title: string; description: string; icon: React.ReactNode }) {
+  return (
+    <EmptyState
+      icon={icon}
+      title={title}
+      description={description}
+      className="mt-8 border-0"
+    />
+  );
+}
+
+// ─── Main Page ─────────────────────────────────────────────────
 export default function CapabilityCenterClient({ initialData }: Props) {
   const [data, setData] = useState(initialData);
-  const [view, setView] = useState<ViewMode>('capabilities');
-  const [keyword, setKeyword] = useState('');
-  const [selectedId, setSelectedId] = useState(initialData.defaultCapabilityId);
+  const [activeTab, setActiveTab] = useState<TabId>("capabilities");
+  const [keyword, setKeyword] = useState("");
+  const [selectedCap, setSelectedCap] = useState<CapabilityCenterItem | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const filteredCapabilities = useMemo(() => {
     const lower = keyword.trim().toLowerCase();
-    return data.capabilities.filter((capability) => {
+    return data.capabilities.filter((cap) => {
       if (!lower) return true;
-      return [
-        capability.id,
-        capability.name,
-        capability.description,
-        capability.groupId,
-        capability.agentType,
-        ...capability.tags,
-        ...capability.dataEndpoints,
-        ...capability.requiredSkills.map((skill) => skill.id),
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(lower);
+      return [cap.id, cap.name, cap.description, cap.groupId, cap.agentType, ...cap.tags, ...cap.dataEndpoints, ...cap.requiredSkills.map((s) => s.id)]
+        .join(" ").toLowerCase().includes(lower);
     });
   }, [data.capabilities, keyword]);
 
   const filteredProviders = useMemo(() => {
     const lower = keyword.trim().toLowerCase();
-    return data.dataProviders.filter((provider) => {
+    return data.dataProviders.filter((p) => {
       if (!lower) return true;
-      return [
-        provider.id,
-        provider.name,
-        provider.category,
-        provider.description,
-        provider.status,
-        ...provider.endpoints,
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(lower);
+      return [p.id, p.name, p.category, p.description, p.status, ...p.endpoints]
+        .join(" ").toLowerCase().includes(lower);
     });
   }, [data.dataProviders, keyword]);
 
-  const selectedCapability =
-    data.capabilities.find((capability) => capability.id === selectedId) ??
-    filteredCapabilities[0] ??
-    data.capabilities[0] ??
-    null;
+  const providersByCategory = useMemo(() => {
+    const map = new Map<string, CapabilityCenterDataProvider[]>();
+    for (const p of filteredProviders) {
+      const list = map.get(p.category) || [];
+      list.push(p);
+      map.set(p.category, list);
+    }
+    return map;
+  }, [filteredProviders]);
 
   const refresh = async () => {
     setIsRefreshing(true);
     setToast(null);
     try {
-      const response = await fetch(`${API_BASE}/api/quant/capability-center`, { cache: 'no-store' });
-      const payload = await response.json();
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error ?? '刷新数据平台失败');
-      }
+      const r = await fetch(`${API_BASE}/api/quant/capability-center`, { cache: "no-store" });
+      const payload = await r.json();
+      if (!r.ok || !payload.success) throw new Error(payload.error ?? "刷新失败");
       setData(payload.data);
-      if (!payload.data.capabilities.some((capability: CapabilityCenterItem) => capability.id === selectedId)) {
-        setSelectedId(payload.data.defaultCapabilityId);
-      }
     } catch (error) {
       setToast(error instanceof Error ? error.message : String(error));
     } finally {
@@ -195,241 +359,145 @@ export default function CapabilityCenterClient({ initialData }: Props) {
     }
   };
 
+  const openSheet = (cap: CapabilityCenterItem) => {
+    setSelectedCap(cap);
+    setSheetOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-surface text-slate-900">
       <PageHeader
         title="数据平台"
         badge={<Badge variant="outline" className="bg-white text-slate-500">{data.summary.capabilities} 个能力</Badge>}
-        subtitle={`${data.marketApi.baseUrl} · 生成于 ${formatDate(data.generatedAt)}`}
-      >
-        <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-1">
-          <button
-            type="button"
-            onClick={() => setView('capabilities')}
-            className={`flex h-8 items-center gap-2 rounded px-3 text-sm font-medium ${
-              view === 'capabilities' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Sparkles className="h-4 w-4" />
-            能力矩阵
-          </button>
-          <button
-            type="button"
-            onClick={() => setView('data')}
-            className={`flex h-8 items-center gap-2 rounded px-3 text-sm font-medium ${
-              view === 'data' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Database className="h-4 w-4" />
-            数据源
-          </button>
-        </div>
-        <Button variant="outline" onClick={refresh} disabled={isRefreshing}>
-          <RefreshCcw className={isRefreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-          刷新
-        </Button>
-      </PageHeader>
+        subtitle={`市场 API: ${data.marketApi.baseUrl} · 数据生成于 ${formatDate(data.generatedAt)}`}
+      />
 
-      <main className="space-y-5 px-4 py-5 lg:px-6">
+      {/* Sub‑navigation */}
+      <SubNav
+        items={SUB_NAV_ITEMS}
+        activeId={activeTab}
+        onChange={(id) => {
+          setActiveTab(id as TabId);
+          setKeyword("");
+        }}
+        actions={
+          <Button variant="outline" size="sm" onClick={refresh} disabled={isRefreshing}>
+            <RefreshCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+            刷新
+          </Button>
+        }
+      />
+
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 lg:px-6">
+        {/* Toast */}
         {toast && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">
-            {toast}
-          </div>
+          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">{toast}</div>
         )}
 
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <StatCard label="可用能力" value={data.summary.readyCapabilities} helper={`${data.summary.plannedCapabilities} 个规划能力`} icon={<Sparkles className="h-4 w-4" />} />
-          <StatCard label="阻断能力" value={data.summary.blockedCapabilities} helper="依赖缺失或异常" icon={<XCircle className="h-4 w-4" />} />
-          <StatCard label="Skills" value={data.summary.skills} helper={`${data.summary.skillErrors} 个异常`} icon={<Layers3 className="h-4 w-4" />} />
-          <StatCard label="数据源" value={data.summary.dataProviders} helper={`${data.summary.availableProviders} 可用`} icon={<Database className="h-4 w-4" />} />
-          <StatCard label="降级源" value={data.summary.degradedProviders} helper="需要关注的数据源" icon={<TriangleAlert className="h-4 w-4" />} />
-          <StatCard label="市场服务" value={data.summary.marketApiReachable ? '在线' : '离线'} helper={data.marketApi.status} icon={<Server className="h-4 w-4" />} />
-        </section>
+        {/* Status Bar (shown on active tabs) */}
+        {activeTab !== "lakehouse" && activeTab !== "doris" && (
+          <StatusBar data={data} />
+        )}
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            placeholder={view === 'capabilities' ? '搜索能力、Skill、端点...' : '搜索数据源、端点、类别...'}
-            className="h-10 border-slate-200 bg-white pl-9"
-          />
-        </div>
-
-        {view === 'capabilities' ? (
-          <section className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-            <Panel
-              title="能力矩阵"
-              icon={<Boxes className="h-4 w-4 text-blue-700" />}
-              action={<Badge variant="outline" className="bg-white text-slate-500">{filteredCapabilities.length}</Badge>}
-            >
-              <div className="max-h-[760px] space-y-2 overflow-y-auto p-3">
-                {filteredCapabilities.map((capability) => (
-                  <CapabilityListItem
-                    key={capability.id}
-                    capability={capability}
-                    active={selectedCapability?.id === capability.id}
-                    onSelect={() => setSelectedId(capability.id)}
-                  />
-                ))}
-                {!filteredCapabilities.length && (
-                  <EmptyState title="没有匹配的能力" description="尝试其他关键词搜索" className="m-3 border-0" />
-                )}
+        {/* ── Tab: Capabilities ──────────────────────────── */}
+        {activeTab === "capabilities" && (
+          <section>
+            <div className="mb-4 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-blue-600" />
+              <h2 className="text-sm font-semibold text-slate-700">
+                能力矩阵 <span className="font-normal text-slate-400">{filteredCapabilities.length} 项</span>
+              </h2>
+              <div className="relative ml-auto w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  placeholder="搜索能力、Skill、端点..."
+                  className="h-9 border-slate-200 bg-white pl-9 text-sm"
+                />
               </div>
-            </Panel>
+            </div>
 
-            {selectedCapability ? (
-              <div className="min-w-0 space-y-5">
-                <Panel
-                  title={selectedCapability.name}
-                  icon={<Gauge className="h-4 w-4 text-blue-700" />}
-                  action={<Badge variant="outline" className={readinessClass(selectedCapability.readiness.status)}>{readinessLabel(selectedCapability.readiness.status)}</Badge>}
-                >
-                  <div className="space-y-4 p-4">
-                    <p className="text-sm leading-6 text-slate-600">{selectedCapability.description}</p>
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-xs text-slate-500">准备度</p>
-                        <p className="mt-1 text-lg font-semibold text-slate-950">{selectedCapability.readiness.score}</p>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-xs text-slate-500">Agent</p>
-                        <p className="mt-1 truncate text-lg font-semibold text-slate-950">{selectedCapability.agentType}</p>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-xs text-slate-500">执行能力</p>
-                        <p className="mt-1 truncate text-lg font-semibold text-slate-950">{selectedCapability.executionCapabilityId}</p>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-xs text-slate-500">分组</p>
-                        <p className="mt-1 truncate text-lg font-semibold text-slate-950">{selectedCapability.groupId}</p>
-                      </div>
+            {filteredCapabilities.length === 0 ? (
+              <EmptyState
+                title="没有匹配的能力模块"
+                description={keyword ? "尝试其他关键词" : "请检查 Skills registry 和数据端点配置"}
+                action={keyword ? { label: "清除搜索", onClick: () => setKeyword("") } : { label: "刷新状态", onClick: refresh }}
+              />
+            ) : (
+              <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+                {filteredCapabilities.map((cap) => (
+                  <CapabilityRow key={cap.id} cap={cap} onClick={() => openSheet(cap)} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Tab: Data Sources ──────────────────────────── */}
+        {activeTab === "sources" && (
+          <section>
+            <div className="mb-4 flex items-center gap-2">
+              <Database className="h-4 w-4 text-blue-600" />
+              <h2 className="text-sm font-semibold text-slate-700">
+                数据源 <span className="font-normal text-slate-400">{filteredProviders.length} 个</span>
+              </h2>
+              <div className="relative ml-auto w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  placeholder="搜索数据源、端点..."
+                  className="h-9 border-slate-200 bg-white pl-9 text-sm"
+                />
+              </div>
+            </div>
+
+            {filteredProviders.length === 0 ? (
+              <EmptyState
+                title="没有匹配的数据源"
+                description={keyword ? "尝试其他关键词" : "Market API 暂无可用数据源"}
+                action={keyword ? { label: "清除搜索", onClick: () => setKeyword("") } : { label: "刷新状态", onClick: refresh }}
+              />
+            ) : (
+              <div className="space-y-6">
+                {Array.from(providersByCategory.entries()).map(([category, providers]) => (
+                  <div key={category}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <Zap className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="text-xs font-medium text-slate-500">{CATEGORY_LABELS[category] || category}</span>
+                      <span className="text-xs text-slate-400">({providers.length})</span>
                     </div>
-                    <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-                      {selectedCapability.readiness.summary}
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {providers.map((p) => <ProviderCard key={p.id} provider={p} />)}
                     </div>
                   </div>
-                </Panel>
-
-                <div className="grid gap-5 xl:grid-cols-2">
-                  <Panel title="依赖 Skills" icon={<Layers3 className="h-4 w-4 text-blue-700" />}>
-                    <div className="divide-y divide-slate-100">
-                      {selectedCapability.requiredSkills.map((skill) => (
-                        <div key={skill.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-950">{skill.name}</p>
-                            <p className="mt-1 truncate text-xs text-slate-500">
-                              {skill.requestedId === skill.id ? skill.id : `${skill.requestedId} -> ${skill.id}`} · v{skill.version}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            {skill.viaAlias && <Badge variant="outline" className="bg-white text-slate-500">alias</Badge>}
-                            <Badge variant="outline" className={skill.health === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}>{skill.health}</Badge>
-                          </div>
-                        </div>
-                      ))}
-                      {selectedCapability.missingSkills.map((skillId) => (
-                        <div key={skillId} className="flex items-center justify-between gap-3 px-4 py-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-950">{skillId}</p>
-                            <p className="mt-1 text-xs text-slate-500">未在 Skills registry 中找到</p>
-                          </div>
-                          <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">missing</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </Panel>
-
-                  <Panel title="数据端点" icon={<Database className="h-4 w-4 text-blue-700" />}>
-                    <div className="space-y-2 p-4">
-                      {selectedCapability.dataEndpoints.map((endpoint) => (
-                        <div key={endpoint} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
-                          {endpoint}
-                        </div>
-                      ))}
-                    </div>
-                  </Panel>
-                </div>
-
-                <div className="grid gap-5 xl:grid-cols-2">
-                  <Panel title="产物契约" icon={<ShieldCheck className="h-4 w-4 text-blue-700" />}>
-                    <div className="flex flex-wrap gap-2 p-4">
-                      {selectedCapability.expectedArtifacts.map((artifact) => (
-                        <Badge key={artifact} variant="outline" className="bg-slate-50 text-slate-600">{artifact}</Badge>
-                      ))}
-                    </div>
-                  </Panel>
-                  <Panel title="验证规则" icon={<CheckCircle2 className="h-4 w-4 text-blue-700" />}>
-                    <div className="space-y-2 p-4">
-                      {selectedCapability.validationRules.map((rule) => (
-                        <div key={rule} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
-                          {rule}
-                        </div>
-                      ))}
-                    </div>
-                  </Panel>
-                </div>
+                ))}
               </div>
-            ) : (
-              <Panel title="能力详情" icon={<Gauge className="h-4 w-4 text-blue-700" />}>
-                <EmptyState title="暂无能力" description="请检查 Skills 和数据源是否正常" className="border-0" />
-              </Panel>
-            )}
-          </section>
-        ) : (
-          <section className="space-y-5">
-            <Panel
-              title="市场数据服务"
-              icon={<Server className="h-4 w-4 text-blue-700" />}
-              action={<Badge variant="outline" className={data.marketApi.reachable ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}>{data.marketApi.status}</Badge>}
-            >
-              <div className="grid gap-3 p-4 md:grid-cols-3">
-                <div className="rounded-md bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">Base URL</p>
-                  <p className="mt-1 truncate font-mono text-sm font-semibold text-slate-950">{data.marketApi.baseUrl}</p>
-                </div>
-                <div className="rounded-md bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">检查时间</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">{formatDate(data.marketApi.checkedAt)}</p>
-                </div>
-                <div className="rounded-md bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">错误</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-slate-950">{data.marketApi.error ?? '-'}</p>
-                </div>
-              </div>
-            </Panel>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {filteredProviders.map((provider) => (
-                <ProviderCard key={provider.id} provider={provider} />
-              ))}
-            </div>
-            {!filteredProviders.length && (
-              <EmptyState title="没有匹配的数据源" description="尝试其他关键词搜索" className="border-0" />
             )}
           </section>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/strategies">
-              <LineChart className="h-4 w-4" />
-              打开策略平台
-            </Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/skills">
-              <Wrench className="h-4 w-4" />
-              打开 Skills 管理
-            </Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/workspaces">
-              <GitBranch className="h-4 w-4" />
-              打开运维平台
-            </Link>
-          </Button>
-        </div>
+        {/* ── Tab: 湖仓 (placeholder) ────────────────────── */}
+        {activeTab === "lakehouse" && (
+          <ComingSoonTab
+            title="湖仓接入"
+            description="支持 Delta Lake、Iceberg、Hudi 等开放湖仓格式的元数据检索与数据预览。功能开发中，敬请期待。"
+            icon={<Building2 className="h-8 w-8" />}
+          />
+        )}
+
+        {/* ── Tab: Doris (placeholder) ───────────────────── */}
+        {activeTab === "doris" && (
+          <ComingSoonTab
+            title="Apache Doris"
+            description="高性能实时 OLAP 查询引擎接入，支持大规模金融数据的交互式分析。功能开发中，敬请期待。"
+            icon={<Server className="h-8 w-8" />}
+          />
+        )}
+
+        {/* Capability detail sheet */}
+        <CapabilitySheet cap={selectedCap} open={sheetOpen} onOpenChange={setSheetOpen} />
       </main>
     </div>
   );
