@@ -14,7 +14,6 @@ flowchart LR
   M --> P
   P --> V[生成项目预览 :3100+]
   P --> H[运维平台 /workspaces]
-  P --> O[生成观测 /observability]
   W --> T[策略平台 /strategies]
   W --> C[数据平台 /capabilities]
   W --> E[评测后台 /evals]
@@ -44,8 +43,6 @@ flowchart LR
 模型和 CLI 的注册入口：
 
 - `src/lib/constants/cliModels.ts`
-- `src/lib/constants/claudeModels.ts`
-- `src/lib/constants/codexModels.ts`
 - `src/lib/services/cli/claude.ts`
 - `src/lib/services/cli/codex.ts`
 
@@ -96,11 +93,8 @@ flowchart LR
 | Skills 管理 | `/skills` | 编辑、发布、回滚和导入核心 skills |
 | 策略平台 | `/strategies` | 管理策略模板、扫描队列、参数结果对比、版本口径、回测归档和关联策略工作空间 |
 | 数据平台 | `/capabilities` | 查看能力域、数据接口、产物契约和验证规则 |
-| 运维平台 | `/workspaces` | 查看 workspace 健康、事件、产物和 trace |
-| 生成观测 | `/observability` | 聚合生成链路状态、队列和阶段信息 |
+| 运维平台 | `/workspaces` | 查看 workspace 健康、生成链路状态、队列、阶段事件、产物和 trace |
 | 评测后台 | `/evals` | 管理用例、评测集、运行队列、报告和失败修复 |
-
-控制台细节见 [控制台使用指南](console-guide.md)。
 
 项目目录和分层边界见 [项目结构与分层边界](project-structure.md)。
 

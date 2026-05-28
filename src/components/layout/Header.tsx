@@ -18,9 +18,8 @@ export default function Header() {
   const isStrategiesPage = pathname === '/strategies';
   const isEvalsPage = pathname === '/evals' || pathname.startsWith('/evals/');
   const isWorkspacesPage = pathname === '/workspaces';
-  const isObservabilityPage = pathname === '/observability';
 
-  if (isChatPage || isMainPage || isSkillsPage || isCapabilitiesPage || isStrategiesPage || isEvalsPage || isWorkspacesPage || isObservabilityPage) {
+  if (isChatPage || isMainPage || isSkillsPage || isCapabilitiesPage || isStrategiesPage || isEvalsPage || isWorkspacesPage) {
     return null;
   }
 

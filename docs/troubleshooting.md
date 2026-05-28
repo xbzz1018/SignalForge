@@ -116,7 +116,7 @@ evidence/data_quality.json
 
 - 聊天页执行过程。
 - `/workspaces` 工作空间健康。
-- `/observability` 生成观测。
+- `/workspaces` 链路观测。
 - `.quantpilot/events.jsonl`。
 - `.quantpilot/validation.json`。
 - `.quantpilot/validation-repair-plan.json`。
