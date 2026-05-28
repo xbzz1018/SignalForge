@@ -23,7 +23,7 @@ import {
   GLM_DEFAULT_MODEL,
   getGLMModelDisplayName,
   normalizeGLMModelId,
-} from '@/lib/constants/glmModels';
+} from '@/lib/constants/cliModels';
 
 const GLM_ANTHROPIC_BASE_URL =
   process.env.GLM_ANTHROPIC_BASE_URL?.trim() || 'https://api.z.ai/api/anthropic';

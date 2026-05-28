@@ -13,7 +13,7 @@ import { streamManager } from '@/lib/services/stream';
 import { createMessage } from '@/lib/services/message';
 import { getProjectById } from '@/lib/services/project';
 import { getDefaultModelForCli } from '@/lib/constants/cliModels';
-import { CODEX_DEFAULT_MODEL, getCodexModelDisplayName, normalizeCodexModelId } from '@/lib/constants/codexModels';
+import { CODEX_DEFAULT_MODEL, getCodexModelDisplayName, normalizeCodexModelId } from '@/lib/constants/cliModels';
 import {
   buildCodexConfigArgs,
   buildCodexEnvironment,

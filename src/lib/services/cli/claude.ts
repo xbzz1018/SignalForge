@@ -10,7 +10,7 @@ import { streamManager } from '../stream';
 import { serializeMessage, createRealtimeMessage } from '@/lib/serializers/chat';
 import { updateProject, getProjectById } from '../project';
 import { createMessage } from '../message';
-import { CLAUDE_DEFAULT_MODEL, normalizeClaudeModelId, getClaudeModelDefinition, getClaudeModelDisplayName } from '@/lib/constants/claudeModels';
+import { CLAUDE_DEFAULT_MODEL, normalizeClaudeModelId, getClaudeModelDefinition, getClaudeModelDisplayName } from '@/lib/constants/cliModels';
 import path from 'path';
 import fs from 'fs/promises';
 import { randomUUID } from 'crypto';

@@ -8,11 +8,13 @@ import { exec } from 'child_process';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import type { CLIStatus } from '@/types/backend';
-import { CODEX_MODEL_DEFINITIONS } from '@/lib/constants/codexModels';
-import { QWEN_MODEL_DEFINITIONS } from '@/lib/constants/qwenModels';
-import { GLM_MODEL_DEFINITIONS } from '@/lib/constants/glmModels';
-import { CURSOR_MODEL_DEFINITIONS } from '@/lib/constants/cursorModels';
-import { CLAUDE_MODEL_DEFINITIONS } from '@/lib/constants/claudeModels';
+import {
+  CLAUDE_MODEL_DEFINITIONS,
+  CODEX_MODEL_DEFINITIONS,
+  CURSOR_MODEL_DEFINITIONS,
+  QWEN_MODEL_DEFINITIONS,
+  GLM_MODEL_DEFINITIONS,
+} from '@/lib/constants/cliModels';
 import { buildCodexEnvironment, getCodexRuntimeConfig } from '@/lib/services/cli/codex-config';
 
 const execAsync = promisify(exec);

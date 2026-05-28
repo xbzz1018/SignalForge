@@ -18,7 +18,7 @@ import {
   QWEN_DEFAULT_MODEL,
   getQwenModelDisplayName,
   normalizeQwenModelId,
-} from '@/lib/constants/qwenModels';
+} from '@/lib/constants/cliModels';
 import {
   markUserRequestAsCompleted,
   markUserRequestAsFailed,

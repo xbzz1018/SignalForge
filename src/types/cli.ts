@@ -1,8 +1,10 @@
-import { CLAUDE_MODEL_DEFINITIONS } from '@/lib/constants/claudeModels';
-import { CODEX_MODEL_DEFINITIONS } from '@/lib/constants/codexModels';
-import { CURSOR_MODEL_DEFINITIONS } from '@/lib/constants/cursorModels';
-import { QWEN_MODEL_DEFINITIONS } from '@/lib/constants/qwenModels';
-import { GLM_MODEL_DEFINITIONS } from '@/lib/constants/glmModels';
+import {
+  CLAUDE_MODEL_DEFINITIONS,
+  CODEX_MODEL_DEFINITIONS,
+  CURSOR_MODEL_DEFINITIONS,
+  QWEN_MODEL_DEFINITIONS,
+  GLM_MODEL_DEFINITIONS,
+} from '@/lib/constants/cliModels';
 
 /**
  * Frontend CLI Type Definitions (claude-only variant)

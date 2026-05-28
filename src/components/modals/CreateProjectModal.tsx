@@ -12,7 +12,7 @@ import {
   type QuantCapabilityId,
 } from '@/lib/quant/capabilities';
 
-import type { CreateProjectCLIOption, GlobalSettings } from '@/types/client';
+import type { CreateProjectCLIOption, GlobalSettings } from '@/types';
 
 type CLIOption = CreateProjectCLIOption;
 

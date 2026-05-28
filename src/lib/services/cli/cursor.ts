@@ -25,7 +25,7 @@ import {
   getCursorModelDisplayName,
   normalizeCursorModelId,
   resolveCursorCliModelId,
-} from '@/lib/constants/cursorModels';
+} from '@/lib/constants/cliModels';
 import {
   markUserRequestAsRunning,
   markUserRequestAsCompleted,
