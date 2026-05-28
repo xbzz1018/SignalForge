@@ -1,6 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { spawn, type ChildProcess } from 'child_process';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/db/client';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -626,6 +628,169 @@ function normalizeQueueStatus(value: unknown): QuantEvalQueueStatus {
   return 'failed';
 }
 
+function toDate(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function dateOrNow(value: string | Date | null | undefined): Date {
+  return toDate(value) ?? new Date();
+}
+
+function jsonArray(value: unknown): Prisma.InputJsonValue {
+  return (Array.isArray(value) ? value : []) as unknown as Prisma.InputJsonValue;
+}
+
+function jsonObject(value: unknown): Prisma.InputJsonValue {
+  return (isRecord(value) ? value : {}) as unknown as Prisma.InputJsonValue;
+}
+
+function mapDbEvalRun(record: {
+  id: string;
+  fileName: string;
+  filePath: string;
+  reportCreatedAt: Date;
+  mtimeMs: number;
+  passed: boolean;
+  total: number;
+  passedCount: number;
+  failedCount: number;
+  passRate: number;
+  averageScore: number;
+  durationMs: number;
+  metadata: unknown;
+  coverage: unknown;
+  results: unknown;
+}): QuantEvalRun {
+  return {
+    id: record.id,
+    fileName: record.fileName,
+    filePath: record.filePath,
+    createdAt: record.reportCreatedAt.toISOString(),
+    mtimeMs: record.mtimeMs,
+    passed: record.passed,
+    total: record.total,
+    passedCount: record.passedCount,
+    failedCount: record.failedCount,
+    passRate: record.passRate,
+    averageScore: record.averageScore,
+    durationMs: record.durationMs,
+    metadata: record.metadata as QuantEvalRun['metadata'],
+    coverage: record.coverage as QuantEvalRun['coverage'],
+    results: Array.isArray(record.results) ? record.results as QuantEvalResult[] : [],
+  };
+}
+
+function mapDbQueueItem(record: {
+  id: string;
+  status: string;
+  cli: string;
+  model: string;
+  reasoningEffort: string;
+  selectedCases: unknown;
+  limit: number | null;
+  keepProjects: boolean;
+  reportId: string | null;
+  reportPath: string | null;
+  logPath: string | null;
+  pid: number | null;
+  exitCode: number | null;
+  error: string | null;
+  createdAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+}): QuantEvalQueueItem {
+  return {
+    id: record.id,
+    status: normalizeQueueStatus(record.status),
+    createdAt: record.createdAt.toISOString(),
+    startedAt: record.startedAt ? record.startedAt.toISOString() : null,
+    finishedAt: record.finishedAt ? record.finishedAt.toISOString() : null,
+    cli: record.cli,
+    model: record.model,
+    reasoningEffort: record.reasoningEffort,
+    selectedCases: stringArray(record.selectedCases),
+    limit: record.limit,
+    keepProjects: record.keepProjects,
+    reportId: record.reportId,
+    reportPath: record.reportPath,
+    logPath: record.logPath,
+    pid: record.pid,
+    exitCode: record.exitCode,
+    error: record.error,
+  };
+}
+
+function mapDbRepairTicket(record: {
+  id: string;
+  runId: string;
+  caseId: string;
+  title: string;
+  status: string;
+  severity: string;
+  createdAt: Date;
+  updatedAt: Date;
+  model: string;
+  reportPath: string;
+  projectId: string | null;
+  failures: unknown;
+  validationSummaries: unknown;
+  suggestedActions: unknown;
+  skillVersions: unknown;
+}): QuantEvalRepairTicket {
+  return {
+    id: record.id,
+    runId: record.runId,
+    caseId: record.caseId,
+    title: record.title,
+    status: record.status === 'resolved' ? 'resolved' : 'open',
+    severity: record.severity === 'high' ? 'high' : 'medium',
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+    model: record.model,
+    reportPath: record.reportPath,
+    projectId: record.projectId,
+    failures: stringArray(record.failures),
+    validationSummaries: stringArray(record.validationSummaries),
+    suggestedActions: stringArray(record.suggestedActions),
+    skillVersions: isRecord(record.skillVersions)
+      ? Object.fromEntries(Object.entries(record.skillVersions).map(([key, value]) => [key, stringValue(value) || null]))
+      : {},
+  };
+}
+
+function mapDbSchedule(record: {
+  enabled: boolean;
+  intervalHours: number;
+  cli: string;
+  model: string;
+  reasoningEffort: string;
+  selectedCases: unknown;
+  limit: number | null;
+  keepProjects: boolean;
+  nextRunAt: Date | null;
+  lastRunAt: Date | null;
+  lastQueuedRunId: string | null;
+  updatedAt: Date;
+}): QuantEvalScheduleConfig {
+  return {
+    enabled: record.enabled,
+    intervalHours: record.intervalHours,
+    cli: record.cli,
+    model: record.model,
+    reasoningEffort: record.reasoningEffort,
+    selectedCases: stringArray(record.selectedCases),
+    limit: record.limit,
+    keepProjects: record.keepProjects,
+    nextRunAt: record.nextRunAt ? record.nextRunAt.toISOString() : null,
+    lastRunAt: record.lastRunAt ? record.lastRunAt.toISOString() : null,
+    lastQueuedRunId: record.lastQueuedRunId,
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
 function countWarnings(result: JsonRecord): number {
   const validation = isRecord(result.validation) ? result.validation : {};
   const checks = normalizeChecks(validation.checks);
@@ -763,10 +928,61 @@ function normalizeRun(filePath: string, statMtimeMs: number, report: JsonRecord,
   };
 }
 
+async function writeEvalRunToDatabase(run: QuantEvalRun): Promise<void> {
+  await prisma.evalRun.upsert({
+    where: { id: run.id },
+    update: {
+      fileName: run.fileName,
+      filePath: run.filePath,
+      reportCreatedAt: dateOrNow(run.createdAt),
+      mtimeMs: run.mtimeMs,
+      passed: run.passed,
+      total: run.total,
+      passedCount: run.passedCount,
+      failedCount: run.failedCount,
+      passRate: run.passRate,
+      averageScore: run.averageScore,
+      durationMs: run.durationMs,
+      metadata: jsonObject(run.metadata),
+      coverage: jsonObject(run.coverage),
+      results: jsonArray(run.results),
+    },
+    create: {
+      id: run.id,
+      fileName: run.fileName,
+      filePath: run.filePath,
+      reportCreatedAt: dateOrNow(run.createdAt),
+      mtimeMs: run.mtimeMs,
+      passed: run.passed,
+      total: run.total,
+      passedCount: run.passedCount,
+      failedCount: run.failedCount,
+      passRate: run.passRate,
+      averageScore: run.averageScore,
+      durationMs: run.durationMs,
+      metadata: jsonObject(run.metadata),
+      coverage: jsonObject(run.coverage),
+      results: jsonArray(run.results),
+    },
+  });
+}
+
+async function listEvalRunsFromDatabase(limit: number): Promise<QuantEvalRun[]> {
+  const records = await prisma.evalRun.findMany({
+    orderBy: { reportCreatedAt: 'desc' },
+    take: limit,
+  });
+  return records.map(mapDbEvalRun);
+}
+
 async function readQueue(): Promise<QuantEvalQueueItem[]> {
+  const dbItems = await prisma.evalQueueItem
+    .findMany({ orderBy: { createdAt: 'desc' }, take: 50 })
+    .then((items) => items.map(mapDbQueueItem))
+    .catch(() => []);
   const parsed = await readJson(QUEUE_PATH).catch(() => []);
   const items = Array.isArray(parsed) ? parsed : [];
-  return items
+  const fileItems = items
     .filter(isRecord)
     .map((item): QuantEvalQueueItem => ({
       id: stringValue(item.id),
@@ -787,13 +1003,60 @@ async function readQueue(): Promise<QuantEvalQueueItem[]> {
       exitCode: typeof item.exitCode === 'number' ? item.exitCode : null,
       error: stringValue(item.error) || null,
     }))
-    .filter((item) => item.id)
+    .filter((item) => item.id);
+  const byId = new Map<string, QuantEvalQueueItem>();
+  for (const item of fileItems) byId.set(item.id, item);
+  for (const item of dbItems) byId.set(item.id, item);
+  return Array.from(byId.values())
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 50);
 }
 
 async function writeQueue(items: QuantEvalQueueItem[]): Promise<void> {
-  await writeJson(QUEUE_PATH, items.slice(0, 80));
+  const limited = items.slice(0, 80);
+  await Promise.all([
+    writeJson(QUEUE_PATH, limited).catch(() => undefined),
+    Promise.all(limited.map((item) => prisma.evalQueueItem.upsert({
+      where: { id: item.id },
+      update: {
+        status: item.status,
+        cli: item.cli,
+        model: item.model,
+        reasoningEffort: item.reasoningEffort,
+        selectedCases: jsonArray(item.selectedCases),
+        limit: item.limit,
+        keepProjects: item.keepProjects,
+        reportId: item.reportId,
+        reportPath: item.reportPath,
+        logPath: item.logPath,
+        pid: item.pid,
+        exitCode: item.exitCode,
+        error: item.error,
+        createdAt: dateOrNow(item.createdAt),
+        startedAt: toDate(item.startedAt),
+        finishedAt: toDate(item.finishedAt),
+      },
+      create: {
+        id: item.id,
+        status: item.status,
+        cli: item.cli,
+        model: item.model,
+        reasoningEffort: item.reasoningEffort,
+        selectedCases: jsonArray(item.selectedCases),
+        limit: item.limit,
+        keepProjects: item.keepProjects,
+        reportId: item.reportId,
+        reportPath: item.reportPath,
+        logPath: item.logPath,
+        pid: item.pid,
+        exitCode: item.exitCode,
+        error: item.error,
+        createdAt: dateOrNow(item.createdAt),
+        startedAt: toDate(item.startedAt),
+        finishedAt: toDate(item.finishedAt),
+      },
+    }))),
+  ]);
 }
 
 function buildVirtualQueueItem(options: StartQuantEvalOptions = {}): QuantEvalQueueItem {
@@ -842,9 +1105,13 @@ async function latestReportAfter(startedAtMs: number): Promise<QuantEvalRun | nu
 }
 
 async function readRepairTickets(): Promise<QuantEvalRepairTicket[]> {
+  const dbTickets = await prisma.evalRepairTicket
+    .findMany({ orderBy: { createdAt: 'desc' } })
+    .then((items) => items.map(mapDbRepairTicket))
+    .catch(() => []);
   const parsed = await readJson(REPAIRS_PATH).catch(() => []);
   const items = Array.isArray(parsed) ? parsed : [];
-  return items
+  const fileTickets = items
     .filter(isRecord)
     .map((item): QuantEvalRepairTicket => ({
       id: stringValue(item.id),
@@ -865,12 +1132,55 @@ async function readRepairTickets(): Promise<QuantEvalRepairTicket[]> {
         ? Object.fromEntries(Object.entries(item.skillVersions).map(([key, value]) => [key, stringValue(value) || null]))
         : {},
     }))
-    .filter((item) => item.id)
+    .filter((item) => item.id);
+  const byId = new Map<string, QuantEvalRepairTicket>();
+  for (const item of fileTickets) byId.set(item.id, item);
+  for (const item of dbTickets) byId.set(item.id, item);
+  return Array.from(byId.values())
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 async function writeRepairTickets(items: QuantEvalRepairTicket[]): Promise<void> {
-  await writeJson(REPAIRS_PATH, items.slice(0, 200));
+  const limited = items.slice(0, 200);
+  await Promise.all([
+    writeJson(REPAIRS_PATH, limited).catch(() => undefined),
+    Promise.all(limited.map((item) => prisma.evalRepairTicket.upsert({
+      where: { id: item.id },
+      update: {
+        runId: item.runId,
+        caseId: item.caseId,
+        title: item.title,
+        status: item.status,
+        severity: item.severity,
+        model: item.model,
+        reportPath: item.reportPath,
+        projectId: item.projectId,
+        failures: jsonArray(item.failures),
+        validationSummaries: jsonArray(item.validationSummaries),
+        suggestedActions: jsonArray(item.suggestedActions),
+        skillVersions: jsonObject(item.skillVersions),
+        createdAt: dateOrNow(item.createdAt),
+        updatedAt: dateOrNow(item.updatedAt),
+      },
+      create: {
+        id: item.id,
+        runId: item.runId,
+        caseId: item.caseId,
+        title: item.title,
+        status: item.status,
+        severity: item.severity,
+        model: item.model,
+        reportPath: item.reportPath,
+        projectId: item.projectId,
+        failures: jsonArray(item.failures),
+        validationSummaries: jsonArray(item.validationSummaries),
+        suggestedActions: jsonArray(item.suggestedActions),
+        skillVersions: jsonObject(item.skillVersions),
+        createdAt: dateOrNow(item.createdAt),
+        updatedAt: dateOrNow(item.updatedAt),
+      },
+    }))),
+  ]);
 }
 
 function suggestedActionsForResult(result: QuantEvalResult): string[] {
@@ -929,6 +1239,14 @@ async function createRepairTicketsForRun(run: QuantEvalRun): Promise<QuantEvalRe
 }
 
 async function readScheduleConfig(): Promise<QuantEvalScheduleConfig> {
+  const dbSchedule = await prisma.evalSchedule
+    .findUnique({ where: { id: 'default' } })
+    .then((record) => record ? mapDbSchedule(record) : null)
+    .catch(() => null);
+  if (dbSchedule) {
+    return dbSchedule;
+  }
+
   const parsed = await readJson(SCHEDULE_PATH).catch(() => null);
   const record = isRecord(parsed) ? parsed : {};
   return {
@@ -952,7 +1270,39 @@ async function readScheduleConfig(): Promise<QuantEvalScheduleConfig> {
 }
 
 async function writeScheduleConfig(config: QuantEvalScheduleConfig): Promise<QuantEvalScheduleConfig> {
-  await writeJson(SCHEDULE_PATH, config);
+  await Promise.all([
+    writeJson(SCHEDULE_PATH, config).catch(() => undefined),
+    prisma.evalSchedule.upsert({
+      where: { id: 'default' },
+      update: {
+        enabled: config.enabled,
+        intervalHours: config.intervalHours,
+        cli: config.cli,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        selectedCases: jsonArray(config.selectedCases),
+        limit: config.limit,
+        keepProjects: config.keepProjects,
+        nextRunAt: toDate(config.nextRunAt),
+        lastRunAt: toDate(config.lastRunAt),
+        lastQueuedRunId: config.lastQueuedRunId,
+      },
+      create: {
+        id: 'default',
+        enabled: config.enabled,
+        intervalHours: config.intervalHours,
+        cli: config.cli,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        selectedCases: jsonArray(config.selectedCases),
+        limit: config.limit,
+        keepProjects: config.keepProjects,
+        nextRunAt: toDate(config.nextRunAt),
+        lastRunAt: toDate(config.lastRunAt),
+        lastQueuedRunId: config.lastQueuedRunId,
+      },
+    }),
+  ]);
   return config;
 }
 
@@ -1150,6 +1500,7 @@ export async function getQuantEvalCases(): Promise<QuantEvalCase[]> {
 
 export async function getQuantEvalRuns(limit = 30): Promise<QuantEvalRun[]> {
   const cases = await getQuantEvalCases();
+  const dbRuns = await listEvalRunsFromDatabase(limit).catch(() => []);
   const files = await fs
     .readdir(REPORTS_DIR)
     .then((items) => items.filter((item) => /^report-\d+\.json$/.test(item)))
@@ -1164,7 +1515,12 @@ export async function getQuantEvalRuns(limit = 30): Promise<QuantEvalRun[]> {
     })
   );
 
-  return runs.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit);
+  await Promise.all(runs.map((run) => writeEvalRunToDatabase(run).catch(() => undefined)));
+
+  const byId = new Map<string, QuantEvalRun>();
+  for (const run of dbRuns) byId.set(run.id, run);
+  for (const run of runs) byId.set(run.id, run);
+  return Array.from(byId.values()).sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit);
 }
 
 export async function getQuantEvalQueue(): Promise<QuantEvalQueueItem[]> {
@@ -1409,10 +1765,19 @@ export async function getQuantEvalRun(runId: string): Promise<QuantEvalRun | nul
   const cases = await getQuantEvalCases();
   const filePath = path.join(REPORTS_DIR, `${runId}.json`);
   const stat = await fs.stat(filePath).catch(() => null);
-  if (!stat) return null;
-  const parsed = await readJson(filePath).catch(() => null);
-  if (!isRecord(parsed)) return null;
-  return normalizeRun(filePath, stat.mtimeMs, parsed, cases);
+  if (stat) {
+    const parsed = await readJson(filePath).catch(() => null);
+    if (isRecord(parsed)) {
+      const run = normalizeRun(filePath, stat.mtimeMs, parsed, cases);
+      await writeEvalRunToDatabase(run).catch(() => undefined);
+      return run;
+    }
+  }
+
+  return prisma.evalRun
+    .findUnique({ where: { id: runId } })
+    .then((record) => record ? mapDbEvalRun(record) : null)
+    .catch(() => null);
 }
 
 export async function getQuantEvalDashboardData(): Promise<QuantEvalDashboardData> {

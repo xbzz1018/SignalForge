@@ -57,7 +57,7 @@ curl http://127.0.0.1:8000/health
 如果没有响应：
 
 ```bash
-cd backend/market_data
+cd services/market-data
 uv run quantpilot-market-api
 ```
 

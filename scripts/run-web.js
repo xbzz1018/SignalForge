@@ -119,10 +119,7 @@ async function ensureDatabaseSynced() {
   }
 
   try {
-    const tables = await prisma.$queryRaw`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projects'`;
-    if (!Array.isArray(tables) || tables.length === 0) {
-      await runPrismaDbPush();
-    }
+    await prisma.project.findFirst({ select: { id: true } });
   } catch (error) {
     console.warn(
       '⚠️  Prisma schema check failed, attempting to sync automatically:',

@@ -4,6 +4,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { PrismaClient } = require('@prisma/client');
 
 const ROOT = process.cwd();
 const FULL_CHECKS = process.argv.includes('--full');
@@ -65,6 +66,54 @@ function hasCodexApiKey() {
   if (readEnvValue('CODEX_OPENAI_API_KEY') || readEnvValue('OPENAI_API_KEY')) return true;
   const auth = readJson(path.join(process.env.HOME || '', '.codex', 'auth.json'));
   return typeof auth?.OPENAI_API_KEY === 'string' && auth.OPENAI_API_KEY.length > 0;
+}
+
+async function checkDatabase() {
+  const databaseUrl = readEnvValue('DATABASE_URL');
+  if (!databaseUrl) {
+    addCheck('数据库', 'fail', 'DATABASE_URL 未配置。');
+    return;
+  }
+
+  const provider =
+    databaseUrl.startsWith('postgresql://') || databaseUrl.startsWith('postgres://')
+      ? 'PostgreSQL'
+      : 'unsupported';
+
+  const prisma = new PrismaClient();
+  try {
+    if (provider !== 'PostgreSQL') {
+      addCheck('数据库', 'fail', `${provider} DATABASE_URL。`, ['运行 node scripts/setup-env.js 重新生成 PostgreSQL 配置。']);
+      return;
+    }
+    await prisma.project.findFirst({ select: { id: true } });
+
+    const extensionRows =
+      await prisma.$queryRaw`SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'`;
+    const timescaleVersion = Array.isArray(extensionRows) && extensionRows[0]?.extversion
+      ? extensionRows[0].extversion
+      : '';
+    addCheck(
+      '数据库',
+      timescaleVersion ? 'ok' : 'warn',
+      timescaleVersion
+        ? `PostgreSQL 可连接，TimescaleDB ${timescaleVersion} 已启用。`
+        : 'PostgreSQL 可连接，但未检测到 TimescaleDB 扩展。',
+      timescaleVersion ? [] : ['运行 npm run db:up 后再执行 npm run prisma:push。']
+    );
+  } catch (error) {
+    addCheck(
+      '数据库',
+      'fail',
+      `${provider} 连接或 schema 检查失败。`,
+      [
+        error instanceof Error ? error.message : String(error),
+        provider === 'PostgreSQL' ? '运行 npm run db:up && npm run prisma:push。' : null,
+      ]
+    );
+  } finally {
+    await prisma.$disconnect().catch(() => {});
+  }
 }
 
 function requestHead(url, timeoutMs = 2500) {
@@ -151,7 +200,7 @@ async function main() {
 
   const nodeVersion = commandOutput('node', ['--version']);
   const npmVersion = commandOutput('npm', ['--version']);
-  const uvVersion = commandOutput('uv', ['--version'], { cwd: path.join(ROOT, 'backend', 'market_data') });
+  const uvVersion = commandOutput('uv', ['--version'], { cwd: path.join(ROOT, 'services', 'market-data') });
   addCheck(
     '工具版本',
     nodeVersion && npmVersion && uvVersion ? 'ok' : 'fail',
@@ -199,7 +248,7 @@ async function main() {
     '量化数据后端 :8000',
     backend.ok ? 'ok' : 'warn',
     backend.ok ? `HTTP ${backend.statusCode}` : '未连接。',
-    backend.ok ? [] : ['进入 backend/market_data 后运行 uv run quantpilot-market-api。']
+    backend.ok ? [] : ['进入 services/market-data 后运行 uv run quantpilot-market-api。']
   );
 
   const projectsDir = readEnvValue('PROJECTS_DIR') || './data/projects';
@@ -208,6 +257,7 @@ async function main() {
     ? fs.readdirSync(projectRoot).filter((item) => item.startsWith('project-')).length
     : 0;
   addCheck('工作空间目录', fs.existsSync(projectRoot) ? 'ok' : 'warn', `${path.relative(ROOT, projectRoot)} (${projectCount} 个项目)`);
+  await checkDatabase();
 
   checkCommand('Skills 注册表', 'node', ['scripts/check-skills-registry.js', '--check-lock'], {
     successSummary: 'registry / changelog / lock / package 一致。',
@@ -248,11 +298,11 @@ async function main() {
     checkCommand('ESLint', 'npm', ['run', 'lint'], { successSummary: 'lint 通过。' });
     checkCommand('TypeScript', 'npm', ['run', 'type-check'], { successSummary: 'type-check 通过。' });
     checkCommand('后端 Ruff', 'uv', ['run', 'ruff', 'check', '.'], {
-      cwd: path.join(ROOT, 'backend', 'market_data'),
+      cwd: path.join(ROOT, 'services', 'market-data'),
       successSummary: 'ruff 通过。',
     });
     checkCommand('后端 Pytest', 'uv', ['run', 'pytest'], {
-      cwd: path.join(ROOT, 'backend', 'market_data'),
+      cwd: path.join(ROOT, 'services', 'market-data'),
       successSummary: 'pytest 通过。',
     });
   } else {

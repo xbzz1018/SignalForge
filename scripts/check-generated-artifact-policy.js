@@ -9,7 +9,7 @@ const jiti = require('jiti')(path.join(process.cwd(), 'scripts/check-generated-a
   interopDefault: true,
 });
 
-const { checkQuantArtifactPolicy } = jiti('../lib/quant/validation.ts');
+const { checkQuantArtifactPolicy } = jiti('../src/lib/quant/validation.ts');
 
 async function writeFile(filePath, content) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });

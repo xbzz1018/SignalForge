@@ -1,9 +1,12 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/db/client';
 import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliModels';
 
 const DATA_DIR = process.env.SETTINGS_DIR || path.join(process.cwd(), 'data');
 const SETTINGS_FILE = path.join(DATA_DIR, 'global-settings.json');
+const GLOBAL_SETTINGS_KEY = 'global';
 
 export type CLISettings = Record<string, Record<string, unknown>>;
 
@@ -165,11 +168,58 @@ async function readSettingsFile(): Promise<GlobalSettings | null> {
 }
 
 async function writeSettings(settings: GlobalSettings): Promise<void> {
-  await ensureDataDir();
-  await fs.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+  await prisma.platformSetting.upsert({
+    where: { key: GLOBAL_SETTINGS_KEY },
+    update: { value: settings as unknown as Prisma.InputJsonValue },
+    create: { key: GLOBAL_SETTINGS_KEY, value: settings as unknown as Prisma.InputJsonValue },
+  });
+}
+
+function coerceSettings(value: unknown): GlobalSettings | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const parsed = value as Partial<GlobalSettings>;
+  const cliSettings =
+    parsed.cli_settings && typeof parsed.cli_settings === 'object'
+      ? parsed.cli_settings
+      : {};
+
+  return {
+    default_cli: typeof parsed.default_cli === 'string' ? parsed.default_cli : DEFAULT_SETTINGS.default_cli,
+    cli_settings: {
+      ...DEFAULT_SETTINGS.cli_settings,
+      ...cliSettings,
+    },
+  };
+}
+
+async function readSettingsFromDatabase(): Promise<GlobalSettings | null> {
+  try {
+    const record = await prisma.platformSetting.findUnique({
+      where: { key: GLOBAL_SETTINGS_KEY },
+    });
+    return coerceSettings(record?.value);
+  } catch {
+    return null;
+  }
+}
+
+async function migrateSettingsFileToDatabase(settings: GlobalSettings): Promise<void> {
+  try {
+    await writeSettings(settings);
+  } catch {
+    await ensureDataDir();
+    await fs.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+  }
 }
 
 export async function loadGlobalSettings(): Promise<GlobalSettings> {
+  const stored = await readSettingsFromDatabase();
+  if (stored) {
+    return applyEnvironmentRuntimeDefaults(applyEnvironmentModelDefaults(migrateStoredModelDefaults(stored)));
+  }
+
   const existing = await readSettingsFile();
   if (existing) {
     const merged: GlobalSettings = {
@@ -179,7 +229,9 @@ export async function loadGlobalSettings(): Promise<GlobalSettings> {
         ...(existing.cli_settings ?? {}),
       },
     };
-    return applyEnvironmentRuntimeDefaults(applyEnvironmentModelDefaults(migrateStoredModelDefaults(merged)));
+    const normalized = applyEnvironmentRuntimeDefaults(applyEnvironmentModelDefaults(migrateStoredModelDefaults(merged)));
+    await migrateSettingsFileToDatabase(normalized);
+    return normalized;
   }
 
   const defaults = applyEnvironmentRuntimeDefaults(applyEnvironmentModelDefaults(migrateStoredModelDefaults(DEFAULT_SETTINGS)));

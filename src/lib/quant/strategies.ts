@@ -1,6 +1,8 @@
 import { getAllProjects } from '@/lib/services/project';
 import { getQuantCapability, type QuantCapabilityId } from '@/lib/quant/capabilities';
 import { serializeProjects } from '@/lib/serializers/project';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/db/client';
 import type { Project } from '@/types';
 import fs from 'fs/promises';
 import path from 'path';
@@ -87,6 +89,20 @@ export interface StrategyScanRun {
   results: StrategyScanRunResult[];
 }
 
+export interface StrategyScanJob {
+  id: string;
+  templateId: string;
+  scanId: string;
+  symbol: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  runId?: string | null;
+  error?: string | null;
+}
+
 export interface StrategyTemplate {
   id: string;
   name: string;
@@ -144,10 +160,13 @@ export interface StrategyDashboardData {
   templates: StrategyCatalogItem[];
   workspaces: StrategyWorkspaceRef[];
   scanRuns: StrategyScanRun[];
+  scanJobs: StrategyScanJob[];
 }
 
 const ROOT = process.cwd();
 const DATA_DIR = process.env.STRATEGY_SCANS_DIR || path.join(ROOT, 'data', 'strategy-scans');
+const RUNS_DIR = path.join(DATA_DIR, 'runs');
+const JOBS_DIR = path.join(DATA_DIR, 'jobs');
 const MARKET_API_BASE_URL =
   process.env.QUANTPILOT_MARKET_API_URL ||
   process.env.QUANTPILOT_MARKET_API_BASE_URL ||
@@ -400,24 +419,245 @@ async function writeJsonFile(filePath: string, value: unknown) {
   await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
+function toDate(value: string | Date | undefined | null): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isScanRunStatus(value: string): StrategyScanRun['status'] {
+  return value === 'completed' || value === 'failed' || value === 'partial' ? value : 'failed';
+}
+
+function isScanJobStatus(value: string): StrategyScanJob['status'] {
+  return value === 'queued' || value === 'running' || value === 'completed' || value === 'failed'
+    ? value
+    : 'failed';
+}
+
+function scanRunResults(value: unknown): StrategyScanRunResult[] {
+  return Array.isArray(value) ? value as StrategyScanRunResult[] : [];
+}
+
+function mapDbScanRun(record: {
+  id: string;
+  templateId: string;
+  scanId: string;
+  symbol: string;
+  status: string;
+  startedAt: Date;
+  completedAt: Date;
+  total: number;
+  succeeded: number;
+  failed: number;
+  bestResultId: string | null;
+  objective: string;
+  source: string;
+  results: unknown;
+}): StrategyScanRun {
+  return {
+    id: record.id,
+    templateId: record.templateId,
+    scanId: record.scanId,
+    symbol: record.symbol,
+    status: isScanRunStatus(record.status),
+    startedAt: record.startedAt.toISOString(),
+    completedAt: record.completedAt.toISOString(),
+    total: record.total,
+    succeeded: record.succeeded,
+    failed: record.failed,
+    bestResultId: record.bestResultId,
+    objective: record.objective,
+    source: record.source,
+    results: scanRunResults(record.results),
+  };
+}
+
+function mapDbScanJob(record: {
+  id: string;
+  templateId: string;
+  scanId: string;
+  symbol: string;
+  status: string;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  runId: string | null;
+  error: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): StrategyScanJob {
+  return {
+    id: record.id,
+    templateId: record.templateId,
+    scanId: record.scanId,
+    symbol: record.symbol,
+    status: isScanJobStatus(record.status),
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+    startedAt: record.startedAt ? record.startedAt.toISOString() : undefined,
+    completedAt: record.completedAt ? record.completedAt.toISOString() : undefined,
+    runId: record.runId,
+    error: record.error,
+  };
+}
+
+async function listScanRunsFromDatabase(): Promise<StrategyScanRun[]> {
+  const records = await prisma.strategyScanRun.findMany({
+    orderBy: { completedAt: 'desc' },
+  });
+  return records.map(mapDbScanRun);
+}
+
+async function listScanJobsFromDatabase(): Promise<StrategyScanJob[]> {
+  const records = await prisma.strategyScanJob.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
+  return records.map(mapDbScanJob);
+}
+
+async function writeScanRunToDatabase(run: StrategyScanRun) {
+  const startedAt = toDate(run.startedAt) ?? new Date();
+  const completedAt = toDate(run.completedAt) ?? new Date();
+  const results = run.results as unknown as Prisma.InputJsonValue;
+  await prisma.strategyScanRun.upsert({
+    where: { id: run.id },
+    update: {
+      templateId: run.templateId,
+      scanId: run.scanId,
+      symbol: run.symbol,
+      status: run.status,
+      startedAt,
+      completedAt,
+      total: run.total,
+      succeeded: run.succeeded,
+      failed: run.failed,
+      bestResultId: run.bestResultId ?? null,
+      objective: run.objective,
+      source: run.source,
+      results,
+    },
+    create: {
+      id: run.id,
+      templateId: run.templateId,
+      scanId: run.scanId,
+      symbol: run.symbol,
+      status: run.status,
+      startedAt,
+      completedAt,
+      total: run.total,
+      succeeded: run.succeeded,
+      failed: run.failed,
+      bestResultId: run.bestResultId ?? null,
+      objective: run.objective,
+      source: run.source,
+      results,
+    },
+  });
+}
+
+async function writeScanJobToDatabase(job: StrategyScanJob) {
+  await prisma.strategyScanJob.upsert({
+    where: { id: job.id },
+    update: {
+      templateId: job.templateId,
+      scanId: job.scanId,
+      symbol: job.symbol,
+      status: job.status,
+      startedAt: toDate(job.startedAt),
+      completedAt: toDate(job.completedAt),
+      runId: job.runId ?? null,
+      error: job.error ?? null,
+      createdAt: toDate(job.createdAt) ?? new Date(),
+      updatedAt: toDate(job.updatedAt) ?? new Date(),
+    },
+    create: {
+      id: job.id,
+      templateId: job.templateId,
+      scanId: job.scanId,
+      symbol: job.symbol,
+      status: job.status,
+      startedAt: toDate(job.startedAt),
+      completedAt: toDate(job.completedAt),
+      runId: job.runId ?? null,
+      error: job.error ?? null,
+      createdAt: toDate(job.createdAt) ?? new Date(),
+      updatedAt: toDate(job.updatedAt) ?? new Date(),
+    },
+  });
+}
+
 async function listScanRuns(): Promise<StrategyScanRun[]> {
+  const dbRuns = await listScanRunsFromDatabase().catch(() => []);
   try {
-    const entries = await fs.readdir(DATA_DIR, { withFileTypes: true });
-    const runs = await Promise.all(
-      entries
+    const [runEntries, legacyEntries] = await Promise.all([
+      fs.readdir(RUNS_DIR, { withFileTypes: true }).catch(() => []),
+      fs.readdir(DATA_DIR, { withFileTypes: true }).catch(() => []),
+    ]);
+    const runFiles = [
+      ...runEntries
         .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
-        .map(entry => readJsonFile<StrategyScanRun>(path.join(DATA_DIR, entry.name)))
-    );
-    return runs
-      .filter((run): run is StrategyScanRun => Boolean(run?.id && run?.templateId && run?.scanId))
-      .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+        .map(entry => path.join(RUNS_DIR, entry.name)),
+      ...legacyEntries
+        .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
+        .map(entry => path.join(DATA_DIR, entry.name)),
+    ];
+    const runs = await Promise.all(runFiles.map(filePath => readJsonFile<StrategyScanRun>(filePath)));
+    const byId = new Map<string, StrategyScanRun>();
+    for (const run of runs.filter((run): run is StrategyScanRun => Boolean(run?.id && run?.templateId && run?.scanId))) {
+      byId.set(run.id, run);
+    }
+    for (const run of dbRuns) {
+      byId.set(run.id, run);
+    }
+    return Array.from(byId.values()).sort((a, b) => b.completedAt.localeCompare(a.completedAt));
   } catch {
-    return [];
+    return dbRuns;
   }
 }
 
 function scanRunPath(runId: string) {
-  return path.join(DATA_DIR, `${runId}.json`);
+  return path.join(RUNS_DIR, `${runId}.json`);
+}
+
+async function listScanJobs(): Promise<StrategyScanJob[]> {
+  const dbJobs = await listScanJobsFromDatabase().catch(() => []);
+  try {
+    const entries = await fs.readdir(JOBS_DIR, { withFileTypes: true });
+    const jobs = await Promise.all(
+      entries
+        .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
+        .map(entry => readJsonFile<StrategyScanJob>(path.join(JOBS_DIR, entry.name)))
+    );
+    const byId = new Map<string, StrategyScanJob>();
+    for (const job of jobs.filter((job): job is StrategyScanJob => Boolean(job?.id && job?.templateId && job?.scanId))) {
+      byId.set(job.id, job);
+    }
+    for (const job of dbJobs) {
+      byId.set(job.id, job);
+    }
+    return Array.from(byId.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch {
+    return dbJobs;
+  }
+}
+
+function scanJobPath(jobId: string) {
+  return path.join(JOBS_DIR, `${jobId}.json`);
+}
+
+async function writeScanJob(job: StrategyScanJob) {
+  await Promise.all([
+    writeScanJobToDatabase(job),
+    writeJsonFile(scanJobPath(job.id), job).catch(() => undefined),
+  ]);
+}
+
+async function writeScanRun(run: StrategyScanRun) {
+  await Promise.all([
+    writeScanRunToDatabase(run),
+    writeJsonFile(scanRunPath(run.id), run).catch(() => undefined),
+  ]);
 }
 
 function findTemplate(templateId: string) {
@@ -522,7 +762,7 @@ function matchesTemplate(project: StrategyWorkspaceRef, template: StrategyTempla
 
 export async function getStrategyDashboardData(): Promise<StrategyDashboardData> {
   const projects = serializeProjects(await getAllProjects());
-  const scanRuns = await listScanRuns();
+  const [scanRuns, scanJobs] = await Promise.all([listScanRuns(), listScanJobs()]);
   const strategyWorkspaces = projects
     .filter(project => isStrategyCapability(project.quantCapabilityId))
     .map(toWorkspaceRef);
@@ -558,6 +798,7 @@ export async function getStrategyDashboardData(): Promise<StrategyDashboardData>
     templates,
     workspaces: strategyWorkspaces,
     scanRuns,
+    scanJobs,
   };
 }
 
@@ -613,7 +854,7 @@ export async function runStrategyParameterScan(params: {
         error: scan.status === 'planned' ? '扫描仍在规划中' : '扫描被依赖阻断',
       })),
     };
-    await writeJsonFile(scanRunPath(run.id), run);
+    await writeScanRun(run);
     return run;
   }
 
@@ -668,6 +909,76 @@ export async function runStrategyParameterScan(params: {
     source: `${MARKET_API_BASE_URL}/api/v1/backtests/ma-crossover/{symbol}`,
     results,
   };
-  await writeJsonFile(scanRunPath(run.id), run);
+  await writeScanRun(run);
   return run;
+}
+
+async function executeScanJob(job: StrategyScanJob) {
+  const runningJob: StrategyScanJob = {
+    ...job,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    error: null,
+  };
+  await writeScanJob(runningJob);
+
+  try {
+    const run = await runStrategyParameterScan({
+      templateId: job.templateId,
+      scanId: job.scanId,
+      symbol: job.symbol,
+    });
+    await writeScanJob({
+      ...runningJob,
+      status: run.status === 'failed' ? 'failed' : 'completed',
+      runId: run.id,
+      completedAt: run.completedAt,
+      updatedAt: new Date().toISOString(),
+      error: run.status === 'failed' ? '扫描未产生成功结果' : null,
+    });
+  } catch (error) {
+    await writeScanJob({
+      ...runningJob,
+      status: 'failed',
+      completedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export async function enqueueStrategyParameterScan(params: {
+  templateId: string;
+  scanId: string;
+  symbol?: string;
+}): Promise<StrategyScanJob> {
+  const template = findTemplate(params.templateId);
+  if (!template) {
+    throw new Error(`Unknown strategy template: ${params.templateId}`);
+  }
+  const scan = findScan(template, params.scanId);
+  if (!scan) {
+    throw new Error(`Unknown parameter scan: ${params.scanId}`);
+  }
+
+  const now = new Date().toISOString();
+  const job: StrategyScanJob = {
+    id: `scan-job-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    templateId: template.id,
+    scanId: scan.id,
+    symbol: params.symbol?.trim() || template.defaultSymbols[0] || '510300',
+    status: 'queued',
+    createdAt: now,
+    updatedAt: now,
+    runId: null,
+    error: null,
+  };
+  await writeScanJob(job);
+
+  setTimeout(() => {
+    void executeScanJob(job);
+  }, 0);
+
+  return job;
 }

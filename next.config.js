@@ -10,9 +10,9 @@ const tracingExcludes = [
   './.ruff_cache/**',
   './data/**',
   './tmp/**',
-  './backend/market_data/.venv/**',
-  './backend/**/.venv/**',
-  './backend/**/.ruff_cache/**',
+  './services/market-data/.venv/**',
+  './services/**/.venv/**',
+  './services/**/.ruff_cache/**',
   './coverage/**',
   './dist/**',
   './build/**',
@@ -26,9 +26,9 @@ const tracePluginIgnores = [
   '**/.ruff_cache/**',
   '**/data/**',
   '**/tmp/**',
-  '**/backend/market_data/.venv/**',
-  '**/backend/**/.venv/**',
-  '**/backend/**/.ruff_cache/**',
+  '**/services/market-data/.venv/**',
+  '**/services/**/.venv/**',
+  '**/services/**/.ruff_cache/**',
 ];
 
 /** @type {import('next').NextConfig} */

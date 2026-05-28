@@ -5,9 +5,11 @@ QuantPilot 的核心链路是：用户提出量化研究问题，主工作台调
 ```mermaid
 flowchart LR
   U[用户问题/图片] --> W[Next.js 工作台 :3000]
+  W --> DB[(PostgreSQL / TimescaleDB :5432)]
   W --> R[Agent Runtime]
   R --> S[QuantPilot Skills]
   W --> M[市场数据后端 :8000]
+  M --> DB
   R --> P[data/projects/project-*]
   M --> P
   P --> V[生成项目预览 :3100+]
@@ -41,15 +43,15 @@ flowchart LR
 
 模型和 CLI 的注册入口：
 
-- `lib/constants/cliModels.ts`
-- `lib/constants/claudeModels.ts`
-- `lib/constants/codexModels.ts`
-- `lib/services/cli/claude.ts`
-- `lib/services/cli/codex.ts`
+- `src/lib/constants/cliModels.ts`
+- `src/lib/constants/claudeModels.ts`
+- `src/lib/constants/codexModels.ts`
+- `src/lib/services/cli/claude.ts`
+- `src/lib/services/cli/codex.ts`
 
 ## 数据层
 
-后端位于 `backend/market_data`，当前默认以东方财富为主数据源，并提供候选免费信源探针。核心响应统一携带：
+后端位于 `services/market-data`，当前默认以东方财富为主数据源，并提供候选免费信源探针。核心响应统一携带：
 
 - `source`
 - `asset_type`
@@ -58,7 +60,15 @@ flowchart LR
 - `fetch`
 - `data_quality`
 
-主要接口见 [量化数据后端 README](../backend/market_data/README.md)。
+主要接口见 [量化数据后端 README](../services/market-data/README.md)。
+
+本地基础设施默认使用 Docker 中的 PostgreSQL + TimescaleDB：
+
+- PostgreSQL 承载 Prisma 管理的主业务表，包括工作空间、项目、评测、设置和运行记录。
+- TimescaleDB 承载 `quant.stock_bars`、`quant.stock_factors`、`quant.strategy_signals` 和 `quant.portfolio_snapshots` 等时序表。
+- 初始化脚本位于 `infra/postgres/init/001-timescaledb.sql`，使用 `npm run db:up` 首次创建容器时执行。
+
+更多细节见 [基础设施配置](infrastructure.md)。
 
 ## 工作空间产物
 
@@ -84,13 +94,15 @@ flowchart LR
 | --- | --- | --- |
 | 首页工作台 | `/` | 创建任务、进入项目、管理主工作流 |
 | Skills 管理 | `/skills` | 编辑、发布、回滚和导入核心 skills |
-| 策略平台 | `/strategies` | 管理策略模板、参数扫描、版本口径、回测归档和关联策略工作空间 |
+| 策略平台 | `/strategies` | 管理策略模板、扫描队列、参数结果对比、版本口径、回测归档和关联策略工作空间 |
 | 数据平台 | `/capabilities` | 查看能力域、数据接口、产物契约和验证规则 |
 | 运维平台 | `/workspaces` | 查看 workspace 健康、事件、产物和 trace |
 | 生成观测 | `/observability` | 聚合生成链路状态、队列和阶段信息 |
 | 评测后台 | `/evals` | 管理用例、评测集、运行队列、报告和失败修复 |
 
 控制台细节见 [控制台使用指南](console-guide.md)。
+
+项目目录和分层边界见 [项目结构与分层边界](project-structure.md)。
 
 ## 构建与开发模式
 
@@ -121,5 +133,5 @@ GitHub Actions 当前包含：
 Dependabot 每周检查：
 
 - 根目录 npm 依赖。
-- `backend/market_data` uv 依赖。
+- `services/market-data` uv 依赖。
 - GitHub Actions。

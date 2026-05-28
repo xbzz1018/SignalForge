@@ -39,7 +39,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: backend/market_data
+        working-directory: services/market-data
     steps:
       - name: Checkout
         uses: actions/checkout@v4

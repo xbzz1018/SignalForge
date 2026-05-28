@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   BarChart3,
   CheckCircle2,
+  Clock3,
   Database,
   FileClock,
   FlaskConical,
@@ -18,6 +19,7 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  SquareStack,
   TrendingUp,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +39,7 @@ type Props = {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
 
-type StrategyView = 'catalog' | 'scans' | 'versions' | 'archives';
+type StrategyView = 'catalog' | 'scans' | 'compare' | 'queue' | 'versions' | 'archives';
 
 function statusLabel(status: StrategyCatalogItem['status']) {
   if (status === 'ready') return '可回测';
@@ -87,6 +89,18 @@ function archiveStatusLabel(status: StrategyCatalogItem['backtestArchives'][numb
   return '缺失';
 }
 
+function jobStatusClass(status: StrategyDashboardData['scanJobs'][number]['status']) {
+  if (status === 'completed') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'running') return 'border-blue-200 bg-blue-50 text-blue-700';
+  if (status === 'queued') return 'border-slate-200 bg-slate-50 text-slate-600';
+  return 'border-red-200 bg-red-50 text-red-700';
+}
+
+function formatMetric(value?: number | null, suffix = '') {
+  if (value === null || value === undefined) return '-';
+  return `${Number(value).toFixed(2)}${suffix}`;
+}
+
 export default function StrategyPlatformClient({ initialData }: Props) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
@@ -124,6 +138,16 @@ export default function StrategyPlatformClient({ initialData }: Props) {
     filteredTemplates[0] ??
     data.templates[0] ??
     null;
+  const selectedTemplateJobs = selectedTemplate
+    ? data.scanJobs.filter(job => job.templateId === selectedTemplate.id)
+    : [];
+  const selectedTemplateRuns = selectedTemplate
+    ? data.scanRuns.filter(run => run.templateId === selectedTemplate.id)
+    : [];
+  const comparisonResults = (selectedTemplate?.latestScanRun?.results ?? [])
+    .filter(result => result.status === 'success')
+    .slice()
+    .sort((a, b) => (b.metrics.totalReturnPct ?? Number.NEGATIVE_INFINITY) - (a.metrics.totalReturnPct ?? Number.NEGATIVE_INFINITY));
 
   const refresh = async () => {
     setIsRefreshing(true);
@@ -214,7 +238,7 @@ export default function StrategyPlatformClient({ initialData }: Props) {
       if (!response.ok || !payload.success) {
         throw new Error(payload.error ?? '参数扫描失败');
       }
-      setToast({ type: 'success', message: `扫描完成：成功 ${payload.data.succeeded}/${payload.data.total} 组参数。` });
+      setToast({ type: 'success', message: `扫描任务已加入队列：${payload.data.id}` });
       await refresh();
       setView('scans');
     } catch (error) {
@@ -251,6 +275,8 @@ export default function StrategyPlatformClient({ initialData }: Props) {
               {[
                 { id: 'catalog' as const, label: '策略目录', icon: <TrendingUp className="h-4 w-4" /> },
                 { id: 'scans' as const, label: '参数扫描', icon: <SlidersHorizontal className="h-4 w-4" /> },
+                { id: 'compare' as const, label: '结果对比', icon: <SquareStack className="h-4 w-4" /> },
+                { id: 'queue' as const, label: '执行队列', icon: <Clock3 className="h-4 w-4" /> },
                 { id: 'versions' as const, label: '版本口径', icon: <History className="h-4 w-4" /> },
                 { id: 'archives' as const, label: '回测归档', icon: <FileClock className="h-4 w-4" /> },
               ].map((item) => (
@@ -295,8 +321,8 @@ export default function StrategyPlatformClient({ initialData }: Props) {
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <StatCard label="策略模板" value={data.summary.templates} helper={`${data.summary.readyTemplates} 个可回测`} icon={<FlaskConical className="h-4 w-4" />} />
           <StatCard label="参数扫描" value={data.summary.parameterScans} helper="扫描网格与约束" icon={<SlidersHorizontal className="h-4 w-4" />} />
+          <StatCard label="执行队列" value={data.scanJobs.length} helper={`${data.scanJobs.filter(job => job.status === 'running' || job.status === 'queued').length} 个待完成`} icon={<Clock3 className="h-4 w-4" />} />
           <StatCard label="策略工作空间" value={data.summary.strategyWorkspaces} helper={`${data.summary.backtestWorkspaces} 个回测项目`} icon={<GitBranch className="h-4 w-4" />} />
-          <StatCard label="数据依赖" value={data.summary.dataDependencies} helper="端点与数据口径" icon={<Database className="h-4 w-4" />} />
           <StatCard label="版本口径" value={data.summary.activeVersions} helper={`${data.templates.reduce((sum, template) => sum + template.versions.length, 0)} 条记录`} icon={<History className="h-4 w-4" />} />
           <StatCard label="回测归档" value={data.summary.archivedReports} helper="报告与限制说明" icon={<FileClock className="h-4 w-4" />} />
         </section>
@@ -480,7 +506,7 @@ export default function StrategyPlatformClient({ initialData }: Props) {
                               className={scan.status === 'available' ? 'bg-blue-600 text-white hover:bg-blue-700' : ''}
                             >
                               {runningScanId === scan.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                              运行扫描
+                              加入队列
                             </Button>
                           </div>
                         </div>
@@ -607,6 +633,102 @@ export default function StrategyPlatformClient({ initialData }: Props) {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </Panel>
+              )}
+
+              {view === 'compare' && (
+                <Panel title="扫描结果对比" icon={<SquareStack className="h-4 w-4 text-blue-700" />}>
+                  {selectedTemplate.latestScanRun ? (
+                    <div className="space-y-4 p-4">
+                      <div className="grid gap-3 md:grid-cols-4">
+                        <div className="rounded-md bg-slate-50 p-3">
+                          <p className="text-xs text-slate-500">报告</p>
+                          <p className="mt-1 truncate font-semibold text-slate-950">{selectedTemplate.latestScanRun.id}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-3">
+                          <p className="text-xs text-slate-500">标的</p>
+                          <p className="mt-1 font-semibold text-slate-950">{selectedTemplate.latestScanRun.symbol}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-3">
+                          <p className="text-xs text-slate-500">成功组合</p>
+                          <p className="mt-1 font-semibold text-slate-950">{selectedTemplate.latestScanRun.succeeded}/{selectedTemplate.latestScanRun.total}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-3">
+                          <p className="text-xs text-slate-500">最优参数</p>
+                          <p className="mt-1 font-semibold text-slate-950">{selectedTemplate.latestScanRun.bestResultId ?? '-'}</p>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[860px] text-left text-sm">
+                          <thead className="text-xs text-slate-500">
+                            <tr className="border-b border-slate-100">
+                              <th className="py-2 pr-3 font-medium">排名</th>
+                              <th className="py-2 pr-3 font-medium">参数</th>
+                              <th className="py-2 pr-3 font-medium">总收益</th>
+                              <th className="py-2 pr-3 font-medium">最大回撤</th>
+                              <th className="py-2 pr-3 font-medium">胜率</th>
+                              <th className="py-2 pr-3 font-medium">交易次数</th>
+                              <th className="py-2 pr-3 font-medium">Sharpe</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {comparisonResults.map((result, index) => (
+                              <tr key={result.id} className={result.id === selectedTemplate.latestScanRun?.bestResultId ? 'border-b border-blue-100 bg-blue-50/70' : 'border-b border-slate-50'}>
+                                <td className="py-2 pr-3 font-medium text-slate-900">{index + 1}</td>
+                                <td className="py-2 pr-3 font-mono text-xs text-slate-600">
+                                  {Object.entries(result.parameters).map(([key, value]) => `${key}=${value}`).join(', ')}
+                                </td>
+                                <td className="py-2 pr-3 text-slate-900">{formatMetric(result.metrics.totalReturnPct, '%')}</td>
+                                <td className="py-2 pr-3 text-slate-900">{formatMetric(result.metrics.maxDrawdownPct, '%')}</td>
+                                <td className="py-2 pr-3 text-slate-900">{formatMetric(result.metrics.winRatePct, '%')}</td>
+                                <td className="py-2 pr-3 text-slate-900">{result.metrics.tradeCount ?? '-'}</td>
+                                <td className="py-2 pr-3 text-slate-900">{formatMetric(result.metrics.sharpe)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-sm text-slate-500">
+                      暂无扫描结果，先在参数扫描页加入扫描队列。
+                    </div>
+                  )}
+                </Panel>
+              )}
+
+              {view === 'queue' && (
+                <Panel title="扫描执行队列" icon={<Clock3 className="h-4 w-4 text-blue-700" />}>
+                  <div className="divide-y divide-slate-100">
+                    {selectedTemplateJobs.map((job) => {
+                      const run = job.runId ? selectedTemplateRuns.find(item => item.id === job.runId) : null;
+                      return (
+                        <div key={job.id} className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_160px_160px] md:items-center">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate font-medium text-slate-950">{job.id}</p>
+                              <Badge variant="outline" className={jobStatusClass(job.status)}>{job.status}</Badge>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {job.symbol} · {job.scanId} · 创建 {formatDate(job.createdAt)}
+                            </p>
+                            {job.error && <p className="mt-1 text-xs text-red-600">{job.error}</p>}
+                          </div>
+                          <div className="text-sm text-slate-600">
+                            {run ? `成功 ${run.succeeded}/${run.total}` : job.startedAt ? `开始 ${formatDate(job.startedAt)}` : '等待执行'}
+                          </div>
+                          <div className="text-sm text-slate-600">
+                            {run?.bestResultId ? `最优 ${run.bestResultId}` : job.completedAt ? `完成 ${formatDate(job.completedAt)}` : '-'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {!selectedTemplateJobs.length && (
+                      <div className="p-8 text-center text-sm text-slate-500">
+                        当前策略暂无扫描队列记录。
+                      </div>
+                    )}
                   </div>
                 </Panel>
               )}

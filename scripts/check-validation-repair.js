@@ -10,7 +10,7 @@ const jiti = require('jiti')(path.join(process.cwd(), 'scripts/check-validation-
 const {
   buildQuantValidationRepairInstruction,
   buildQuantValidationRepairPlan,
-} = jiti('../lib/quant/validation.ts');
+} = jiti('../src/lib/quant/validation.ts');
 
 function assertCondition(condition, message, failures) {
   if (!condition) {

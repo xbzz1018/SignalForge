@@ -5,9 +5,9 @@ QuantPilot 后续 UI 逐步向 shadcn/ui 的组件组织方式收敛，但保留
 ## 当前基线
 
 - `components.json` 作为 shadcn 组件配置入口。
-- `components/ui/*` 存放可复用基础组件。
-- `lib/utils/index.ts` 提供 `cn()`，统一处理 Tailwind class 合并。
-- `app/globals.css` 和 `tailwind.config.ts` 提供 shadcn token，主色保持 QuantPilot 红色系。
+- `src/components/ui/*` 存放可复用基础组件。
+- `src/lib/utils/index.ts` 提供 `cn()`，统一处理 Tailwind class 合并。
+- `src/app/globals.css` 和 `tailwind.config.ts` 提供 shadcn token，主色保持 QuantPilot 红色系。
 
 ## 迁移顺序
 
@@ -18,7 +18,7 @@ QuantPilot 后续 UI 逐步向 shadcn/ui 的组件组织方式收敛，但保留
 
 ## 设计原则
 
-- 优先使用 `components/ui` 的基础组件，再补充业务组件。
+- 优先使用 `src/components/ui` 的基础组件，再补充业务组件。
 - 保持量化工作台的密度和可扫描性，不做营销页式大卡片堆叠。
 - 视觉样式可二次开发，但交互状态、可访问性和键盘行为尽量沿用 shadcn/Radix 模式。
 - 页面迁移按模块推进，避免一次性重写影响 Agent、预览和验证主链路。

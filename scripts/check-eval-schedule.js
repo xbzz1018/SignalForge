@@ -7,7 +7,7 @@ const jiti = require('jiti')(path.join(process.cwd(), 'scripts/check-eval-schedu
   interopDefault: true,
 });
 
-const { checkQuantEvalSchedule } = jiti('../lib/quant/evals.ts');
+const { checkQuantEvalSchedule } = jiti('../src/lib/quant/evals.ts');
 
 checkQuantEvalSchedule()
   .then((result) => {

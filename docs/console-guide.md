@@ -57,7 +57,9 @@ http://localhost:3000/strategies
 - 管理策略模板、策略族和成熟度。
 - 查看参数口径、样本周期、默认标的和评估指标。
 - 查看参数扫描网格、观测指标和执行护栏。
-- 对可执行策略发起参数扫描，并把扫描报告落盘到 `data/strategy-scans/`。
+- 对可执行策略发起参数扫描任务，并通过执行队列查看 queued、running、completed、failed 状态。
+- 查看最新扫描报告和参数结果对比，按收益、回撤、胜率、交易次数和 Sharpe 复盘参数组合。
+- 扫描任务和报告分别落盘到 `data/strategy-scans/jobs/` 与 `data/strategy-scans/runs/`。
 - 查看策略版本口径、参数快照和变更记录。
 - 查看回测报告归档、报告状态、指标摘要和限制说明。
 - 查看策略依赖的数据端点和风险限制。
@@ -71,7 +73,7 @@ GET /api/quant/strategies
 POST /api/quant/strategies
 ```
 
-`POST /api/quant/strategies` 默认用于生成策略工作空间提示；传入 `action: "run-scan"` 时会运行参数扫描并返回扫描报告。
+`POST /api/quant/strategies` 默认用于生成策略工作空间提示；传入 `action: "run-scan"` 时会把扫描任务加入队列，传入 `action: "run-scan-now"` 可用于调试时同步生成扫描报告。
 
 ## 数据平台
 
@@ -93,6 +95,30 @@ http://localhost:3000/capabilities
 
 ```text
 GET /api/quant/capability-center
+```
+
+## 基础组件设置
+
+入口：
+
+```text
+首页左下角“设置” -> “基础组件”
+```
+
+主要能力：
+
+- 查看 PostgreSQL 主业务库连接状态。
+- 查看 TimescaleDB 扩展版本和量化时序表。
+- 查看本地 Docker Compose 的 `timescaledb` 服务状态。
+- 复制 `db:up`、`prisma:push`、`db:doctor`、`db:psql` 等本地运维命令。
+
+常用命令：
+
+```bash
+npm run db:up
+npm run prisma:push
+npm run db:doctor
+npm run db:psql
 ```
 
 ## 运维平台

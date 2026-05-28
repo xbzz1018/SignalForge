@@ -1,6 +1,11 @@
 import { NextRequest } from 'next/server';
 import { createSuccessResponse, handleApiError } from '@/lib/utils/api-response';
-import { buildStrategyPrompt, getStrategyDashboardData, runStrategyParameterScan } from '@/lib/quant/strategies';
+import {
+  buildStrategyPrompt,
+  enqueueStrategyParameterScan,
+  getStrategyDashboardData,
+  runStrategyParameterScan,
+} from '@/lib/quant/strategies';
 
 export async function GET() {
   try {
@@ -14,6 +19,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     if (body.action === 'run-scan') {
+      return createSuccessResponse(
+        await enqueueStrategyParameterScan({
+          templateId: String(body.templateId ?? ''),
+          scanId: String(body.scanId ?? ''),
+          symbol: typeof body.symbol === 'string' ? body.symbol : undefined,
+        }),
+        201
+      );
+    }
+    if (body.action === 'run-scan-now') {
       return createSuccessResponse(
         await runStrategyParameterScan({
           templateId: String(body.templateId ?? ''),

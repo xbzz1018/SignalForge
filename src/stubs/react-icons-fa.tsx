@@ -31,6 +31,7 @@ import {
   Ship,
   Smartphone,
   Square,
+  Server,
   Triangle,
   Workflow,
 } from 'lucide-react';
@@ -64,6 +65,7 @@ export const FaDocker = wrap(Ship);
 export const FaGitAlt = wrap(GitBranch);
 export const FaMarkdown = wrap(FileText);
 export const FaDatabase = wrap(Database);
+export const FaServer = wrap(Server);
 export const FaPhp = wrap(Braces);
 export const FaJava = wrap(Coffee);
 export const FaRust = wrap(Settings);

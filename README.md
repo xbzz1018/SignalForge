@@ -12,7 +12,7 @@ QuantPilot 是面向量化投研、金融数据分析和可视化看板生成的
 - **Skills 能力层**：统一管理 `.claude/skills`，支持源码编辑、文件树管理、版本发布、发布前 diff、回滚和压缩包导入。
 - **工作空间健康与生成观测**：检查生成 workspace 的产物、验证、视觉检查、队列状态和事件时间线。
 - **数据平台**：集中查看能力域、必需 skills、数据接口、产物契约和验证边界。
-- **策略平台**：承载策略模板、参数扫描运行、版本口径、回测归档、风控限制和关联策略工作空间。
+- **策略平台**：承载策略模板、扫描执行队列、参数结果对比、版本口径、回测归档、风控限制和关联策略工作空间。
 - **自动验证与修复**：生成后自动检查 build、HTTP 200、数据文件、证据文件、图表、产物策略和视觉呈现，失败后进入修复链路。
 - **Agent 评测后台**：提供测试用例、评测集、评测器 dry-run、运行队列、运行记录、失败修复和定时回归。
 
@@ -28,10 +28,22 @@ cp .env.example .env.local
 
 把 `.env` 或 `.env.local` 中的模型 token 改成你自己的值。真实密钥不要提交到 Git。
 
-### 2. 启动量化数据后端
+### 2. 启动本地数据库
+
+先拉起 PostgreSQL + TimescaleDB，并同步 Prisma 应用表：
 
 ```bash
-cd backend/market_data
+npm run db:up
+npm run prisma:push
+npm run db:doctor
+```
+
+TimescaleDB 用于股票 K 线、因子、策略信号和组合净值等时序数据；PostgreSQL 承载工作空间、项目、评测、配置和运行记录。
+
+### 3. 启动量化数据后端
+
+```bash
+cd services/market-data
 uv sync
 uv run quantpilot-market-api
 ```
@@ -43,7 +55,7 @@ curl http://127.0.0.1:8000/health
 curl "http://127.0.0.1:8000/api/v1/quotes/realtime/600519"
 ```
 
-### 3. 启动主前端
+### 4. 启动主前端
 
 回到项目根目录：
 
@@ -65,7 +77,7 @@ http://localhost:3000
 | --- | --- | --- |
 | AI 工作台 | `http://localhost:3000` | 创建任务、进入项目聊天和预览 |
 | Skills 管理 | `http://localhost:3000/skills` | 编辑、发布、回滚和导入核心 skills |
-| 策略平台 | `http://localhost:3000/strategies` | 管理策略模板、运行参数扫描、查看版本口径、回测归档和关联工作空间 |
+| 策略平台 | `http://localhost:3000/strategies` | 管理策略模板、扫描队列、结果对比、版本口径、回测归档和关联工作空间 |
 | 数据平台 | `http://localhost:3000/capabilities` | 查看能力域、数据接口、契约和验证边界 |
 | 运维平台 | `http://localhost:3000/workspaces` | 查看 workspace 健康、产物、队列和 trace |
 | 生成观测 | `http://localhost:3000/observability` | 聚合生成链路事件和阶段状态 |
@@ -114,13 +126,20 @@ npm run eval:ci
 npm run benchmark:quant
 
 # 数据库
+npm run db:up
+npm run db:down
+npm run db:logs
+npm run db:doctor
+npm run db:psql
+npm run db:sync-workspaces
+npm run db:migrate-platform-state
 npm run prisma:generate
 npm run prisma:push
 npm run prisma:migrate
 npm run prisma:studio
 
 # 后端
-cd backend/market_data
+cd services/market-data
 uv sync
 uv run quantpilot-market-api
 uv run ruff check .
@@ -160,7 +179,12 @@ CODEX_MAX_THINKING_TOKENS=4096
 ```env
 QUANTPILOT_MARKET_HOST="127.0.0.1"
 QUANTPILOT_MARKET_PORT=8000
-DATABASE_URL="file:../data/cc.db"
+DATABASE_URL="postgresql://quantpilot:quantpilot_dev_password@127.0.0.1:5432/quantpilot?schema=public"
+TIMESCALEDB_IMAGE="timescale/timescaledb:2.27.1-pg18"
+POSTGRES_DB="quantpilot"
+POSTGRES_USER="quantpilot"
+POSTGRES_PASSWORD="quantpilot_dev_password"
+POSTGRES_PORT=5432
 PROJECTS_DIR="./data/projects"
 ENCRYPTION_KEY="replace-with-a-64-character-hex-secret"
 PORT=3000
@@ -176,19 +200,19 @@ PREVIEW_PORT_END=3999
 
 | 路径 | 说明 |
 | --- | --- |
-| `app/` | Next.js App Router 页面和 API |
-| `app/[project_id]/chat/` | 项目聊天、执行过程、预览和生成工作台 |
-| `app/skills/` | Skills 管理界面 |
-| `app/evals/` | Agent 评测后台 |
-| `app/strategies/` | 策略平台 |
-| `app/workspaces/` | 工作空间健康和生成链路观测 |
-| `app/capabilities/` | 数据平台 |
-| `backend/market_data/` | Python/FastAPI 量化数据后端 |
+| `src/app/` | Next.js App Router 页面和 API |
+| `src/app/[project_id]/chat/` | 项目聊天、执行过程、预览和生成工作台 |
+| `src/app/skills/` | Skills 管理界面 |
+| `src/app/evals/` | Agent 评测后台 |
+| `src/app/strategies/` | 策略平台 |
+| `src/app/workspaces/` | 工作空间健康和生成链路观测 |
+| `src/app/capabilities/` | 数据平台 |
+| `services/market-data/` | Python/FastAPI 量化数据后端 |
 | `.claude/skills/` | 核心 skills 源码目录 |
 | `.claude/skill-packages/` | skills 发布包和历史版本包 |
 | `benchmarks/quantpilot/` | 固定评测用例 |
-| `components/quant/` | 量化控制台和业务组件 |
-| `lib/quant/` | run plan、预取、证据、验证、评测、skills、观测和工作空间健康 |
+| `src/components/quant/` | 量化控制台和业务组件 |
+| `src/lib/quant/` | run plan、预取、证据、验证、评测、skills、观测和工作空间健康 |
 | `scripts/` | 启动、构建、检查、评测和打包脚本 |
 | `docs/` | 架构、治理、控制台和排障文档 |
 | `data/projects/` | 本地生成的项目工作空间，默认不提交 |
@@ -197,12 +221,14 @@ PREVIEW_PORT_END=3999
 ## 文档索引
 
 - [架构总览](docs/architecture.md)
+- [基础设施配置](docs/infrastructure.md)
+- [项目结构与分层边界](docs/project-structure.md)
 - [控制台使用指南](docs/console-guide.md)
 - [生成工作空间契约](docs/generated-workspace-contract.md)
 - [Agent 评测指南](docs/evals-guide.md)
 - [Skills 治理规范](docs/skills-governance.md)
 - [故障排查](docs/troubleshooting.md)
-- [量化数据后端](backend/market_data/README.md)
+- [量化数据后端](services/market-data/README.md)
 - [shadcn/ui 迁移记录](docs/ui-shadcn-migration.md)
 
 ## 本地数据与 Git 边界
@@ -217,8 +243,8 @@ PREVIEW_PORT_END=3999
 - `tmp/`
 - `public/uploads/`
 - `public/generated/`
-- `backend/market_data/.venv/`
-- `backend/**/.ruff_cache/`
+- `services/market-data/.venv/`
+- `services/**/.ruff_cache/`
 - `*.tsbuildinfo`
 
 以下内容属于 Agent 能力版本管理的一部分，需要提交：

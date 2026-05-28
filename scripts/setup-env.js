@@ -17,8 +17,8 @@ const envFile = path.join(rootDir, '.env');
 const envLocalFile = path.join(rootDir, '.env.local');
 const rootDataDir = path.join(rootDir, 'data');
 const projectsDir = path.join(rootDataDir, 'projects');
-const prismaDataDir = path.join(rootDir, 'prisma', 'data');
-const sqlitePath = path.join(rootDataDir, 'cc.db');
+const defaultDatabaseUrl =
+  '"postgresql://quantpilot:quantpilot_dev_password@127.0.0.1:5432/quantpilot?schema=public"';
 
 const MAX_PORT = 65_535;
 // Preview servers (per-project) dynamic pool
@@ -68,15 +68,22 @@ function hasEnvKey(contents, key) {
   return pattern.test(contents);
 }
 
+function readEnvRawValue(contents, key) {
+  if (!contents) return '';
+  const pattern = new RegExp(`^${escapeRegExp(key)}=["']?([^"'\\n]+)["']?$`, 'm');
+  const match = contents.match(pattern);
+  return match ? match[1] : '';
+}
+
+function shouldSetPostgresDatabaseUrl(contents) {
+  const current = readEnvRawValue(contents, 'DATABASE_URL');
+  if (!current) return true;
+  return !current.startsWith('postgresql://') && !current.startsWith('postgres://');
+}
+
 function ensureDirectory(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
-  }
-}
-
-function ensureFile(filePath) {
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, '');
   }
 }
 
@@ -187,12 +194,25 @@ async function ensureEnvironment(options = {}) {
   // Ensure required directories/files exist
   ensureDirectory(rootDataDir);
   ensureDirectory(projectsDir);
-  ensureDirectory(prismaDataDir);
-  ensureFile(sqlitePath);
 
   const envDefaults = {};
-  if (!hasEnvKey(envContents, 'DATABASE_URL')) {
-    envDefaults.DATABASE_URL = '"file:../data/cc.db"';
+  if (shouldSetPostgresDatabaseUrl(envContents)) {
+    envDefaults.DATABASE_URL = defaultDatabaseUrl;
+  }
+  if (!hasEnvKey(envContents, 'TIMESCALEDB_IMAGE')) {
+    envDefaults.TIMESCALEDB_IMAGE = '"timescale/timescaledb:2.27.1-pg18"';
+  }
+  if (!hasEnvKey(envContents, 'POSTGRES_DB')) {
+    envDefaults.POSTGRES_DB = '"quantpilot"';
+  }
+  if (!hasEnvKey(envContents, 'POSTGRES_USER')) {
+    envDefaults.POSTGRES_USER = '"quantpilot"';
+  }
+  if (!hasEnvKey(envContents, 'POSTGRES_PASSWORD')) {
+    envDefaults.POSTGRES_PASSWORD = '"quantpilot_dev_password"';
+  }
+  if (!hasEnvKey(envContents, 'POSTGRES_PORT')) {
+    envDefaults.POSTGRES_PORT = '5432';
   }
   if (!hasEnvKey(envContents, 'PROJECTS_DIR')) {
     envDefaults.PROJECTS_DIR = '"./data/projects"';

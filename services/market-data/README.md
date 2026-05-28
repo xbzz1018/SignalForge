@@ -34,7 +34,7 @@
 首次初始化：
 
 ```bash
-cd backend/market_data
+cd services/market-data
 uv sync
 ```
 
