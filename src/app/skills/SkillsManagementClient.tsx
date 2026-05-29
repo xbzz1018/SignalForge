@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   CheckCircle2,
   Code2,
@@ -76,6 +77,13 @@ const FILTER_CHIPS: { id: SkillHealthStatus | "all"; label: string }[] = [
   { id: "warning", label: "需同步" },
   { id: "ok", label: "正常" },
 ];
+const SKILL_LIST_DEFAULT_WIDTH = 280;
+const SKILL_LIST_MIN_WIDTH = 220;
+const SKILL_LIST_MAX_WIDTH = 380;
+
+function clampSkillListWidth(width: number) {
+  return Math.min(SKILL_LIST_MAX_WIDTH, Math.max(SKILL_LIST_MIN_WIDTH, width));
+}
 
 export default function SkillsManagementClient({ initialData }: { initialData: SkillsPayload }) {
   // ── State (unchanged) ──────────────────────────────────────
@@ -106,7 +114,10 @@ export default function SkillsManagementClient({ initialData }: { initialData: S
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isDraggingUpload, setIsDraggingUpload] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
+  const [skillListWidth, setSkillListWidth] = useState(SKILL_LIST_DEFAULT_WIDTH);
+  const [isResizingSkillList, setIsResizingSkillList] = useState(false);
   const activeSourceRequest = useRef(0);
+  const skillListResize = useRef({ startX: 0, startWidth: SKILL_LIST_DEFAULT_WIDTH });
 
   // ── Derived data ────────────────────────────────────────────
   const filteredSkills = useMemo(() => {
@@ -353,6 +364,38 @@ export default function SkillsManagementClient({ initialData }: { initialData: S
     setExpandedSourcePaths((prev) => { const n = new Set(prev); selectedSkill.source.directories.forEach((d) => { if (sourceFileQuery.trim() || selectedFilePath.startsWith(`${d.path}/`)) n.add(d.path); }); return n; });
   }, [selectedSkill, selectedFilePath, sourceFileQuery]);
 
+  useEffect(() => {
+    if (!isResizingSkillList) return;
+
+    const move = (event: PointerEvent) => {
+      const delta = event.clientX - skillListResize.current.startX;
+      setSkillListWidth(clampSkillListWidth(skillListResize.current.startWidth + delta));
+    };
+    const stop = () => setIsResizingSkillList(false);
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, [isResizingSkillList]);
+
+  const startSkillListResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    skillListResize.current = { startX: event.clientX, startWidth: skillListWidth };
+    setIsResizingSkillList(true);
+  }, [skillListWidth]);
+
   // ── Render ───────────────────────────────────────────────────
   const pendingCount = payload.totals.warning + payload.totals.error;
 
@@ -398,7 +441,10 @@ export default function SkillsManagementClient({ initialData }: { initialData: S
       {/* Main content: Skill List | Editor */}
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left: Skill List (always visible) ──────────────── */}
-        <aside className="flex w-[280px] shrink-0 flex-col border-r border-slate-200 bg-white lg:w-[320px]">
+        <aside
+          className="relative flex shrink-0 flex-col border-r border-slate-200 bg-white"
+          style={{ width: skillListWidth }}
+        >
           <div className="border-b border-slate-100 p-3">
             <div className="relative mb-2">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -452,6 +498,28 @@ export default function SkillsManagementClient({ initialData }: { initialData: S
               <EmptyState title="没有匹配的 skill" description="尝试其他关键词" className="mx-2 border-0 py-8" />
             )}
           </div>
+          <div
+            role="separator"
+            aria-label="调整 Skill 列表宽度"
+            aria-orientation="vertical"
+            tabIndex={0}
+            onPointerDown={startSkillListResize}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft") {
+                event.preventDefault();
+                setSkillListWidth((width) => clampSkillListWidth(width - 16));
+              }
+              if (event.key === "ArrowRight") {
+                event.preventDefault();
+                setSkillListWidth((width) => clampSkillListWidth(width + 16));
+              }
+            }}
+            className={cn(
+              "absolute -right-1 top-0 z-20 flex h-full w-2 cursor-col-resize items-center justify-center outline-none",
+              "after:h-12 after:w-1 after:rounded-full after:bg-slate-300 after:opacity-0 after:transition-opacity hover:after:opacity-100 focus-visible:after:opacity-100",
+              isResizingSkillList && "after:opacity-100"
+            )}
+          />
         </aside>
 
         {/* ── Right: Editor Area ──────────────────────────────── */}
