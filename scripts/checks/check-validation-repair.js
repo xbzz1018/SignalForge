@@ -40,6 +40,13 @@ const report = {
       status: 'failed',
       summary: '未检测到 K 线、成交量或指标图表。',
     },
+    {
+      id: 'final_data_file',
+      name: '最终数据文件',
+      status: 'failed',
+      summary: '最终数据文件存在，但没有通过真实数据形态检查。',
+      details: 'data_file/final/dashboard-data.json 未提取到可用实时行情或 K 线样本。',
+    },
   ],
 };
 
@@ -51,7 +58,7 @@ const instruction = buildQuantValidationRepairInstruction(report, {
 
 assertCondition(plan.status === 'needed', 'repair plan 状态应为 needed。', failures);
 assertCondition(plan.repairPlanPath === '.quantpilot/validation-repair-plan.json', 'repair plan 路径不正确。', failures);
-assertCondition(plan.steps.length === 2, `repair plan 应包含 2 个步骤，实际为 ${plan.steps.length}。`, failures);
+assertCondition(plan.steps.length === 3, `repair plan 应包含 3 个步骤，实际为 ${plan.steps.length}。`, failures);
 assertCondition(plan.steps[0]?.checkId === 'artifact_policy', '第一个失败项应保留 artifact_policy。', failures);
 assertCondition(
   plan.steps[0]?.actions?.some((action) => action.includes('移除外部 CDN')),
@@ -69,12 +76,25 @@ assertCondition(
   failures
 );
 assertCondition(
+  plan.steps[2]?.actions?.some((action) => action.includes('dashboard-data.json')),
+  'final_data_file 修复动作应要求修复 dashboard-data.json。',
+  failures
+);
+assertCondition(
+  plan.steps[2]?.actions?.some((action) => action.includes('quote.price') || action.includes('kline.bars')),
+  'final_data_file 修复动作应要求补齐真实数据形态字段。',
+  failures
+);
+assertCondition(
   instruction.includes('.quantpilot/validation-repair-plan.json'),
   '修复提示词应包含结构化修复计划路径。',
   failures
 );
 assertCondition(instruction.includes('移除外部 CDN'), '修复提示词应包含外部 CDN 禁用规则。', failures);
 assertCondition(instruction.includes('金融图表'), '修复提示词应包含金融图表修复要求。', failures);
+assertCondition(instruction.includes('.quantpilot/visual-validation.json'), '修复提示词应要求读取视觉验收报告。', failures);
+assertCondition(instruction.includes('真实数据形态检查'), '修复提示词应覆盖真实数据形态失败。', failures);
+assertCondition(instruction.includes('npm run build'), '修复提示词应要求修复后运行 build。', failures);
 
 if (failures.length > 0) {
   console.error('[validation-repair] failed');

@@ -2106,8 +2106,11 @@ function actionsForFailedCheck(check: QuantValidationCheck): string[] {
       return [
         ...common,
         '生成或修复 data_file/final/dashboard-data.json。',
-        '确保 final 数据包含 quote.price 或 kline.bars/history.bars 等真实行情字段。',
-        '多标的任务必须覆盖 run_plan.symbols 中的全部代码，并写入 assets[] 与 comparison.rows[]。',
+        '读取 .quantpilot/run_plan.json 和现有 raw/final/evidence 数据，按真实数据重组 final 文件，不要只创建空 JSON。',
+        '确保 final 数据包含 symbol/name/source/as_of、quote.price/change_percent/quote_time，以及 kline.bars[] 或 history.bars[]；每根 K 线至少包含 date/open/high/low/close/volume 或 amount。',
+        '多标的任务必须覆盖 run_plan.symbols 中的全部代码，并写入 requestedSymbols、assets[] 与 comparison.rows[]；comparison.rows[] 必须包含 symbol/name、价格或收益、回撤/波动/成交额等可排序字段。',
+        'final 数据必须包含 visualization.template_id、variant_id、required_components 和 rendered_components，并与 run_plan.visualization.templateId 对齐。',
+        '修复后重新检查 data_file/final/dashboard-data.json 不含 mock/demo/placeholder/sample 等标记，并能被页面读取。',
       ];
     case 'evidence_files':
       return [
@@ -2266,17 +2269,20 @@ ${repairSteps || '请重新检查验证报告并补齐缺失产物。'}
 修复要求：
 1. 只修改当前生成项目目录内的文件，不要修改父级 QuantPilot 平台工程。
 2. 不要只回复说明，必须实际修改文件并让页面可访问。
-3. 不允许把取到的行情、K 线、财务、公告数据整段硬编码到 app/page.tsx；即使是真实数据，整段内联到页面代码也视为失败。
-4. 最终数据必须保留在 data_file/final/dashboard-data.json，页面必须读取该数据文件，或通过同源 /api/market/** 获取/刷新数据。
-5. 必须写入 evidence/sources.json 和 evidence/data_quality.json，记录来源、端点、时间戳、样本长度、缺失字段、警告和限制。
-6. 必须创建 app/api/market/[...path]/route.ts，将 /api/market/** 转发到 http://127.0.0.1:8000/api/v1/**，并保留 query 参数。
-7. 不得引用外部 CDN、远程脚本、远程样式或浏览器直连外部接口；页面资源必须本地化，浏览器取数只能走 final 数据文件或同源 /api/market/**。
-8. 不得留下 MOCK_DATA、SAMPLE_DATA、STATIC_QUOTES、示例数据、模拟数据等 mock/static 产物，也不得写入任何鉴权凭据、会话凭据或密钥值。
-9. 保留或增强金融图表：K 线/量价/均线/财务趋势/公告事件至少覆盖当前用户问题所需内容。
-10. 如果 final 数据包含 assets[] 或 comparison，必须生成多标的对比页面：展示全部标的、指标矩阵、收益对比、波动/回撤对比和相对强弱摘要，不能只展示主标的。
-11. 如果失败细节提示 run_plan 或 visualization.template_id 与任务语义不一致，必须同步修复 .quantpilot/run_plan.json、data_file/final/dashboard-data.json 的 visualization.template_id 和 app/page.tsx 的页面结构。
-12. 修复后确保 npm run build、预览 HTTP 200、数据文件、evidence、产物策略、页面数据绑定、图表存在性和 /api/market 代理都能通过平台验证。
-13. 不要启动开发服务器，QuantPilot 会统一管理预览。`;
+3. 必须先读取 .quantpilot/validation.json、.quantpilot/validation-repair-plan.json、.quantpilot/run_plan.json、data_file/final/dashboard-data.json、evidence/sources.json、evidence/data_quality.json、app/page.tsx 和 app/globals.css；如果存在 .quantpilot/visual-validation.json，也必须读取截图路径和 viewport metrics。
+4. 如果失败项包含“最终数据文件存在，但没有通过真实数据形态检查”，必须修复 final 数据契约：单标的包含 symbol/name/source/as_of、quote.price/change_percent/quote_time、kline.bars[]；多标的包含 requestedSymbols、assets[]、comparison.rows[]，且覆盖 run_plan.symbols 全部标的。
+5. 不允许把取到的行情、K 线、财务、公告数据整段硬编码到 app/page.tsx；即使是真实数据，整段内联到页面代码也视为失败。
+6. 最终数据必须保留在 data_file/final/dashboard-data.json，页面必须读取该数据文件，或通过同源 /api/market/** 获取/刷新数据。
+7. 必须写入 evidence/sources.json 和 evidence/data_quality.json，记录来源、端点、时间戳、样本长度、缺失字段、警告和限制。
+8. 必须创建 app/api/market/[...path]/route.ts，将 /api/market/** 转发到 http://127.0.0.1:8000/api/v1/**，并保留 query 参数。
+9. 不得引用外部 CDN、远程脚本、远程样式或浏览器直连外部接口；页面资源必须本地化，浏览器取数只能走 final 数据文件或同源 /api/market/**。
+10. 不得留下 MOCK_DATA、SAMPLE_DATA、STATIC_QUOTES、示例数据、模拟数据等 mock/static 产物，也不得写入任何鉴权凭据、会话凭据或密钥值。
+11. 保留或增强金融图表：K 线/量价/均线/财务趋势/公告事件至少覆盖当前用户问题所需内容。
+12. 如果 final 数据包含 assets[] 或 comparison，必须生成多标的对比页面：展示全部标的、指标矩阵、收益对比、波动/回撤对比和相对强弱摘要，不能只展示主标的。
+13. 如果失败细节提示 run_plan 或 visualization.template_id 与任务语义不一致，必须同步修复 .quantpilot/run_plan.json、data_file/final/dashboard-data.json 的 visualization.template_id 和 app/page.tsx 的页面结构。
+14. 修复后在当前生成项目目录内运行 npm run build；如果平台验证仍产生新的失败项，继续修复，不要停在“自动修复计划”页面。
+15. 最终必须确保 npm run build、预览 HTTP 200、数据文件、evidence、产物策略、页面数据绑定、图表存在性、视觉验收和 /api/market 代理都能通过平台验证。
+16. 不要启动开发服务器，QuantPilot 会统一管理预览。`;
 }
 
 async function publishValidationSummary(

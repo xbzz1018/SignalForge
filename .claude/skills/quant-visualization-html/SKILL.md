@@ -36,6 +36,8 @@ description: Use this skill to generate a real visual Next.js/HTML quantitative 
 15. 禁止留下 `MOCK_DATA`、`SAMPLE_DATA`、`STATIC_QUOTES`、示例数据、模拟数据、占位数据；如果数据不足，展示真实缺口和重试入口。
 16. 禁止把 token、api key、cookie、authorization 或任何密钥写入页面、evidence、final 数据或配置文件。
 17. 禁止把多个迷你 sparkline 当作主要可视化交付。Sparkline 只能作为资产卡辅助图；页面必须额外提供至少一个带坐标/日期/图例/数值标签的主图、对比图或矩阵。
+18. 如果平台自动验证失败，本 skill 必须进入自修复模式：读取 `.quantpilot/validation.json`、`.quantpilot/validation-repair-plan.json`、`.quantpilot/visual-validation.json` 和截图路径，实际修改页面、final 数据或 evidence，然后重新执行平台验证；不能只输出修复计划或解释。
+19. “最终数据文件存在，但没有通过真实数据形态检查”不是可忽略警告。必须修复 `data_file/final/dashboard-data.json` 的标准字段和页面数据绑定，让数据形态、模板 ID、标的覆盖和图表组件同时满足验证。
 
 ## 标准工作流
 
@@ -64,6 +66,22 @@ description: Use this skill to generate a real visual Next.js/HTML quantitative 
 9. 使用 `quant-data-quality` 写入 `evidence/sources.json` 与 `evidence/data_quality.json`，记录来源、接口、时间戳、样本长度、缺失字段、警告和限制。
 10. 将最终看板数据写入 `data_file/final/dashboard-data.json`，字段中保留 `symbol`、`source`、`fetched_at`、`quote_time` 或对应数据源时间。
 11. 完成后简短说明修改了哪些页面和看板现在包含哪些数据视图。
+
+## 自动修复模式
+
+当看到 `QuantPilot 自动验证未通过`、`validation-repair-plan.json`、`看板验证未通过` 或用户指出生成页面仍停留在失败页时，按以下流程处理：
+
+1. 读取 `.quantpilot/validation.json`、`.quantpilot/validation-repair-plan.json`、`.quantpilot/run_plan.json`、`data_file/final/dashboard-data.json`、`evidence/sources.json`、`evidence/data_quality.json`、`app/page.tsx` 和 `app/globals.css`。
+2. 如果存在 `.quantpilot/visual-validation.json`，读取其中 failures、warnings、viewport metrics 和 screenshotPath；按截图问题调整首屏、图表、移动端和横向溢出。
+3. 针对失败项实际修复：
+   - `final_data_file`：补齐标准数据契约，保证 `symbol/name/source/as_of`、`quote`、`kline.bars[]` 或多标的 `requestedSymbols/assets[]/comparison.rows[]` 可被验证提取。
+   - `dashboard_data_binding`：让页面读取 `data_file/final/dashboard-data.json` 或同源 `/api/market/**`，禁止页面只渲染静态文案。
+   - `chart_presence`/`visual_presentation`：补齐足够尺寸的主图、矩阵或表格，首屏必须有真实金融数据和核心图表。
+   - `artifact_policy`：移除 CDN、远程资源、mock/static 数据和敏感字段。
+   - 模板不一致：同步 `.quantpilot/run_plan.json`、final 数据 `visualization.template_id/variant_id` 和页面结构。
+4. 修复后必须运行或触发平台验证：优先使用 QuantPilot 自动验证入口；在 CLI 环境中至少执行 `npm run build`，并检查 `.quantpilot/validation.json` 更新后的失败项。
+5. 如果验证仍失败，必须根据新的失败项继续改文件，直到通过或只剩真实外部环境不可达等明确不可修复限制。
+6. 回复用户前必须说明验证状态；不要让预览页停在“看板验证未通过”的兜底页。
 
 ## TypeScript 稳定性规则
 
