@@ -14,6 +14,7 @@ npm run doctor
 - Claude / MiniMax 环境变量。
 - Claude Code 和 Codex CLI。
 - 前端 `3000` 和后端 `8000` 可达性。
+- PostgreSQL / TimescaleDB、Loki 可观测性和降级配置。
 - workspace 目录。
 - Skills 注册表、lock 和压缩包一致性。
 - 生成产物策略。
@@ -29,6 +30,14 @@ npm run doctor:full
 ```
 
 完整诊断会额外运行 `lint`、`type-check`、后端 `ruff` 和后端 `pytest`。
+
+如果本机没有启动部分组件，可通过 `.env` 控制降级：
+
+```bash
+QUANTPILOT_DEGRADATION_MODE=offline npm run doctor
+```
+
+`offline` 会跳过市场数据后端、Loki/Grafana/Alloy 和 Redis 等可选外部探测；`auto` 适合本地开发；`strict` 适合 CI 或生产巡检。
 
 ## 3000 端口被占用
 
@@ -60,6 +69,30 @@ curl http://127.0.0.1:8000/health
 cd services/market-data
 uv run quantpilot-market-api
 ```
+
+如果只是浏览平台页面而不需要实时行情，可临时关闭市场数据后端探测：
+
+```bash
+QUANTPILOT_MARKET_API_ENABLED=0 npm run doctor
+```
+
+## Loki / Grafana 不可用
+
+启动本地可观测性组件：
+
+```bash
+npm run obs:up
+```
+
+默认入口：
+
+```text
+Loki: http://127.0.0.1:3100
+Grafana: http://localhost:3001
+Alloy: http://localhost:12345
+```
+
+如果不需要集中日志，可保持 Loki 停止。运维平台会降级读取本地日志文件；`npm run doctor` 在 `auto` 模式下只给 warning，不会失败。
 
 ## Claude Code 找不到 MiniMax 配置
 

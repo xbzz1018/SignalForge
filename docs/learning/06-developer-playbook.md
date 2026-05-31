@@ -23,6 +23,21 @@
 
 详细边界见 [项目结构与分层边界](../project-structure.md)。
 
+## 分层思维
+
+QuantPilot 不是单纯的前端项目，也不是单纯的数据服务。改代码前先判断这次变更属于哪一层：
+
+| 层级 | 典型问题 | 应该改哪里 |
+| --- | --- | --- |
+| 页面交互 | 按钮、弹窗、分页、图表展示不合理 | `src/app/*/*Client.tsx` 或 `src/components/` |
+| 平台业务 | 项目、消息、设置、评测、策略状态 | `src/lib/services/` 或 `src/lib/quant/` |
+| 市场数据 | 行情接口、补数、股票池分页、因子口径 | `services/market-data/` 和 `sqls/` |
+| 数据结构 | 新表、新字段、索引、初始化数据 | `prisma/schema.prisma` 或 `sqls/*.sql` |
+| 生成能力 | Agent 反复生成不好看的页面或用错数据 | `.claude/skills/` 和评测用例 |
+| 运维基础 | 日志、健康检查、降级模式、端口 | `docker-compose.yml`、`deploy/`、`src/lib/ops/` |
+
+分层的意义是降低连带风险。比如股票池页面显示问题不应该直接改数据库表；DDE 字段缺失也不是靠前端写死一个 `0` 解决，而是要先明确数据源和入库口径。
+
 ## 开发原则
 
 - 前端页面只做组织和交互，复杂业务逻辑下沉到组件或 `src/lib/*`。
@@ -31,6 +46,32 @@
 - PostgreSQL/TimescaleDB 是事实库，Redis 是短期缓存，不把 Redis 当长期数据源。
 - 生成工作空间的问题优先修 skill 和生成链路，不直接手改单个工作空间作为长期方案。
 - 文档、SQL 和代码需要同步更新，避免“代码会跑但新同学不知道怎么用”。
+
+## 常见改动路径
+
+### 新增一个策略平台字段
+
+1. 先确认字段来源和口径，例如来自东方财富、Baostock、AKShare 还是本地计算。
+2. 如果需要长期保存，先补 `sqls/` 或后端数据库映射。
+3. 在 `services/market-data` 返回字段，并保证已有数据不会被空值覆盖。
+4. 在 `src/lib/quant/strategies.ts` 做类型映射。
+5. 在策略平台客户端展示，避免重复列和低价值指标。
+6. 更新 `docs/learning/03-market-data-and-strategy-platform.md` 和相关 README。
+
+### 新增一个基础设施组件
+
+1. 先判断它是不是必需组件，是否需要降级模式。
+2. 更新 `docker-compose.yml` 和 `.env.example`。
+3. 在 `scripts/checks/doctor.js` 和运维平台增加健康检查。
+4. 写入 `docs/infrastructure.md`、`docs/troubleshooting.md` 和 README。
+5. 确认没有和主前端、预览端口或数据库端口冲突。
+
+### 修一个生成页面反复不好看的问题
+
+1. 找到具体失败截图或验证报告。
+2. 判断是数据不足、模板错配、布局问题还是 skill 缺规则。
+3. 如果是单次生成错误，修当前工作空间；如果是系统性错误，修 skill。
+4. 给评测或视觉 smoke 增加覆盖，防止回归。
 
 ## 提交前检查
 
@@ -88,6 +129,8 @@ npm run check:homepage
 | 新 skill 或版本治理规则 | `docs/skills-governance.md` |
 | 新评测规则 | `docs/evals-guide.md` |
 | 新人教程 | `docs/learning/` |
+
+`docs/learning/` 的写法要偏教学：不要只写“运行这个命令”，还要解释这个命令背后的组件、为什么需要它、失败时意味着什么。README 可以短，learning 应该帮助读者建立模型。
 
 ## 调试口诀
 

@@ -1,6 +1,6 @@
 # QuantPilot 市场数据服务
 
-这个子模块用于给量化分析 Agent 提供基础行情、财务和事件数据能力。当前以东方财富为主数据源，已接入实时行情、证券解析、财务摘要和公告事件；历史 K 线接口已预留，但外部源偶发断连，后续会继续接入 AKShare/Tushare 作为降级源。
+这个子模块用于给量化分析 Agent 和策略平台提供行情、财务、事件、补数、基础组件和回测数据能力。当前以东方财富为实时行情和事件主源，历史 K 线优先走东方财富，失败时使用 Baostock 补 A 股日线增强字段，AKShare 作为补充聚合层，Yahoo Finance 仅用于海外市场方向。
 
 所有核心响应会保留原有业务字段，同时补充统一数据契约字段，方便 Agent 判断来源和质量：
 
@@ -142,7 +142,7 @@ curl -X POST 'http://127.0.0.1:8000/api/v1/quotes/realtime' \
 curl 'http://127.0.0.1:8000/api/v1/quotes/history/600519?period=daily&adjustment=qfq&limit=120'
 ```
 
-说明：当前东方财富历史 K 线外部源偶发断连，注册表会将能力标记为 `degraded`。调用失败时应展示真实错误，并降级到实时行情、财务摘要和公告事件。
+说明：东方财富历史 K 线外部源可能偶发断连。策略平台的长期本地研究优先读取 `quant.stock_bars`，缺失字段通过 Baostock / AKShare 补数端点补齐。
 
 ### 历史 K 线字段补数
 
@@ -156,13 +156,28 @@ curl -X POST 'http://127.0.0.1:8000/api/v1/ingestion/baostock/history' \
 
 更完整的 provider 选择和字段口径见项目根目录的 `docs/market-data-source-knowledge.md`。
 
+### 基础组件
+
+策略平台“基础组件”页使用这些接口查看数据底座状态和口径：
+
+```bash
+curl 'http://127.0.0.1:8000/api/v1/foundation/status'
+curl 'http://127.0.0.1:8000/api/v1/foundation/factors'
+curl 'http://127.0.0.1:8000/api/v1/foundation/trading-calendar?market=CN-A&limit=30'
+curl -X POST 'http://127.0.0.1:8000/api/v1/foundation/data-quality/scan' \
+  -H 'Content-Type: application/json' \
+  -d '{"universe_id":"a-share-sample-research-pool","lookback_years":5,"timeframe":"daily","adjustment":"qfq"}'
+```
+
+对应 SQL 位于根目录 `sqls/007-quant-foundation-components.sql`，包括交易日历、因子定义、数据质量扫描和通用平台任务表。
+
 ### 技术指标
 
 ```bash
 curl 'http://127.0.0.1:8000/api/v1/indicators/technical/600519?period=daily&adjustment=qfq&limit=120'
 ```
 
-返回 MA5/MA10/MA20、单日收益率、回撤序列、区间收益、最大回撤、年化波动率和 20 日平均成交量。
+返回 MA5/MA10/MA20/MA30/MA60、单日收益率、回撤序列、区间收益、最大回撤、年化波动率和 20 日平均成交量。
 
 ### 指数与 ETF
 
@@ -201,6 +216,7 @@ curl 'http://127.0.0.1:8000/api/v1/events/announcements/600519?limit=20'
 - `quantpilot_market_data/providers/eastmoney.py`：东方财富数据源客户端。
 - `quantpilot_market_data/providers/baostock.py`：Baostock A 股历史字段补数 provider。
 - `quantpilot_market_data/providers/akshare.py`：AKShare 可选补数字段 provider。
+- `quantpilot_market_data/database.py`：TimescaleDB 写入、股票池分页、补数任务、基础组件和质量扫描查询。
 - `quantpilot_market_data/models.py`：行情数据模型。
 - `quantpilot_market_data/api.py`：FastAPI HTTP 服务。
 - `quantpilot_market_data/cli.py`：启动入口。

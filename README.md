@@ -7,11 +7,11 @@ QuantPilot 是面向量化投研、金融数据分析和可视化看板生成的
 ## 核心能力
 
 - AI 工作台：任务入口、项目聊天、工作空间预览、任务记录和自动修复链路。
-- 量化数据底座：PostgreSQL + TimescaleDB + Redis，承载应用状态、时序行情、估值因子、缓存和后续任务状态。
-- 市场数据服务：Python/FastAPI 后端，提供行情、K 线、财务、公告、指标、补数和策略平台接口。
-- 策略平台：股票池、ETF/指数池、策略目录、板块资金、金融知识和后续回测入口。
+- 量化数据底座：PostgreSQL + TimescaleDB + Redis，承载应用状态、时序行情、估值因子、缓存和补数任务状态。
+- 市场数据服务：Python/FastAPI 后端，提供行情、K 线、财务、公告、指标、补数、基础组件和策略平台接口。
+- 策略平台：股票池、ETF/指数池、策略目录、板块资金、基础组件、金融知识和后续回测入口。
 - Skills 能力层：管理 `.claude/skills`，沉淀量化规划、数据质量、可视化生成和自修复能力。
-- 评测与运维：评测平台、数据平台、运维平台共同覆盖生成质量、数据契约、工作空间健康和运行 trace。
+- 评测与运维：评测平台、数据平台、运维平台共同覆盖生成质量、数据契约、工作空间健康、运行 trace 和集中日志。
 
 ## 快速启动
 
@@ -28,6 +28,12 @@ npm run db:up
 npm run db:init
 ```
 
+如需集中日志和 Grafana 排查界面，可再启动本地可观测性组件：
+
+```bash
+npm run obs:up
+```
+
 ```bash
 cd services/market-data
 uv sync --extra baostock --extra akshare
@@ -40,14 +46,14 @@ uv run quantpilot-market-api
 npm run dev
 ```
 
-默认访问 `http://localhost:3000`。推荐启动顺序是数据库、市场数据后端、主前端。
+默认访问 `http://localhost:3000`。推荐启动顺序是数据库、可观测性组件、市场数据后端、主前端；不启动 Loki/Grafana 时，运维平台会自动降级到本地文件日志。
 
 ## 常用入口
 
 | 入口 | 地址 | 说明 |
 | --- | --- | --- |
 | AI 工作台 | `http://localhost:3000` | 创建任务、进入项目聊天和预览 |
-| 策略平台 | `http://localhost:3000/strategy-platform` | 股票池、ETF/指数池、板块资金、策略目录和金融知识 |
+| 策略平台 | `http://localhost:3000/strategy-platform` | 股票池、ETF/指数池、板块资金、策略目录、基础组件和金融知识 |
 | Skills 管理 | `http://localhost:3000/skills` | 编辑、发布、回滚和导入核心 skills |
 | 数据平台 | `http://localhost:3000/data-platform` | 查看能力域、数据接口、契约和验证边界 |
 | 运维平台 | `http://localhost:3000/ops-platform` | 查看 workspace 健康、产物、队列和 trace |
@@ -99,4 +105,4 @@ npm run dev
 
 ## 降级模式
 
-`.env` 中的 `QUANTPILOT_DEGRADATION_MODE` 控制组件缺失时的行为：`auto` 适合本地开发，可选组件缺失时自动降级；`strict` 适合 CI/生产，必需组件缺失会失败；`offline` 会跳过可选外部组件探测，优先使用文件日志、内置数据源注册表和本地兜底数据。可通过 `QUANTPILOT_MARKET_API_ENABLED`、`QUANTPILOT_OBSERVABILITY_ENABLED`、`QUANTPILOT_REDIS_CACHE_ENABLED` 等开关精确控制。
+`.env` 中的 `QUANTPILOT_DEGRADATION_MODE` 控制组件缺失时的行为：`auto` 适合本地开发，可选组件缺失时自动降级；`strict` 适合 CI/生产，必需组件缺失会失败；`offline` 会跳过可选外部组件探测，优先使用文件日志、内置数据源注册表和本地兜底数据。可通过 `QUANTPILOT_DATABASE_ENABLED`、`QUANTPILOT_MARKET_API_ENABLED`、`QUANTPILOT_OBSERVABILITY_ENABLED`、`QUANTPILOT_REDIS_CACHE_ENABLED` 等开关精确控制。

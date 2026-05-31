@@ -10,6 +10,7 @@ flowchart LR
   R --> S[QuantPilot Skills]
   W --> M[市场数据后端 :8000]
   M --> DB
+  W --> L[(Loki / Grafana / Alloy)]
   R --> P[data/projects/project-*]
   M --> P
   P --> V[生成项目预览 :4100+]
@@ -59,10 +60,12 @@ flowchart LR
 
 主要接口见 [量化数据后端 README](../services/market-data/README.md)。
 
-本地基础设施默认使用 Docker 中的 PostgreSQL + TimescaleDB：
+本地基础设施默认使用 Docker 中的 PostgreSQL + TimescaleDB + Redis + Loki/Grafana/Alloy：
 
 - PostgreSQL 承载 Prisma 管理的主业务表，包括工作空间、项目、评测、设置和运行记录。
 - TimescaleDB 承载 `quant.stock_bars`、`quant.stock_factors`、`quant.strategy_signals` 和 `quant.portfolio_snapshots` 等时序表。
+- Redis 承载短期缓存，优先用于板块资金、行情摘要和后续任务进度。
+- Loki/Grafana/Alloy 承载集中日志采集和运维排查；Loki 未启动时运维平台会降级读取本地文件日志。
 - 行情字段来源、补数优先级和 provider 边界见 [行情数据源采集知识库](market-data-source-knowledge.md)。
 - 根目录 `sqls/` 保存组件默认需要的基础 SQL，Docker 首次创建容器时会执行；已有数据库可通过 `npm run db:init` 补齐 SQL 对象并同步 Prisma 应用表。
 
@@ -92,9 +95,9 @@ flowchart LR
 | --- | --- | --- |
 | 首页工作台 | `/` | 创建任务、进入项目、管理主工作流 |
 | Skills 管理 | `/skills` | 编辑、发布、回滚和导入核心 skills |
-| 策略平台 | `/strategy-platform` | 管理策略模板、扫描队列、参数结果对比、版本口径、回测归档和关联策略工作空间 |
+| 策略平台 | `/strategy-platform` | 管理股票池、ETF/指数池、策略模板、板块资金、基础组件、金融知识、扫描队列和回测入口 |
 | 数据平台 | `/data-platform` | 查看能力域、数据接口、产物契约和验证规则 |
-| 运维平台 | `/ops-platform` | 查看 workspace 健康、生成链路状态、队列、阶段事件、产物和 trace |
+| 运维平台 | `/ops-platform` | 查看 workspace 健康、生成链路状态、队列、阶段事件、产物、trace 和集中日志 |
 | 评测平台 | `/eval-platform` | 管理用例、评测集、运行队列、报告和失败修复 |
 
 项目目录和分层边界见 [项目结构与分层边界](project-structure.md)。

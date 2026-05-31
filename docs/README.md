@@ -19,7 +19,7 @@
 | --- | --- | --- |
 | 总体架构 | [架构总览](architecture.md) | 主链路、运行时、数据层、控制台和质量门 |
 | 项目结构 | [项目结构与分层边界](project-structure.md) | 前端、后端、量化领域层、脚本和生成工作空间边界 |
-| 基础设施 | [基础设施配置](infrastructure.md) | PostgreSQL、TimescaleDB、Redis、SQL 初始化和组件路线 |
+| 基础设施 | [基础设施配置](infrastructure.md) | PostgreSQL、TimescaleDB、Redis、Loki/Grafana/Alloy、SQL 初始化和降级模式 |
 | 行情数据 | [行情数据源采集知识库](market-data-source-knowledge.md) | 东方财富、Baostock、AKShare、字段口径和补数规则 |
 | 工作空间契约 | [生成工作空间契约](generated-workspace-contract.md) | run plan、数据文件、证据、验证、视觉检查和修复计划 |
 | Skills | [Skills 治理规范](skills-governance.md) | skill 元数据、版本、发布、回滚和锁文件 |
@@ -39,6 +39,7 @@ flowchart TB
   MD --> PG[(PostgreSQL)]
   MD --> TS[(TimescaleDB)]
   MD --> RD[(Redis)]
+  OP --> LK[(Loki / Grafana / Alloy)]
   R --> WS[data/projects 工作空间]
   WS --> V[预览与自动验证]
   W --> SP[策略平台]

@@ -109,15 +109,18 @@ npm run db:init
 
 `db:init` 会先执行 `sqls/*.sql`，再运行 `prisma db push` 同步 Prisma 管理的应用表。
 
-当前 `sqls/001-quant-timeseries.sql` 会创建：
+当前 SQL 入口详见 [sqls/README.md](../sqls/README.md)。核心包括：
 
 - `quant.stock_bars`
 - `quant.stock_bars` 内的高价值 K 线字段包括 `amount`、`amplitude`、`change_percent`、`change_amount` 和 `turnover`，字段来源与补数策略见 `docs/market-data-source-knowledge.md`。
 - `quant.stock_factors`
 - `quant.strategy_signals`
 - `quant.portfolio_snapshots`
+- `quant.security_universes`、`quant.security_universe_members` 和 A 股股票池 / ETF 指数池成员关系。
+- `quant.ingestion_jobs`、`quant.ingestion_watermarks` 和补数进度。
+- `quant.trading_calendars`、`quant.factor_definitions`、`quant.data_quality_scans` 和 `quant.platform_jobs`。
 
-这些表使用 TimescaleDB hypertable，以时间字段 `ts` 做分区。Prisma 继续管理主业务表，量化时序数据可通过 SQL、后端服务或后续专门的数据访问层写入。
+K 线、因子、信号和组合快照使用 TimescaleDB hypertable，以时间字段 `ts` 做分区。Prisma 继续管理主业务表，量化时序和策略研究数据通过 SQL 初始化和市场数据后端写入。
 
 ## 推荐组件路线
 
