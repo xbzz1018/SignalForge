@@ -194,6 +194,60 @@ export interface StrategyUniverseMembersPage {
   fetchedAt: string;
 }
 
+export type StrategyScreenerMode = 'short_term' | 'limit_up_relay' | 'trend_liquidity';
+
+export interface StrategyScreenerCandidate {
+  symbol: string;
+  code: string;
+  name?: string | null;
+  exchange: string;
+  sectorTags: string[];
+  tradeDate: string;
+  close?: number | null;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  previousClose?: number | null;
+  changePercent?: number | null;
+  amount?: number | null;
+  turnover?: number | null;
+  ma5?: number | null;
+  ma10?: number | null;
+  ma20?: number | null;
+  ma30?: number | null;
+  ma60?: number | null;
+  strength20dPct?: number | null;
+  amountRatio20d?: number | null;
+  limitUpCount4d: number;
+  limitUpCount10d: number;
+  latestLimitUpDate?: string | null;
+  isLimitUp?: boolean | null;
+  isSt?: boolean | null;
+  sampleCount: number;
+  score?: number | null;
+  signals: string[];
+  warnings: string[];
+  missingFields: string[];
+}
+
+export interface StrategyScreenerResponse {
+  universeId: string;
+  mode: StrategyScreenerMode;
+  tradeDate?: string | null;
+  timeframe: string;
+  adjustment: string;
+  scannedSymbols: number;
+  totalCandidates: number;
+  limit: number;
+  candidates: StrategyScreenerCandidate[];
+  dataBasis: string;
+  source: string;
+  notes: string[];
+  cacheStatus: string;
+  cacheTtlSeconds?: number | null;
+  fetchedAt: string;
+}
+
 export interface StrategyDataCoverageItem {
   symbol: string;
   name?: string | null;
@@ -2523,6 +2577,73 @@ function mapResearchUniverseMembersPage(
   };
 }
 
+function screenerMode(value: unknown): StrategyScreenerMode {
+  return value === 'limit_up_relay' || value === 'trend_liquidity' || value === 'short_term'
+    ? value
+    : 'short_term';
+}
+
+function mapScreenerCandidate(value: unknown): StrategyScreenerCandidate {
+  const record = asRecord(value);
+  return {
+    symbol: asString(record.symbol),
+    code: asString(record.code),
+    name: typeof record.name === 'string' ? record.name : null,
+    exchange: asString(record.exchange, 'UNKNOWN'),
+    sectorTags: asStringArray(record.sector_tags),
+    tradeDate: asString(record.trade_date),
+    close: asNumber(record.close),
+    open: asNumber(record.open),
+    high: asNumber(record.high),
+    low: asNumber(record.low),
+    previousClose: asNumber(record.previous_close),
+    changePercent: asNumber(record.change_percent),
+    amount: asNumber(record.amount),
+    turnover: asNumber(record.turnover),
+    ma5: asNumber(record.ma5),
+    ma10: asNumber(record.ma10),
+    ma20: asNumber(record.ma20),
+    ma30: asNumber(record.ma30),
+    ma60: asNumber(record.ma60),
+    strength20dPct: asNumber(record.strength_20d_pct),
+    amountRatio20d: asNumber(record.amount_ratio_20d),
+    limitUpCount4d: asNumber(record.limit_up_count_4d) ?? 0,
+    limitUpCount10d: asNumber(record.limit_up_count_10d) ?? 0,
+    latestLimitUpDate: typeof record.latest_limit_up_date === 'string' ? record.latest_limit_up_date : null,
+    isLimitUp: asBoolean(record.is_limit_up),
+    isSt: asBoolean(record.is_st),
+    sampleCount: asNumber(record.sample_count) ?? 0,
+    score: asNumber(record.score),
+    signals: asStringArray(record.signals),
+    warnings: asStringArray(record.warnings),
+    missingFields: asStringArray(record.missing_fields),
+  };
+}
+
+function mapScreenerResponse(value: unknown): StrategyScreenerResponse {
+  const record = asRecord(value);
+  const candidates = Array.isArray(record.candidates)
+    ? record.candidates.map(mapScreenerCandidate)
+    : [];
+  return {
+    universeId: asString(record.universe_id, SAMPLE_UNIVERSE_ID),
+    mode: screenerMode(record.mode),
+    tradeDate: typeof record.trade_date === 'string' ? record.trade_date : null,
+    timeframe: asString(record.timeframe, 'daily'),
+    adjustment: asString(record.adjustment, 'qfq'),
+    scannedSymbols: asNumber(record.scanned_symbols) ?? 0,
+    totalCandidates: asNumber(record.total_candidates) ?? candidates.length,
+    limit: asNumber(record.limit) ?? candidates.length,
+    candidates,
+    dataBasis: asString(record.data_basis, 'timescaledb.stock_bars'),
+    source: asString(record.source, 'quantpilot-market-api'),
+    notes: asStringArray(record.notes),
+    cacheStatus: asString(record.cache_status, 'bypass'),
+    cacheTtlSeconds: asNumber(record.cache_ttl_seconds),
+    fetchedAt: asString(record.fetched_at, new Date().toISOString()),
+  };
+}
+
 function mapCoverageItem(value: unknown): StrategyDataCoverageItem {
   const record = asRecord(value);
   return {
@@ -2908,14 +3029,33 @@ function mapIngestionJobControlResult(value: unknown): StrategyIngestionJobContr
   };
 }
 
-async function fetchMarketApiJson<T>(pathName: string): Promise<T> {
+async function fetchMarketApiJson<T>(
+  pathName: string,
+  options: { timeoutMs?: number } = {}
+): Promise<T> {
   assertMarketApiEnabled();
-  const response = await fetch(`${MARKET_API_BASE_URL}${pathName}`, { cache: 'no-store' });
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`market API ${response.status}: ${body.slice(0, 180)}`);
+  const controller = options.timeoutMs ? new AbortController() : null;
+  const timeout = controller && options.timeoutMs
+    ? setTimeout(() => controller.abort(), options.timeoutMs)
+    : null;
+  try {
+    const response = await fetch(`${MARKET_API_BASE_URL}${pathName}`, {
+      cache: 'no-store',
+      signal: controller?.signal,
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`market API ${response.status}: ${body.slice(0, 180)}`);
+    }
+    return response.json() as Promise<T>;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`market API timeout after ${options.timeoutMs}ms: ${pathName}`);
+    }
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
-  return response.json() as Promise<T>;
 }
 
 export async function getStrategyUniverseMembersPage(params: {
@@ -2923,6 +3063,7 @@ export async function getStrategyUniverseMembersPage(params: {
   page?: number;
   pageSize?: number;
   keyword?: string;
+  timeoutMs?: number;
 } = {}): Promise<StrategyUniverseMembersPage> {
   const universeId = params.universeId || SAMPLE_UNIVERSE_ID;
   const page = Math.max(1, params.page ?? 1);
@@ -2934,9 +3075,31 @@ export async function getStrategyUniverseMembersPage(params: {
   const keyword = params.keyword?.trim();
   if (keyword) query.set('keyword', keyword);
   const payload = await fetchMarketApiJson<unknown>(
-    `/api/v1/research/universes/${encodeURIComponent(universeId)}/members?${query.toString()}`
+    `/api/v1/research/universes/${encodeURIComponent(universeId)}/members?${query.toString()}`,
+    { timeoutMs: params.timeoutMs }
   );
   return mapResearchUniverseMembersPage(payload, universeId, page, pageSize);
+}
+
+export async function runStrategyScreener(params: {
+  universeId?: string;
+  tradeDate?: string;
+  mode?: StrategyScreenerMode;
+  limit?: number;
+  timeoutMs?: number;
+} = {}): Promise<StrategyScreenerResponse> {
+  const query = new URLSearchParams({
+    universe_id: params.universeId || SAMPLE_UNIVERSE_ID,
+    mode: params.mode || 'short_term',
+    limit: String(Math.max(1, Math.min(params.limit ?? 20, 100))),
+  });
+  const tradeDate = params.tradeDate?.trim();
+  if (tradeDate) query.set('trade_date', tradeDate);
+  const payload = await fetchMarketApiJson<unknown>(
+    `/api/v1/research/screeners/a-share/short-term-candidates?${query.toString()}`,
+    { timeoutMs: params.timeoutMs }
+  );
+  return mapScreenerResponse(payload);
 }
 
 export async function getStrategyIngestionJobs(params: {
@@ -3030,7 +3193,7 @@ export async function getStrategySectorCapitalFlow(params: {
 async function getStrategyResearchState(): Promise<StrategyResearchState> {
   try {
     const universesPayload = asRecord(
-      await fetchMarketApiJson<unknown>('/api/v1/research/universes/summary')
+      await fetchMarketApiJson<unknown>('/api/v1/research/universes/summary', { timeoutMs: 2500 })
     );
     const universes = Array.isArray(universesPayload.universes)
       ? universesPayload.universes.map(mapResearchUniverse)
@@ -3044,6 +3207,7 @@ async function getStrategyResearchState(): Promise<StrategyResearchState> {
       universeId: primaryUniverse.id,
       page: 1,
       pageSize: 10,
+      timeoutMs: 4500,
     });
     const hydratedUniverses = universes.map((universe) => (
       universe.id === primaryUniverse.id
@@ -3092,11 +3256,24 @@ async function getStrategyResearchState(): Promise<StrategyResearchState> {
 
 async function getStrategyFoundationState(): Promise<StrategyFoundationState> {
   try {
-    const [statusPayload, factorsPayload, calendarPayload] = await Promise.all([
-      fetchMarketApiJson<unknown>('/api/v1/foundation/status'),
-      fetchMarketApiJson<unknown>('/api/v1/foundation/factors'),
-      fetchMarketApiJson<unknown>('/api/v1/foundation/trading-calendar?market=CN-A&limit=30'),
+    const [statusResult, factorsResult, calendarResult] = await Promise.allSettled([
+      fetchMarketApiJson<unknown>('/api/v1/foundation/status', { timeoutMs: 2000 }),
+      fetchMarketApiJson<unknown>('/api/v1/foundation/factors', { timeoutMs: 2000 }),
+      fetchMarketApiJson<unknown>('/api/v1/foundation/trading-calendar?market=CN-A&limit=30', { timeoutMs: 2500 }),
     ]);
+    const failures = [statusResult, factorsResult, calendarResult]
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason));
+    if (
+      statusResult.status === 'rejected' &&
+      factorsResult.status === 'rejected' &&
+      calendarResult.status === 'rejected'
+    ) {
+      throw new Error(failures.join('；') || '基础组件接口暂不可用');
+    }
+    const statusPayload = statusResult.status === 'fulfilled' ? statusResult.value : {};
+    const factorsPayload = factorsResult.status === 'fulfilled' ? factorsResult.value : {};
+    const calendarPayload = calendarResult.status === 'fulfilled' ? calendarResult.value : {};
     const statusRecord = asRecord(statusPayload);
     const factorsRecord = asRecord(factorsPayload);
     const calendarRecord = asRecord(calendarPayload);
@@ -3112,7 +3289,7 @@ async function getStrategyFoundationState(): Promise<StrategyFoundationState> {
         ? calendarRecord.days.map(mapTradingCalendarDay)
         : [],
       latestQualityScan: null,
-      error: null,
+      error: failures.length ? failures.join('；') : null,
     };
   } catch (error) {
     return {
@@ -3255,6 +3432,7 @@ export async function ingestStrategyUniverseHistoryBatch(params: {
   end?: string;
   period?: string;
   adjustment?: string;
+  includeValuationFactors?: boolean;
 } = {}): Promise<StrategyHistoryIngestionResult> {
   assertMarketApiEnabled();
   const body = {
@@ -3267,7 +3445,8 @@ export async function ingestStrategyUniverseHistoryBatch(params: {
     lookback_years: params.lookbackYears ?? FALLBACK_RESEARCH_STATE.ingestionPlan.lookbackYears,
     start: params.start || undefined,
     end: params.end || undefined,
-    request_delay_seconds: 1.2,
+    include_valuation_factors: params.includeValuationFactors === true,
+    request_delay_seconds: 0.2,
   };
   const response = await fetch(`${MARKET_API_BASE_URL}/api/v1/ingestion/baostock/history/batch`, {
     method: 'POST',
@@ -3293,6 +3472,7 @@ export async function startStrategyUniverseHistoryAutoFill(params: {
   period?: string;
   adjustment?: string;
   maxBatches?: number;
+  includeValuationFactors?: boolean;
 } = {}): Promise<StrategyAutoFillIngestionStartResult> {
   assertMarketApiEnabled();
   const body = {
@@ -3305,8 +3485,9 @@ export async function startStrategyUniverseHistoryAutoFill(params: {
     lookback_years: params.lookbackYears ?? FALLBACK_RESEARCH_STATE.ingestionPlan.lookbackYears,
     start: params.start || undefined,
     end: params.end || undefined,
-    request_delay_seconds: 1.2,
-    batch_delay_seconds: 0.7,
+    include_valuation_factors: params.includeValuationFactors === true,
+    request_delay_seconds: 0.2,
+    batch_delay_seconds: 0.2,
     max_batches: params.maxBatches,
   };
   const response = await fetch(`${MARKET_API_BASE_URL}/api/v1/ingestion/baostock/history/autofill`, {

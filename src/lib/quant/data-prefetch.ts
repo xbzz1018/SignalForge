@@ -18,6 +18,8 @@ interface PrefetchResult {
 
 const MARKET_API_BASE_URL = process.env.QUANTPILOT_MARKET_API_URL ?? 'http://127.0.0.1:8000';
 const FETCH_TIMEOUT_MS = Number.parseInt(process.env.QUANTPILOT_MARKET_PREFETCH_TIMEOUT_MS ?? '', 10) || 12_000;
+const SCREENER_FETCH_TIMEOUT_MS =
+  Number.parseInt(process.env.QUANTPILOT_SCREENER_PREFETCH_TIMEOUT_MS ?? '', 10) || Math.max(FETCH_TIMEOUT_MS, 45_000);
 
 const KNOWN_SYMBOLS: Array<{ keyword: string; symbol: string }> = [
   { keyword: '贵州茅台', symbol: '600519' },
@@ -199,6 +201,94 @@ async function inferSymbols(plan: QuantRunPlan, warnings: string[]): Promise<str
   }
 
   return resolveSymbolsFromQuestion(plan.question, warnings);
+}
+
+function isBroadStockScreenerPlan(plan: QuantRunPlan): boolean {
+  const normalized = `${plan.question} ${plan.dataRequirements.join(' ')}`.replace(/\s+/g, '');
+  return (
+    normalized.includes('/api/v1/research/screeners/a-share/short-term-candidates') ||
+    /全A|A股股票池|股票池|选股|筛选|候选|短线候选|次日|买股|买入策略|短线/.test(normalized)
+  );
+}
+
+function pickScreenerCandidateCode(value: unknown): string | null {
+  const record = asRecord(value);
+  const candidates = [
+    record?.code,
+    record?.symbol,
+    record?.security_code,
+    record?.securityCode,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') {
+      continue;
+    }
+    const match = candidate.trim().match(/(?:^|[^\d])((?:6|0|3|5)\d{5})(?:\.(?:SH|SZ|BJ))?$/i)
+      ?? candidate.trim().match(/^((?:6|0|3|5)\d{5})(?:\.(?:SH|SZ|BJ))?/i);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+function screenerModeForQuestion(question: string): string {
+  const normalized = question.replace(/\s+/g, '');
+  if (/涨停|连板|接力/.test(normalized)) return 'limit_up_relay';
+  if (/趋势|强弱|流动性|均线/.test(normalized)) return 'trend_liquidity';
+  return 'short_term';
+}
+
+function screenerLimitForQuestion(question: string): number {
+  const normalized = question.replace(/\s+/g, '');
+  const explicit = normalized.match(/(?:候选|筛选|推荐|选出)?(\d+)(?:只|个)/);
+  const value = explicit?.[1] ? Number.parseInt(explicit[1], 10) : 5;
+  if (!Number.isFinite(value)) return 5;
+  return Math.min(Math.max(value, 3), 8);
+}
+
+async function fetchScreenerSeedSymbols(params: {
+  projectPath: string;
+  runId: string;
+  plan: QuantRunPlan;
+  rawFiles: string[];
+  warnings: string[];
+}): Promise<{ symbols: string[]; screener: JsonRecord | null }> {
+  const mode = screenerModeForQuestion(params.plan.question);
+  const limit = screenerLimitForQuestion(params.plan.question);
+  const screener = await fetchJson(
+    `/api/v1/research/screeners/a-share/short-term-candidates?mode=${encodeURIComponent(mode)}&limit=${limit}`,
+    {},
+    { timeoutMs: SCREENER_FETCH_TIMEOUT_MS }
+  );
+  const rawPath = path.join(params.projectPath, 'data_file', 'raw', params.runId, 'a-share-screener.json');
+  await writeJson(rawPath, screener);
+  params.rawFiles.push(path.relative(params.projectPath, rawPath).replaceAll(path.sep, '/'));
+
+  const candidates = Array.isArray(screener.candidates) ? screener.candidates : [];
+  const symbols = uniqueSymbols(
+    candidates
+      .map(pickScreenerCandidateCode)
+      .filter((symbol): symbol is string => Boolean(symbol))
+  ).slice(0, limit);
+
+  const dataQuality = asRecord(screener.data_quality);
+  const missingFields = Array.isArray(dataQuality?.missing_fields)
+    ? dataQuality.missing_fields.filter((field): field is string => typeof field === 'string')
+    : [];
+  const notes = Array.isArray(screener.notes)
+    ? screener.notes.filter((note): note is string => typeof note === 'string')
+    : [];
+  if (missingFields.length > 0) {
+    params.warnings.push(`选股接口缺少字段：${missingFields.join('、')}`);
+  }
+  if (notes.length > 0) {
+    params.warnings.push(...notes.map((note) => `选股接口说明：${note}`));
+  }
+
+  return { symbols, screener };
 }
 
 function inferHistoryLimit(plan: QuantRunPlan): number {
@@ -645,9 +735,13 @@ function buildLiquiditySummary(assets: JsonRecord[]): JsonRecord {
   };
 }
 
-async function fetchJson(endpoint: string, init: RequestInit = {}): Promise<JsonRecord> {
+async function fetchJson(
+  endpoint: string,
+  init: RequestInit = {},
+  options: { timeoutMs?: number } = {}
+): Promise<JsonRecord> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(`${MARKET_API_BASE_URL}${endpoint}`, {
       ...init,
@@ -1214,6 +1308,104 @@ function buildSelectionRanking(comparison: JsonRecord, assets: JsonRecord[]): Js
   };
 }
 
+function buildTradingPlan(assets: JsonRecord[], selectionRanking: JsonRecord): JsonRecord {
+  const rankingRows = Array.isArray(selectionRanking.rows)
+    ? selectionRanking.rows.map(asRecord).filter((row): row is JsonRecord => Boolean(row))
+    : [];
+  const rankBySymbol = new Map(
+    rankingRows
+      .map((row) => [String(row.symbol ?? ''), numeric(row.rank)] as const)
+      .filter(([, rank]) => rank !== null)
+  );
+  const rows = assets
+    .map((asset): JsonRecord | null => {
+      const quote = asRecord(asset.quote);
+      const technical = asRecord(asRecord(asset.technicalIndicators)?.summary) ?? ensureTechnicalSummary(asset);
+      const metrics = asRecord(asset.computedMetrics);
+      const bars = extractBarsFromAsset(asset);
+      const latestBar = bars.at(-1);
+      const symbol = String(asset.symbol ?? quote?.symbol ?? '');
+      const name = String(asset.name ?? quote?.name ?? symbol);
+      const currentPrice =
+        numeric(quote?.price) ??
+        numeric(technical.latest_close) ??
+        numeric(latestBar?.close);
+      if (currentPrice === null || currentPrice <= 0) {
+        return null;
+      }
+      const ma5 = numeric(technical.ma5);
+      const ma10 = numeric(technical.ma10);
+      const ma20 = numeric(technical.ma20);
+      const latestLow = numeric(quote?.low) ?? numeric(latestBar?.low);
+      const periodHigh = numeric(metrics?.periodHigh) ?? numeric(quote?.high) ?? numeric(latestBar?.high) ?? currentPrice;
+      const supportCandidates = [ma5, ma10, ma20]
+        .filter((value): value is number => value !== null && value > 0)
+        .sort((left, right) => {
+          const leftDistance = Math.abs(currentPrice - left);
+          const rightDistance = Math.abs(currentPrice - right);
+          return leftDistance - rightDistance;
+        });
+      const support = supportCandidates[0] ?? currentPrice * 0.97;
+      const buyZoneLow = round(Math.max(currentPrice * 0.94, support * 0.98));
+      const rawBuyZoneHigh = Math.min(currentPrice * 1.01, Math.max((buyZoneLow ?? currentPrice) * 1.04, currentPrice * 0.995));
+      const buyZoneHigh = round(Math.max(rawBuyZoneHigh, (buyZoneLow ?? currentPrice) * 1.01));
+      const stopBase = Math.min(
+        (buyZoneLow ?? currentPrice) * 0.965,
+        latestLow !== null ? latestLow * 0.98 : currentPrice * 0.94,
+        ma10 !== null ? ma10 * 0.985 : currentPrice * 0.94
+      );
+      const stopLoss = round(Math.max(stopBase, currentPrice * 0.86));
+      const risk = Math.max((buyZoneHigh ?? currentPrice) - (stopLoss ?? currentPrice * 0.94), currentPrice * 0.025);
+      const target1 = round(Math.max((buyZoneHigh ?? currentPrice) + risk * 1.5, currentPrice * 1.05, periodHigh * 1.01));
+      const target2 = round(Math.max((target1 ?? currentPrice) + risk, currentPrice * 1.1));
+      const chaseLimitPct = 4;
+      const rank = rankBySymbol.get(symbol) ?? null;
+      const maText = [
+        ma5 !== null ? `MA5 ${round(ma5)}` : null,
+        ma10 !== null ? `MA10 ${round(ma10)}` : null,
+        ma20 !== null ? `MA20 ${round(ma20)}` : null,
+      ].filter(Boolean).join(' / ');
+      return {
+        rank,
+        symbol,
+        name,
+        current_price: round(currentPrice),
+        buy_zone_low: buyZoneLow,
+        buy_zone_high: buyZoneHigh,
+        stop_loss: stopLoss,
+        target_price_1: target1,
+        target_price_2: target2,
+        position_limit_pct: 30,
+        timeframe: '1-3 个交易日',
+        entry_style: '回踩承接，避免高开急拉追价',
+        abandon_condition: [
+          `高开超过 ${chaseLimitPct}% 且未回落到买入区间，不追。`,
+          stopLoss !== null ? `盘中或收盘跌破 ${stopLoss}，短线计划失效。` : '跌破买入区间下沿且不能收回，短线计划失效。',
+          ma5 !== null ? `收盘重新跌回 MA5 ${round(ma5)} 下方，降低优先级。` : null,
+        ].filter(Boolean).join(' '),
+        rationale: [
+          `当前价 ${round(currentPrice)}，买入区间按最近均线支撑和当日波动回撤估算。`,
+          maText ? `均线参考：${maText}。` : '均线样本不足，优先控制仓位。',
+          '目标价以最近区间高点、风险收益比和短线波动共同约束。',
+        ].join(' '),
+        risk_note: '这是基于本地行情和技术指标的短线交易计划，不构成收益承诺或即时交易指令。',
+      };
+    })
+    .filter((row): row is JsonRecord => Boolean(row))
+    .sort((left, right) => (numeric(left.rank) ?? 999) - (numeric(right.rank) ?? 999));
+
+  return {
+    method: 'ma_support_pullback_risk_plan',
+    description: '基于最新价、MA5/MA10/MA20、当日高低点和近期波动生成的短线买入/卖出风险计划。',
+    rows,
+    limitations: [
+      '仅使用本地行情、K 线和已计算指标，不读取用户真实账户、委托深度或盘中逐笔资金。',
+      '若次日集合竞价、成交额、涨跌停状态或板块环境显著变化，需要重新刷新计划。',
+      '单票仓位默认不超过 30%，实际执行还需结合总资金、持仓集中度和交易纪律。',
+    ],
+  };
+}
+
 function buildConclusion(params: {
   comparison: JsonRecord;
   selectionRanking: JsonRecord;
@@ -1423,19 +1615,37 @@ export async function prefetchQuantDataForRunPlan(params: {
     return { skipped: true, summary: `能力 ${params.plan.capabilityId} 暂不需要平台预取数据。` };
   }
 
-  const symbolResolutionWarnings: string[] = [];
-  const symbols = await inferSymbols(params.plan, symbolResolutionWarnings);
-  if (symbols.length === 0) {
-    return {
-      skipped: true,
-      summary: `未识别到 A 股、指数或 ETF 标的，跳过平台预取。${symbolResolutionWarnings.length ? ` ${symbolResolutionWarnings.join('；')}` : ''}`,
-    };
-  }
-
   await ensureQuantWorkspace(params.projectPath);
   const runId = params.plan.runId;
   const rawFiles: string[] = [];
+  const symbolResolutionWarnings: string[] = [];
+  let symbols = await inferSymbols(params.plan, symbolResolutionWarnings);
   const warnings: string[] = [...symbolResolutionWarnings];
+  let screenerData: JsonRecord | null = null;
+
+  if (symbols.length === 0 && isBroadStockScreenerPlan(params.plan)) {
+    try {
+      const screenerSeed = await fetchScreenerSeedSymbols({
+        projectPath: params.projectPath,
+        runId,
+        plan: params.plan,
+        rawFiles,
+        warnings,
+      });
+      symbols = screenerSeed.symbols;
+      screenerData = screenerSeed.screener;
+    } catch (error) {
+      warnings.push(`选股接口预取失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (symbols.length === 0) {
+    return {
+      skipped: true,
+      summary: `未识别到 A 股、指数或 ETF 标的，跳过平台预取。${warnings.length ? ` ${warnings.join('；')}` : ''}`,
+    };
+  }
+
   const imageExtractionEvidence = await buildImageExtractionEvidence(params.projectPath, runId, warnings);
   const imageExtraction = asRecord(imageExtractionEvidence?.imageExtraction);
 
@@ -1530,6 +1740,7 @@ export async function prefetchQuantDataForRunPlan(params: {
   const comparison = buildComparisonSummary(assets);
   const financialQuality = buildFinancialQualitySummary(assets);
   const selectionRanking = buildSelectionRanking(comparison, assets);
+  const tradingPlan = buildTradingPlan(assets, selectionRanking);
   const conclusion = buildConclusion({ comparison, selectionRanking, financialQuality });
   const finalData = symbols.length === 1
     ? {
@@ -1543,10 +1754,12 @@ export async function prefetchQuantDataForRunPlan(params: {
             }
           : {}),
         ...(imageExtraction ? { imageExtraction } : {}),
+        ...(screenerData ? { screener: screenerData } : {}),
         visualization,
         liquidity: buildLiquiditySummary([primaryAsset]),
         financialQuality,
         selectionRanking,
+        tradingPlan,
         conclusion,
       }
     : {
@@ -1570,6 +1783,8 @@ export async function prefetchQuantDataForRunPlan(params: {
         liquidity: buildLiquiditySummary(assets),
         financialQuality,
         selectionRanking,
+        tradingPlan,
+        ...(screenerData ? { screener: screenerData } : {}),
         visualization,
         conclusion,
         warnings,

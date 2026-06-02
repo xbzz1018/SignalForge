@@ -69,6 +69,8 @@ type IngestionRangeMode = "incremental" | "lookback" | "custom";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 const INGESTION_BATCH_SIZE = 25;
 const INGESTION_LOG_LIMIT = 20;
+const INGESTION_STALE_HEARTBEAT_MS = 15 * 60 * 1000;
+const INGESTION_STOP_GRACE_MS = 60 * 1000;
 
 // ─── Status helpers ────────────────────────────────────────────
 function statusLabel(s: StrategyCatalogItem["status"]) {
@@ -366,7 +368,7 @@ function findLatestAutoFillJob(jobs: StrategyIngestionJob[]) {
 }
 
 function findLatestRunningAutoFillChildJob(jobs: StrategyIngestionJob[]) {
-  return jobs.find((job) => job.status === "running" && stringFromUnknown(job.metadata.parent_job_id)) ?? null;
+  return jobs.find((job) => job.status === "running" && !isStaleRunningIngestionJob(job) && stringFromUnknown(job.metadata.parent_job_id)) ?? null;
 }
 
 function ingestionControlJobId(job?: StrategyIngestionJob | null) {
@@ -404,7 +406,53 @@ function stringFromUnknown(value: unknown) {
   return typeof value === "string" && value ? value : null;
 }
 
-function ingestionProgress(job: StrategyIngestionJob | null | undefined) {
+function isStaleRunningIngestionJob(job: StrategyIngestionJob | null | undefined) {
+  if (!job || job.status !== "running") return false;
+  const control = stringFromUnknown(job.metadata.control);
+  const controlUpdatedAt = timestampMs(stringFromUnknown(job.metadata.control_updated_at));
+  if (control === "stop" && controlUpdatedAt && Date.now() - controlUpdatedAt > INGESTION_STOP_GRACE_MS) {
+    return true;
+  }
+  const lastHeartbeatAt = timestampMs(stringFromUnknown(job.metadata.last_heartbeat_at));
+  const lastActivityAt = lastHeartbeatAt ?? timestampMs(job.updatedAt);
+  return Boolean(lastActivityAt && Date.now() - lastActivityAt > INGESTION_STALE_HEARTBEAT_MS);
+}
+
+function completedJobDurationSeconds(job: StrategyIngestionJob) {
+  const startedAt = timestampMs(job.startedAt ?? job.createdAt);
+  const endedAt = timestampMs(job.completedAt ?? job.updatedAt);
+  if (!startedAt || !endedAt || endedAt <= startedAt) return null;
+  return Math.max(1, (endedAt - startedAt) / 1000);
+}
+
+function recentIngestionSymbolRate(job: StrategyIngestionJob, jobs: StrategyIngestionJob[]) {
+  const parentJobId = job.provider === "baostock-autofill"
+    ? job.id
+    : stringFromUnknown(job.metadata.parent_job_id);
+  const relevantJobs = jobs
+    .filter((item) => {
+      if (item.id === job.id || item.status === "running" || item.completedSymbols <= 0) return false;
+      if (parentJobId && stringFromUnknown(item.metadata.parent_job_id) === parentJobId) return true;
+      if (!parentJobId && item.provider === job.provider && item.timeframe === job.timeframe) return true;
+      return false;
+    })
+    .sort((a, b) => (timestampMs(b.completedAt ?? b.updatedAt) ?? 0) - (timestampMs(a.completedAt ?? a.updatedAt) ?? 0))
+    .slice(0, 5);
+  const totals = relevantJobs.reduce(
+    (acc, item) => {
+      const duration = completedJobDurationSeconds(item);
+      if (!duration) return acc;
+      return {
+        symbols: acc.symbols + item.completedSymbols,
+        seconds: acc.seconds + duration,
+      };
+    },
+    { symbols: 0, seconds: 0 }
+  );
+  return totals.symbols > 0 && totals.seconds > 0 ? totals.symbols / totals.seconds : null;
+}
+
+function ingestionProgress(job: StrategyIngestionJob | null | undefined, jobs: StrategyIngestionJob[] = []) {
   if (!job) {
     return {
       completedBatches: 0,
@@ -418,6 +466,7 @@ function ingestionProgress(job: StrategyIngestionJob | null | undefined) {
       lastHeartbeatAt: null as string | null,
       control: null as string | null,
       preflightSkippedSymbols: 0,
+      isStale: false,
     };
   }
   const completedBatches = numberFromUnknown(job.metadata.completed_batches) ?? 0;
@@ -431,10 +480,17 @@ function ingestionProgress(job: StrategyIngestionJob | null | undefined) {
   const startedAt = timestampMs(job.startedAt ?? job.createdAt);
   const endedAt = job.status === "running" ? Date.now() : timestampMs(job.completedAt ?? job.updatedAt);
   const elapsedSeconds = startedAt && endedAt ? Math.max(0, (endedAt - startedAt) / 1000) : null;
-  const etaSeconds =
+  const isStale = isStaleRunningIngestionJob(job);
+  const recentRate = recentIngestionSymbolRate(job, jobs);
+  const fallbackEtaSeconds =
     elapsedSeconds !== null && completedSymbols > 0 && totalSymbols > completedSymbols
       ? (elapsedSeconds / completedSymbols) * (totalSymbols - completedSymbols)
       : null;
+  const etaSeconds = isStale || stringFromUnknown(job.metadata.control) === "stop"
+    ? null
+    : recentRate && totalSymbols > completedSymbols
+      ? (totalSymbols - completedSymbols) / recentRate
+      : fallbackEtaSeconds;
   return {
     completedBatches,
     totalBatches,
@@ -447,6 +503,7 @@ function ingestionProgress(job: StrategyIngestionJob | null | undefined) {
     lastHeartbeatAt: stringFromUnknown(job.metadata.last_heartbeat_at) ?? job.updatedAt,
     control: stringFromUnknown(job.metadata.control),
     preflightSkippedSymbols: numberFromUnknown(job.metadata.preflight_skipped_symbols) ?? 0,
+    isStale,
   };
 }
 
@@ -835,17 +892,24 @@ function UniverseView({
   const latestUniverseBatchJob = findLatestUniverseBatchJob(ingestionJobs);
   const latestAutoFillJob = findLatestAutoFillJob(ingestionJobs);
   const latestAutoFillChildJob = findLatestRunningAutoFillChildJob(ingestionJobs);
-  const controllableIngestionJob = latestAutoFillJob?.status === "running"
+  const runningUniverseBatchJob = latestUniverseBatchJob?.status === "running" && !isStaleRunningIngestionJob(latestUniverseBatchJob)
+    ? latestUniverseBatchJob
+    : null;
+  const runningAutoFillJob = latestAutoFillJob?.status === "running" && !isStaleRunningIngestionJob(latestAutoFillJob)
     ? latestAutoFillJob
-    : latestAutoFillChildJob ?? latestAutoFillJob;
+    : null;
+  const runningAutoFillChildJob = latestAutoFillChildJob?.status === "running" && !isStaleRunningIngestionJob(latestAutoFillChildJob)
+    ? latestAutoFillChildJob
+    : null;
+  const controllableIngestionJob = runningAutoFillJob ?? runningAutoFillChildJob ?? latestAutoFillJob ?? latestAutoFillChildJob;
   const controllableIngestionJobId = ingestionControlJobId(controllableIngestionJob);
   const hasControllableIngestionJob = Boolean(controllableIngestionJobId);
-  const hasRunningBatchJob = latestUniverseBatchJob?.status === "running";
-  const hasRunningAutoFillJob = latestAutoFillJob?.status === "running" || Boolean(latestAutoFillChildJob);
+  const hasRunningBatchJob = Boolean(runningUniverseBatchJob);
+  const hasRunningAutoFillJob = Boolean(runningAutoFillJob || runningAutoFillChildJob);
   const visibleIngestionJobs = ingestionJobs.slice(0, INGESTION_LOG_LIMIT);
   const recentRowsUpserted = visibleIngestionJobs.reduce((sum, job) => sum + job.rowsUpserted, 0);
   const activeJob = controllableIngestionJob ?? latestUniverseBatchJob;
-  const activeProgress = ingestionProgress(activeJob);
+  const activeProgress = ingestionProgress(activeJob, visibleIngestionJobs);
   const activeControl = activeProgress.control;
   const isIngestionBusy = isRunningBatch || isAutoFilling || hasRunningBatchJob || hasRunningAutoFillJob;
   const latestDataDate = selectedUniverse?.latestTs?.slice(0, 10) ?? members.find((member) => member.lastTs)?.lastTs?.slice(0, 10) ?? "";
@@ -1033,8 +1097,14 @@ function UniverseView({
     autoFillPollRef.current = setInterval(() => {
       void loadIngestionJobs().then((jobs) => {
         const parentJob = findLatestAutoFillJob(jobs);
-        const autoFillJob = parentJob ?? findLatestRunningAutoFillChildJob(jobs);
-        if (!autoFillJob) return;
+        const autoFillJob = parentJob && !isStaleRunningIngestionJob(parentJob)
+          ? parentJob
+          : findLatestRunningAutoFillChildJob(jobs);
+        if (!autoFillJob) {
+          setIsAutoFilling(false);
+          stopAutoFillPolling();
+          return;
+        }
         const completedBatches = numberFromUnknown(autoFillJob.metadata.completed_batches) ?? 0;
         const maxBatches = numberFromUnknown(autoFillJob.metadata.max_batches);
         const nextOffset = autoFillJob.nextOffset ?? 0;
@@ -1043,7 +1113,7 @@ function UniverseView({
             ? `后端自动补齐中 · ${completedBatches}${maxBatches ? `/${maxBatches}` : ""} 批 · 下批 ${nextOffset}`
             : `后端自动补齐${jobStatusLabel(autoFillJob.status)} · 下批 ${nextOffset}`
         );
-        if (autoFillJob.status !== "running") {
+        if (autoFillJob.status !== "running" || isStaleRunningIngestionJob(autoFillJob)) {
           setIsAutoFilling(false);
           setMemberReloadToken((value) => value + 1);
           stopAutoFillPolling();
@@ -1201,8 +1271,13 @@ function UniverseView({
                     )}
                     补数
                     {activeJob && (
-                      <span className={cn("ml-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium", jobStatusClass(activeJob.status))}>
-                        {jobStatusLabel(activeJob.status)}
+                      <span
+                        className={cn(
+                          "ml-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                          jobStatusClass(activeProgress.isStale ? "partial" : activeJob.status)
+                        )}
+                      >
+                        {activeProgress.isStale ? "心跳过期" : jobStatusLabel(activeJob.status)}
                       </span>
                     )}
                 </Button>
@@ -1216,14 +1291,17 @@ function UniverseView({
                         <div>
                           <Dialog.Title className="text-lg font-semibold text-slate-950">低频补数</Dialog.Title>
                           <Dialog.Description className="mt-1 text-sm text-slate-500">
-                            选择补数范围后分批补充成交额、换手率、停牌/ST、涨跌停和估值字段；本地已有覆盖会跳过。
+                            选择补数范围后分批补充成交额、换手率、停牌/ST 和涨跌停字段；估值因子后续单独补，避免拖慢日常增量补数。
                           </Dialog.Description>
                         </div>
                         <div className="flex items-center gap-2">
                           {isLoadingJobs && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
                           {activeJob && (
-                            <Badge variant="outline" className={jobStatusClass(activeJob.status)}>
-                              {jobStatusLabel(activeJob.status)}
+                            <Badge
+                              variant="outline"
+                              className={jobStatusClass(activeProgress.isStale ? "partial" : activeJob.status)}
+                            >
+                              {activeProgress.isStale ? "心跳过期" : jobStatusLabel(activeJob.status)}
                             </Badge>
                           )}
                           <Dialog.Close className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
@@ -1277,7 +1355,7 @@ function UniverseView({
                               </div>
                               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                                 <span>
-                                  当前标的 {activeProgress.currentSymbol ?? "-"} · {ingestionControlLabel(activeControl)}
+                                  当前标的 {activeProgress.currentSymbol ?? "-"} · {activeProgress.isStale ? "心跳过期，等待收口" : ingestionControlLabel(activeControl)}
                                   {activeProgress.preflightSkippedSymbols ? ` · 本地跳过 ${activeProgress.preflightSkippedSymbols}` : ""}
                                 </span>
                                 <span>心跳 {formatDateTime(activeProgress.lastHeartbeatAt)}</span>

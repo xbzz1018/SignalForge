@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, date, datetime, time as dt_time, timedelta
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from decimal import Decimal
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -33,6 +34,7 @@ from quantpilot_market_data.database import (
     list_trading_calendar_days,
     normalize_fetch_symbol,
     run_data_quality_scan,
+    screen_a_share_short_term_candidates,
     update_ingestion_job_progress,
     upsert_kline_response,
     upsert_realtime_quote_snapshot,
@@ -42,16 +44,17 @@ from quantpilot_market_data.indicators import build_technical_indicators
 from quantpilot_market_data.models import (
     Adjustment,
     AnnouncementResponse,
+    AShareScreenerResponse,
     AShareUniverseBatchImportRequest,
     AShareUniverseBatchImportResponse,
+    AutoFillIngestionStartResponse,
     BacktestResponse,
     BatchQuoteRequest,
     BatchQuoteResponse,
-    AutoFillIngestionStartResponse,
     DataProviderInfo,
-    DataRegistryResponse,
     DataQualityScanRequest,
     DataQualityScanResponse,
+    DataRegistryResponse,
     DividendEventsResponse,
     ETFUniverseBatchImportRequest,
     ETFUniverseBatchImportResponse,
@@ -79,6 +82,7 @@ from quantpilot_market_data.models import (
     ResearchUniverseMembersPageResponse,
     ResearchUniverseResponse,
     ResearchUniverseSummaryResponse,
+    ScreenerMode,
     SectorCapitalFlowResponse,
     SymbolResolveResponse,
     SymbolResolveResult,
@@ -101,6 +105,7 @@ SYMBOL_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_SYMBOL_CACHE_TTL_SECONDS", 8
 KLINE_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_KLINE_CACHE_TTL_SECONDS", 1800)
 FINANCIAL_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_FINANCIAL_CACHE_TTL_SECONDS", 21600)
 ANNOUNCEMENT_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_ANNOUNCEMENT_CACHE_TTL_SECONDS", 600)
+SCREENER_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_SCREENER_CACHE_TTL_SECONDS", 60)
 CN_TZ = ZoneInfo("Asia/Shanghai")
 INTRADAY_CACHE_EXPIRE_HOUR = 9
 INTRADAY_PERIODS = {"minute1", "minute5", "minute15", "minute30", "minute60"}
@@ -200,9 +205,23 @@ DATA_PROVIDERS = [
             "/api/v1/research/etf/import-batch",
             "/api/v1/research/data-coverage",
             "/api/v1/research/bars/{symbol}",
+            "/api/v1/research/screeners/a-share/short-term-candidates",
             "/api/v1/ingestion/jobs",
         ],
         cache_ttl_seconds=None,
+    ),
+    DataProviderInfo(
+        id="quantpilot-a-share-screener",
+        name="QuantPilot A 股选股筛选器",
+        category="strategy-screener",
+        status="available",
+        description=(
+            "通过本地 TimescaleDB 的日线行情、涨跌停、均线、强弱和流动性字段，"
+            "输出短线候选列表；skills 通过 API 调用，不直接访问数据库。"
+        ),
+        endpoints=["/api/v1/research/screeners/a-share/short-term-candidates"],
+        cache_ttl_seconds=SCREENER_CACHE_TTL_SECONDS,
+        limitations=["DDE 大单金额/大单净量尚未落库，当前筛选为日线量价代理。"],
     ),
     DataProviderInfo(
         id="eastmoney-history-ingestion",
@@ -484,7 +503,7 @@ def _baostock_required_fields(request: HistoryIngestionRequest) -> list[str]:
         "limit_up",
         "limit_down",
     ]
-    if request.period == "daily":
+    if request.period == "daily" and request.include_valuation_factors:
         fields.extend(["pe_ttm", "pb_mrq", "ps_ttm", "pcf_ncf_ttm"])
     return fields
 
@@ -1168,6 +1187,26 @@ def create_app() -> FastAPI:
         except DatabaseError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
 
+    @app.get(
+        "/api/v1/research/screeners/a-share/short-term-candidates",
+        response_model=AShareScreenerResponse,
+    )
+    async def get_a_share_short_term_candidates(
+        universe_id: str = Query(default="a-share-sample-research-pool", min_length=1),
+        trade_date: date | None = None,
+        mode: ScreenerMode = "short_term",
+        limit: int = Query(default=20, ge=1, le=100),
+    ) -> AShareScreenerResponse:
+        try:
+            return await screen_a_share_short_term_candidates(
+                universe_id=universe_id.strip(),
+                trade_date=trade_date,
+                mode=mode,
+                limit=limit,
+            )
+        except DatabaseError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+
     @app.post(
         "/api/v1/research/universes/{universe_id}/members",
         response_model=ResearchUniverseMemberCreateResponse,
@@ -1233,6 +1272,7 @@ def create_app() -> FastAPI:
                     "allow_fallback": request.allow_fallback,
                     "request_delay_seconds": request.request_delay_seconds,
                     "max_retries": request.max_retries,
+                    "include_valuation_factors": request.include_valuation_factors,
                 },
             )
 
@@ -1339,6 +1379,7 @@ def create_app() -> FastAPI:
                     "end": request.end,
                     "request_delay_seconds": request.request_delay_seconds,
                     "max_retries": request.max_retries,
+                    "include_valuation_factors": request.include_valuation_factors,
                     "source_strategy": "akshare-field-enrichment",
                     "field_contract": [
                         "amount",
@@ -1458,6 +1499,7 @@ def create_app() -> FastAPI:
                     "end": request.end,
                     "request_delay_seconds": request.request_delay_seconds,
                     "max_retries": request.max_retries,
+                    "include_valuation_factors": request.include_valuation_factors,
                     "source_strategy": "baostock-field-enrichment",
                     "field_contract": required_fields,
                     "preflight_enabled": True,
@@ -1606,6 +1648,7 @@ def create_app() -> FastAPI:
                     "end": request.end,
                     "request_delay_seconds": request.request_delay_seconds,
                     "max_retries": request.max_retries,
+                    "include_valuation_factors": request.include_valuation_factors,
                     "source_strategy": "baostock-low-frequency-batch-enrichment",
                     "batch_offset": effective_offset,
                     "batch_size": request.batch_size,
@@ -1800,6 +1843,7 @@ def create_app() -> FastAPI:
                         "end": request.end,
                         "request_delay_seconds": request.request_delay_seconds,
                         "max_retries": request.max_retries,
+                        "include_valuation_factors": request.include_valuation_factors,
                         "source_strategy": "baostock-low-frequency-batch-enrichment",
                         "batch_offset": effective_offset,
                         "batch_size": request.batch_size,
@@ -2193,7 +2237,11 @@ def create_app() -> FastAPI:
                     if stop_reason == "stopped":
                         break
 
-            if stop_reason != "stopped" and final_next_offset != 0 and completed_batches >= max_batches:
+            if (
+                stop_reason != "stopped"
+                and final_next_offset != 0
+                and completed_batches >= max_batches
+            ):
                 stop_reason = "max_batches"
             final_status = (
                 "failed"
@@ -2298,6 +2346,7 @@ def create_app() -> FastAPI:
                     "request_delay_seconds": request.request_delay_seconds,
                     "batch_delay_seconds": request.batch_delay_seconds,
                     "max_retries": request.max_retries,
+                    "include_valuation_factors": request.include_valuation_factors,
                     "source_strategy": "baostock-low-frequency-autofill",
                     "batch_offset": effective_offset,
                     "batch_size": request.batch_size,
@@ -2652,7 +2701,9 @@ def create_app() -> FastAPI:
                                         "cache_status": "redis-hit",
                                         "cache_key": cache_key,
                                         "cache_ttl_seconds": ttl_seconds,
-                                        "expires_at": cached_response.fetch.expires_at or expires_at,
+                                        "expires_at": (
+                                            cached_response.fetch.expires_at or expires_at
+                                        ),
                                     }
                                 )
                             }

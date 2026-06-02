@@ -154,6 +154,11 @@ function shouldUseAssetComparison(instruction: string) {
   return symbolCount >= 2 || comparisonIntent || multiNamedStocks;
 }
 
+function isBroadStockScreenerInstruction(instruction: string): boolean {
+  const normalized = instruction.replace(/\s+/g, '');
+  return /全A|A股股票池|股票池|选股|筛选|候选|短线候选|次日|买股|买入策略|短线/.test(normalized);
+}
+
 function inferCapabilityId(params: {
   requestedCapabilityId?: string | null;
   manifestCapabilityId?: string | null;
@@ -179,13 +184,24 @@ function inferCapabilityId(params: {
   return params.manifestCapabilityId;
 }
 
-function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean): string[] {
+function buildAnalysisSteps(capabilityId: string, hasSymbols: boolean, instruction: string): string[] {
   const common = [
     hasSymbols ? '确认输入标的并标准化证券代码。' : '使用 quant-symbol-resolver 解析用户问题中的证券名称或代码。',
     '查询 quant-data-registry，确认本地数据能力可用。',
   ];
 
   if (capabilityId === 'asset_comparison') {
+    if (!hasSymbols && isBroadStockScreenerInstruction(instruction)) {
+      return [
+        '调用本地 /api/v1/research/screeners/a-share/short-term-candidates 获取全 A 短线候选。',
+        '把候选结果中的前排股票作为本次分析 symbols，并记录候选评分、信号和数据缺口。',
+        '逐只获取实时行情、历史 K 线和可用的财务/指标数据。',
+        '标准化收益、波动、回撤、成交额、换手率和相对强弱口径。',
+        '检查每个标的数据质量并写入 evidence/sources.json 与 evidence/data_quality.json。',
+        '生成包含 screener、assets[]、comparison 和 selectionRanking 的最终数据文件。',
+        '生成选股排名看板并验证候选覆盖率、排名依据、图表和数据信源渠道。',
+      ];
+    }
     return [
       ...common,
       '逐只获取实时行情、历史 K 线和可用的财务/指标数据。',
@@ -363,7 +379,7 @@ export async function writeInitialRunPlan(params: {
         ]
       : [
           ...plannedCapabilityNotice(capability.id, executionCapability.id),
-          ...buildAnalysisSteps(capability.id, symbols.length > 0),
+          ...buildAnalysisSteps(capability.id, symbols.length > 0, params.instruction),
         ],
     visualization: {
       required:

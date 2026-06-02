@@ -708,6 +708,74 @@ class SectorCapitalFlowResponse(BaseModel):
         return self
 
 
+ScreenerMode = Literal["short_term", "limit_up_relay", "trend_liquidity"]
+
+
+class AShareScreenerCandidate(BaseModel):
+    symbol: str
+    code: str
+    name: str | None = None
+    exchange: MarketCode = "UNKNOWN"
+    sector_tags: list[str] = Field(default_factory=list)
+    trade_date: date
+    close: Decimal | None = None
+    open: Decimal | None = None
+    high: Decimal | None = None
+    low: Decimal | None = None
+    previous_close: Decimal | None = None
+    change_percent: Decimal | None = None
+    amount: Decimal | None = None
+    turnover: Decimal | None = None
+    ma5: Decimal | None = None
+    ma10: Decimal | None = None
+    ma20: Decimal | None = None
+    ma30: Decimal | None = None
+    ma60: Decimal | None = None
+    strength_20d_pct: Decimal | None = None
+    amount_ratio_20d: Decimal | None = None
+    limit_up_count_4d: int = 0
+    limit_up_count_10d: int = 0
+    latest_limit_up_date: date | None = None
+    is_limit_up: bool | None = None
+    is_st: bool | None = None
+    sample_count: int = 0
+    score: Decimal | None = None
+    signals: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+
+
+class AShareScreenerResponse(BaseModel):
+    universe_id: str
+    mode: ScreenerMode = "short_term"
+    trade_date: date | None = None
+    timeframe: KlinePeriod | str = "daily"
+    adjustment: Adjustment | str = "qfq"
+    scanned_symbols: int = 0
+    total_candidates: int = 0
+    limit: int = 20
+    candidates: list[AShareScreenerCandidate] = Field(default_factory=list)
+    data_basis: str = "timescaledb.stock_bars"
+    source: str = "quantpilot-market-api"
+    notes: list[str] = Field(default_factory=list)
+    cache_status: CacheStatus = "bypass"
+    cache_ttl_seconds: int | None = None
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    data_quality: DataQuality = Field(default_factory=DataQuality)
+
+    @model_validator(mode="after")
+    def fill_contract_fields(self) -> Self:
+        self.total_candidates = len(self.candidates)
+        if not self.candidates:
+            self.data_quality = _merge_data_quality(
+                self.data_quality,
+                missing_fields=["candidates"],
+                warnings=["本地筛选接口未返回候选股票，可能是条件过严或最新交易日覆盖不足。"],
+                status="warning",
+            )
+        return self
+
+
 class LocalKlineBar(BaseModel):
     ts: datetime
     open: Decimal
@@ -786,7 +854,10 @@ class HistoryIngestionRequest(BaseModel):
     adjustment: Adjustment = Field(default="qfq", description="复权方式")
     limit: int = Field(default=1260, ge=1, le=20000, description="每只证券最多拉取条数")
     lookback_years: int = Field(default=5, ge=1, le=30, description="本地保留的最近年份数")
-    start: str | None = Field(default=None, description="自定义补数开始日期，支持 YYYY-MM-DD 或 YYYYMMDD。")
+    start: str | None = Field(
+        default=None,
+        description="自定义补数开始日期，支持 YYYY-MM-DD 或 YYYYMMDD。",
+    )
     end: str = Field(default="20500101", description="东方财富 end 参数，默认远期代表取最新")
     allow_fallback: bool = Field(
         default=False,
@@ -803,6 +874,13 @@ class HistoryIngestionRequest(BaseModel):
         ge=1,
         le=10,
         description="每段 K 线请求失败后的低频重试次数。",
+    )
+    include_valuation_factors: bool = Field(
+        default=False,
+        description=(
+            "是否把 pe_ttm/pb_mrq/ps_ttm/pcf_ncf_ttm 估值因子纳入补数完整性契约；"
+            "默认关闭，避免增量 K 线补数因为估值因子缺口而重复拉取已存在行情。"
+        ),
     )
 
 

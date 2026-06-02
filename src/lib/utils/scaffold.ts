@@ -1073,6 +1073,10 @@ function getConclusion(data: JsonRecord | null): string[] {
   return asArray(conclusion?.summary).map(String).filter(Boolean);
 }
 
+function getTradingPlanRows(data: JsonRecord | null): JsonRecord[] {
+  return getRowsFrom(data, 'tradingPlan');
+}
+
 function pickMetric(row: JsonRecord, fields: string[]): number | null {
   for (const field of fields) {
     const value = numeric(row[field]);
@@ -1101,6 +1105,54 @@ function RankingPanel({ rows }: { rows: JsonRecord[] }) {
             </div>
             <em>{formatNumber(row.score ?? row.composite_score, 0)}</em>
             <p>{String(row.reason ?? row.ranking_reason ?? row.exclusion_reason ?? '等待更多指标确认。')}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function priceRange(low: unknown, high: unknown): string {
+  const left = numeric(low);
+  const right = numeric(high);
+  if (left === null || right === null) {
+    return '-';
+  }
+  return formatNumber(left) + ' - ' + formatNumber(right);
+}
+
+function TradingPlanPanel({ rows }: { rows: JsonRecord[] }) {
+  if (rows.length === 0) {
+    return null;
+  }
+  return (
+    <section className="selection-panel trading-plan-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>短线交易计划</h2>
+          <p>买入区间、止损、目标价和放弃条件按本地行情与均线结构估算</p>
+        </div>
+        <span>{rows.length} 项</span>
+      </div>
+      <div className="trading-plan-grid">
+        {rows.map((row, index) => (
+          <article key={String(row.symbol ?? index)} className="trade-card">
+            <div className="trade-title">
+              <div>
+                <strong>{String(row.name ?? row.symbol ?? '-')}</strong>
+                <small>{String(row.symbol ?? '-')} · {String(row.timeframe ?? '1-3 个交易日')}</small>
+              </div>
+              <em>{String(row.entry_style ?? '回踩承接')}</em>
+            </div>
+            <dl>
+              <div><dt>当前价</dt><dd>{formatNumber(row.current_price)}</dd></div>
+              <div><dt>买入区间</dt><dd>{priceRange(row.buy_zone_low, row.buy_zone_high)}</dd></div>
+              <div><dt>止损</dt><dd className="down">{formatNumber(row.stop_loss)}</dd></div>
+              <div><dt>目标价</dt><dd className="up">{formatNumber(row.target_price_1)} / {formatNumber(row.target_price_2)}</dd></div>
+              <div><dt>仓位上限</dt><dd>{formatPercent(row.position_limit_pct)}</dd></div>
+            </dl>
+            <p className="trade-rationale">{String(row.rationale ?? '等待更多数据确认。')}</p>
+            <p className="trade-abandon"><strong>放弃条件：</strong>{String(row.abandon_condition ?? '触发风险约束时放弃。')}</p>
           </article>
         ))}
       </div>
@@ -1340,6 +1392,7 @@ export default async function Home() {
   const rows = getComparisonRows(data);
   const rankingRows = getRowsFrom(data, 'selectionRanking');
   const financialRows = getRowsFrom(data, 'financialQuality');
+  const tradingRows = getTradingPlanRows(data);
   const conclusion = getConclusion(data);
   const leaders = asRecord(asRecord(data?.comparison)?.leaders);
   const requestedSymbols = asArray(data?.requestedSymbols ?? data?.symbols).map(String);
@@ -1368,6 +1421,7 @@ export default async function Home() {
       </section>
 
       <ComparisonTable rows={rows} />
+      <TradingPlanPanel rows={tradingRows} />
 
       <section className="chart-grid core-chart-grid">
         <BarCompare rows={rows} fields={['return_120d_pct', 'period_return', 'return_120d', 'period_return_pct']} title="收益对比主图" subtitle="统一样本窗口下的阶段收益" />
@@ -1865,6 +1919,83 @@ function stockSelectionCss() {
   gap: 10px;
 }
 
+.trading-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.trade-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
+.trade-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.trade-title strong,
+.trade-title small,
+.trade-title em {
+  display: block;
+}
+
+.trade-title small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.trade-title em {
+  flex-shrink: 0;
+  max-width: 130px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  text-align: right;
+}
+
+.trade-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.trade-card dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.trade-card dd {
+  margin: 3px 0 0;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.trade-card dl div:nth-child(2),
+.trade-card dl div:nth-child(4) {
+  grid-column: span 2;
+}
+
+.trade-rationale,
+.trade-abandon {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.trade-abandon strong {
+  color: var(--ink);
+}
+
 .ranking-row {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) 64px;
@@ -2080,14 +2211,16 @@ td small {
 
   .asset-grid,
   .chart-grid,
-  .main-grid {
+  .main-grid,
+  .trading-plan-grid {
     grid-template-columns: 1fr;
   }
 
   .summary-grid > *,
   .asset-grid > *,
   .chart-grid > *,
-  .main-grid > * {
+  .main-grid > *,
+  .trading-plan-grid > * {
     min-width: 0;
   }
 
@@ -2984,6 +3117,7 @@ async function ensureComparisonDashboardTemplate(projectPath: string) {
 }
 
 export async function ensureQuantDashboardTemplate(projectPath: string) {
+  await scaffoldBasicNextApp(projectPath, path.basename(projectPath));
   await ensureComparisonDashboardTemplate(projectPath);
 }
 

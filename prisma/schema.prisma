@@ -37,7 +37,7 @@ model Project {
 
   // CLI Preferences
   preferredCli  String? @map("preferred_cli") // claude, cursor, codex, gemini, qwen
-  selectedModel String? @map("selected_model") // 前端选择的模型 ID，例如 MiniMax-M2.7
+  selectedModel String? @map("selected_model") // 前端选择的模型 ID，例如 mimo-v2.5-pro
   fallbackEnabled Boolean @default(false) @map("fallback_enabled")
 
   // Settings (JSON)

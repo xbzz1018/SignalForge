@@ -247,6 +247,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
       'quant-visualization-html',
     ],
     dataEndpoints: [
+      'GET /api/v1/research/screeners/a-share/short-term-candidates',
       'GET /api/v1/symbols/resolve',
       'GET /api/v1/quotes/realtime/{symbol}',
       'GET /api/v1/quotes/history/{symbol}',
@@ -329,6 +330,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
       'quant-visualization-html',
     ],
     dataEndpoints: [
+      'GET /api/v1/research/screeners/a-share/short-term-candidates',
       'GET /api/v1/symbols/resolve',
       'GET /api/v1/quotes/history/{symbol}',
       'GET /api/v1/indicators/technical/{symbol}',

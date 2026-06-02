@@ -14,6 +14,7 @@ import {
   getStrategySymbolDividends,
   getStrategyUniverseMembersPage,
   ingestStrategyUniverseHistoryBatch,
+  runStrategyScreener,
   runStrategyDataQualityScan,
   runStrategyParameterScan,
   startStrategyUniverseHistoryAutoFill,
@@ -138,6 +139,19 @@ export async function POST(request: NextRequest) {
         })
       );
     }
+    if (body.action === 'a-share-screener') {
+      const mode = typeof body.mode === 'string' ? body.mode : undefined;
+      return createSuccessResponse(
+        await runStrategyScreener({
+          universeId: typeof body.universeId === 'string' ? body.universeId : undefined,
+          tradeDate: typeof body.tradeDate === 'string' ? body.tradeDate : undefined,
+          mode: mode === 'limit_up_relay' || mode === 'trend_liquidity' || mode === 'short_term'
+            ? mode
+            : undefined,
+          limit: typeof body.limit === 'number' ? body.limit : undefined,
+        })
+      );
+    }
     if (body.action === 'data-quality-scan') {
       return createSuccessResponse(
         await runStrategyDataQualityScan({
@@ -165,6 +179,8 @@ export async function POST(request: NextRequest) {
           end: typeof body.end === 'string' ? body.end : undefined,
           period: typeof body.period === 'string' ? body.period : undefined,
           adjustment: typeof body.adjustment === 'string' ? body.adjustment : undefined,
+          includeValuationFactors:
+            body.includeValuationFactors === true || body.include_valuation_factors === true,
         }),
         201
       );
@@ -182,6 +198,8 @@ export async function POST(request: NextRequest) {
           period: typeof body.period === 'string' ? body.period : undefined,
           adjustment: typeof body.adjustment === 'string' ? body.adjustment : undefined,
           maxBatches: typeof body.maxBatches === 'number' ? body.maxBatches : undefined,
+          includeValuationFactors:
+            body.includeValuationFactors === true || body.include_valuation_factors === true,
         }),
         201
       );
