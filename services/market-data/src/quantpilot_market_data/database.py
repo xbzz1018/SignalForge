@@ -3149,6 +3149,9 @@ async def get_history_ingestion_preflight(
                     max(ts) AS benchmark_last_ts
                   FROM benchmark_dates
                 ),
+                requested_range AS (
+                  SELECT %s::TIMESTAMPTZ AS requested_end_ts
+                ),
                 bar_summary AS (
                   SELECT
                     bars.symbol,
@@ -3208,7 +3211,10 @@ async def get_history_ingestion_preflight(
                   target_symbols.symbol,
                   bar_summary.first_ts,
                   bar_summary.last_ts,
-                  benchmark_summary.benchmark_last_ts,
+                  GREATEST(
+                    benchmark_summary.benchmark_last_ts,
+                    requested_range.requested_end_ts
+                  ) AS benchmark_last_ts,
                   COALESCE(bar_summary.row_count, 0) AS row_count,
                   COALESCE(bar_summary.rows_since_cutoff, 0) AS rows_since_cutoff,
                   COALESCE(
@@ -3225,6 +3231,7 @@ async def get_history_ingestion_preflight(
                   COALESCE(factor_summary.pcf_ncf_ttm_count, 0) AS pcf_ncf_ttm_count
                 FROM target_symbols
                 CROSS JOIN benchmark_summary
+                CROSS JOIN requested_range
                 LEFT JOIN bar_summary
                   ON bar_summary.symbol = target_symbols.symbol
                 LEFT JOIN factor_summary
@@ -3235,6 +3242,7 @@ async def get_history_ingestion_preflight(
                 timeframe,
                 adjustment,
                 cutoff,
+                end_cutoff,
                 end_cutoff,
                 end_cutoff,
                 cutoff,
