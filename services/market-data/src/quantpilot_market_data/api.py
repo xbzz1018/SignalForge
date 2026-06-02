@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time as dt_time, timedelta
 from decimal import Decimal
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from quantpilot_market_data.backtest import build_ma_crossover_backtest, build_strategy_backtest
-from quantpilot_market_data.cache import MarketDataCache, ttl_from_env
+from quantpilot_market_data.cache import MarketDataCache, RedisJsonCache, ttl_from_env
 from quantpilot_market_data.database import (
     DatabaseError,
     add_securities_to_universe,
@@ -56,6 +56,7 @@ from quantpilot_market_data.models import (
     ETFUniverseBatchImportRequest,
     ETFUniverseBatchImportResponse,
     FactorDefinitionResponse,
+    FetchMetadata,
     FinancialReportsResponse,
     FoundationStatusResponse,
     FundamentalIndicatorsResponse,
@@ -100,6 +101,9 @@ SYMBOL_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_SYMBOL_CACHE_TTL_SECONDS", 8
 KLINE_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_KLINE_CACHE_TTL_SECONDS", 1800)
 FINANCIAL_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_FINANCIAL_CACHE_TTL_SECONDS", 21600)
 ANNOUNCEMENT_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_ANNOUNCEMENT_CACHE_TTL_SECONDS", 600)
+CN_TZ = ZoneInfo("Asia/Shanghai")
+INTRADAY_CACHE_EXPIRE_HOUR = 9
+INTRADAY_PERIODS = {"minute1", "minute5", "minute15", "minute30", "minute60"}
 
 DATA_PROVIDERS = [
     DataProviderInfo(
@@ -138,6 +142,22 @@ DATA_PROVIDERS = [
         limitations=[
             "实时行情、分红和公告接口可用；历史 K 线 push2his 当前在本机不可达。",
             "历史入库默认严格东方财富，不会静默回落到腾讯，避免成交额和换手率缺失被误判。",
+        ],
+    ),
+    DataProviderInfo(
+        id="eastmoney-intraday-redis",
+        name="东方财富分时行情 Redis 缓存",
+        category="market-data",
+        status="available",
+        description=(
+            "按需拉取 A 股 1/5/15/30/60 分钟分时行情，不写入 TimescaleDB；"
+            "命中 Redis 直接返回，未命中直连东方财富，缓存到次日 09:00（Asia/Shanghai）。"
+        ),
+        endpoints=["/api/v1/quotes/history/{symbol}?period=minute1&adjustment=none"],
+        cache_ttl_seconds=None,
+        limitations=[
+            "分时数据用于盘中看盘和即时分析，不参与长期历史回测入库。",
+            "Redis 不可用时会降级为直连东方财富，返回数据但不保留临时缓存。",
         ],
     ),
     DataProviderInfo(
@@ -756,6 +776,96 @@ def strategy_backtest_parameters(request: Request) -> dict[str, str]:
     }
 
 
+def is_intraday_period(period: KlinePeriod | str) -> bool:
+    return str(period) in INTRADAY_PERIODS
+
+
+def intraday_cache_date(now: datetime | None = None) -> date:
+    current = (now or datetime.now(CN_TZ)).astimezone(CN_TZ)
+    if current.time() < dt_time(hour=INTRADAY_CACHE_EXPIRE_HOUR):
+        return current.date() - timedelta(days=1)
+    return current.date()
+
+
+def intraday_cache_expires_at(cache_date: date) -> datetime:
+    return datetime.combine(
+        cache_date + timedelta(days=1),
+        dt_time(hour=INTRADAY_CACHE_EXPIRE_HOUR),
+        tzinfo=CN_TZ,
+    )
+
+
+def intraday_cache_ttl_seconds(cache_date: date, now: datetime | None = None) -> int:
+    current = (now or datetime.now(CN_TZ)).astimezone(CN_TZ)
+    expires_at = intraday_cache_expires_at(cache_date)
+    return max(1, int((expires_at - current).total_seconds()))
+
+
+def intraday_redis_cache_key(
+    *,
+    symbol: str,
+    period: KlinePeriod | str,
+    cache_date: date,
+    limit: int,
+) -> str:
+    normalized_symbol = symbol.strip().upper()
+    return f"intraday:eastmoney:{normalized_symbol}:{period}:{cache_date.isoformat()}:limit:{limit}"
+
+
+def with_intraday_fetch_metadata(
+    response: KlineResponse,
+    *,
+    status: str,
+    cache_key: str,
+    ttl_seconds: int,
+    cached_at: datetime | None = None,
+    expires_at: datetime | None = None,
+) -> KlineResponse:
+    cached_at = cached_at or datetime.now(UTC)
+    expires_at = expires_at or (cached_at + timedelta(seconds=ttl_seconds))
+    return response.model_copy(
+        update={
+            "fetch": FetchMetadata(
+                cache_status=status,  # type: ignore[arg-type]
+                cache_key=cache_key,
+                cache_ttl_seconds=ttl_seconds,
+                cached_at=cached_at,
+                expires_at=expires_at,
+            )
+        }
+    )
+
+
+async def fetch_intraday_kline_with_retry(
+    client: EastMoneyClient,
+    *,
+    symbol: str,
+    period: KlinePeriod,
+    adjustment: Adjustment,
+    limit: int,
+    end: str,
+    attempts: int = 3,
+) -> KlineResponse:
+    last_error: EastMoneyError | None = None
+    for attempt in range(max(1, attempts)):
+        try:
+            return await client.get_kline(
+                symbol,
+                period=period,
+                adjustment=adjustment,
+                limit=limit,
+                end=end,
+            )
+        except EastMoneyError as error:
+            last_error = error
+            if attempt >= attempts - 1:
+                break
+            await asyncio.sleep(0.35 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+    raise EastMoneyError("东方财富分时 K 线请求失败")
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="QuantPilot Market Data API",
@@ -773,6 +883,7 @@ def create_app() -> FastAPI:
     akshare_client = AkShareClient()
     baostock_client = BaoStockClient()
     cache = MarketDataCache()
+    intraday_redis_cache = RedisJsonCache()
     auto_fill_tasks: set[asyncio.Task[None]] = set()
 
     @app.get("/health")
@@ -2491,8 +2602,88 @@ def create_app() -> FastAPI:
         adjustment: Adjustment = "qfq",
         limit: int = 120,
         end: str = "20500101",
+        refresh: bool = False,
     ) -> KlineResponse:
         normalized_limit = max(1, min(limit, 1000))
+        if is_intraday_period(period):
+            effective_adjustment: Adjustment = "none"
+            cache_date = intraday_cache_date()
+            cache_key = intraday_redis_cache_key(
+                symbol=symbol,
+                period=period,
+                cache_date=cache_date,
+                limit=normalized_limit,
+            )
+            ttl_seconds = intraday_cache_ttl_seconds(cache_date)
+            expires_at = intraday_cache_expires_at(cache_date).astimezone(UTC)
+            try:
+                cached_payload = await intraday_redis_cache.read(cache_key)
+                if cached_payload is not None and not refresh:
+                    cached_response = KlineResponse.model_validate(cached_payload)
+                    return cached_response.model_copy(
+                        update={
+                            "fetch": cached_response.fetch.model_copy(
+                                update={
+                                    "cache_status": "redis-hit",
+                                    "cache_key": cache_key,
+                                    "cache_ttl_seconds": ttl_seconds,
+                                    "expires_at": cached_response.fetch.expires_at or expires_at,
+                                }
+                            )
+                        }
+                    )
+
+                try:
+                    response = await fetch_intraday_kline_with_retry(
+                        client,
+                        symbol=symbol,
+                        period=period,
+                        adjustment=effective_adjustment,
+                        limit=normalized_limit,
+                        end=end,
+                    )
+                except EastMoneyError:
+                    if cached_payload is not None:
+                        cached_response = KlineResponse.model_validate(cached_payload)
+                        return cached_response.model_copy(
+                            update={
+                                "fetch": cached_response.fetch.model_copy(
+                                    update={
+                                        "cache_status": "redis-hit",
+                                        "cache_key": cache_key,
+                                        "cache_ttl_seconds": ttl_seconds,
+                                        "expires_at": cached_response.fetch.expires_at or expires_at,
+                                    }
+                                )
+                            }
+                        )
+                    raise
+                response_with_metadata = with_intraday_fetch_metadata(
+                    response,
+                    status="miss",
+                    cache_key=cache_key,
+                    ttl_seconds=ttl_seconds,
+                    expires_at=expires_at,
+                )
+                written = await intraday_redis_cache.write(
+                    cache_key,
+                    ttl_seconds=ttl_seconds,
+                    payload=response_with_metadata.model_dump(mode="json"),
+                )
+                if written:
+                    return response_with_metadata
+                return with_intraday_fetch_metadata(
+                    response,
+                    status="disabled",
+                    cache_key=cache_key,
+                    ttl_seconds=ttl_seconds,
+                    expires_at=expires_at,
+                )
+            except ValueError as error:
+                raise HTTPException(status_code=400, detail=str(error)) from error
+            except EastMoneyError as error:
+                raise HTTPException(status_code=502, detail=str(error)) from error
+
         cache_key = cache.build_key(
             "quote-history",
             {

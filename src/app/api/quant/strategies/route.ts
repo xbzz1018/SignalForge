@@ -7,6 +7,8 @@ import {
   enqueueStrategyParameterScan,
   getStrategyDashboardData,
   getStrategyIngestionJobs,
+  getStrategyIntradayBars,
+  getStrategyRealtimeQuote,
   getStrategySectorCapitalFlow,
   getStrategySymbolBars,
   getStrategySymbolDividends,
@@ -85,6 +87,23 @@ export async function POST(request: NextRequest) {
         await getStrategySymbolDividends({
           symbol: String(body.symbol ?? ''),
           limit: typeof body.limit === 'number' ? body.limit : undefined,
+        })
+      );
+    }
+    if (body.action === 'realtime-quote') {
+      return createSuccessResponse(
+        await getStrategyRealtimeQuote({
+          symbol: String(body.symbol ?? ''),
+        })
+      );
+    }
+    if (body.action === 'intraday-bars') {
+      return createSuccessResponse(
+        await getStrategyIntradayBars({
+          symbol: String(body.symbol ?? ''),
+          period: typeof body.period === 'string' ? body.period : undefined,
+          limit: typeof body.limit === 'number' ? body.limit : undefined,
+          refresh: body.refresh === true || body.forceRefresh === true,
         })
       );
     }

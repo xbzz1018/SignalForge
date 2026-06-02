@@ -361,6 +361,36 @@ export interface StrategyLocalKlineResponse {
   fetchedAt: string;
 }
 
+export interface StrategyRealtimeQuote {
+  symbol: string;
+  secid?: string | null;
+  name?: string | null;
+  assetType: string;
+  market: string;
+  source: string;
+  currency: string;
+  timezone: string;
+  price?: number | null;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  previousClose?: number | null;
+  changePercent?: number | null;
+  changeAmount?: number | null;
+  amplitude?: number | null;
+  turnover?: number | null;
+  volume?: number | null;
+  amount?: number | null;
+  marketCap?: number | null;
+  floatMarketCap?: number | null;
+  quoteTime?: string | null;
+  asOf?: string | null;
+  fetchedAt: string;
+  cacheStatus?: string | null;
+  cacheTtlSeconds?: number | null;
+  dataQualityStatus?: string | null;
+}
+
 export interface StrategyIngestionPlan {
   provider: string;
   universeId: string;
@@ -2512,7 +2542,7 @@ function mapLocalKlineBar(value: unknown): StrategyLocalKlineBar {
   const record = asRecord(value);
   const metadata = asRecord(record.metadata);
   return {
-    ts: asString(record.ts),
+    ts: asString(record.ts, asString(record.date)),
     open: asNumber(record.open) ?? 0,
     high: asNumber(record.high) ?? 0,
     low: asNumber(record.low) ?? 0,
@@ -2528,7 +2558,7 @@ function mapLocalKlineBar(value: unknown): StrategyLocalKlineBar {
     isSt: asBoolean(record.is_st),
     limitUp: asBoolean(record.limit_up),
     limitDown: asBoolean(record.limit_down),
-    provider: asString(record.provider, 'unknown'),
+    provider: asString(record.provider, asString(record.source, asString(metadata.source, 'unknown'))),
     metadata: Object.keys(metadata).length ? metadata : undefined,
   };
 }
@@ -2669,33 +2699,78 @@ function mapLocalKlineResponse(value: unknown): StrategyLocalKlineResponse {
   const record = asRecord(value);
   const summary = asRecord(record.summary);
   const bars = Array.isArray(record.bars) ? record.bars.map(mapLocalKlineBar) : [];
+  const firstBar = bars[0] ?? null;
+  const latestBar = bars.at(-1) ?? null;
+  const previousBar = bars.at(-2) ?? null;
+  const timeframe = asString(record.timeframe, asString(record.period, 'daily'));
+  const isIntraday = timeframe.startsWith('minute');
+  const previousClose = asNumber(summary.previous_close) ??
+    latestBar?.previousClose ??
+    (isIntraday ? null : previousBar?.close ?? null);
+  const amountValues = bars.map((bar) => bar.amount).filter((value): value is number => typeof value === 'number');
   return {
     symbol: asString(record.symbol),
     code: typeof record.code === 'string' ? record.code : null,
     name: typeof record.name === 'string' ? record.name : null,
-    exchange: asString(record.exchange, 'UNKNOWN'),
+    exchange: asString(record.exchange, asString(record.market, 'UNKNOWN')),
     assetType: asString(record.asset_type, 'stock'),
     currency: asString(record.currency, 'CNY'),
     timezone: asString(record.timezone, 'Asia/Shanghai'),
     secid: typeof record.secid === 'string' ? record.secid : null,
-    provider: typeof record.provider === 'string' ? record.provider : null,
-    dataProvider: bars.at(-1)?.provider ?? null,
-    timeframe: asString(record.timeframe, 'daily'),
+    provider: typeof record.provider === 'string' ? record.provider : asString(record.source, '') || null,
+    dataProvider: latestBar?.provider ?? null,
+    timeframe,
     adjustment: asString(record.adjustment, 'qfq'),
     bars,
     summary: {
       rowCount: asNumber(summary.row_count) ?? bars.length,
-      firstTs: typeof summary.first_ts === 'string' ? summary.first_ts : null,
-      lastTs: typeof summary.last_ts === 'string' ? summary.last_ts : null,
-      latestClose: asNumber(summary.latest_close),
-      previousClose: asNumber(summary.previous_close),
-      returnPct: asNumber(summary.return_pct),
-      high: asNumber(summary.high),
-      low: asNumber(summary.low),
-      totalVolume: asNumber(summary.total_volume),
-      totalAmount: asNumber(summary.total_amount),
+      firstTs: typeof summary.first_ts === 'string' ? summary.first_ts : firstBar?.ts ?? null,
+      lastTs: typeof summary.last_ts === 'string' ? summary.last_ts : latestBar?.ts ?? null,
+      latestClose: asNumber(summary.latest_close) ?? latestBar?.close ?? null,
+      previousClose,
+      returnPct: asNumber(summary.return_pct) ??
+        (latestBar && previousClose && previousClose !== 0 ? ((latestBar.close - previousClose) / previousClose) * 100 : null),
+      high: asNumber(summary.high) ?? (bars.length ? Math.max(...bars.map((bar) => bar.high)) : null),
+      low: asNumber(summary.low) ?? (bars.length ? Math.min(...bars.map((bar) => bar.low)) : null),
+      totalVolume: asNumber(summary.total_volume) ?? bars.reduce((sum, bar) => sum + bar.volume, 0),
+      totalAmount: asNumber(summary.total_amount) ?? (amountValues.length ? amountValues.reduce((sum, value) => sum + value, 0) : null),
     },
     fetchedAt: asString(record.fetched_at, new Date().toISOString()),
+  };
+}
+
+function mapRealtimeQuote(value: unknown): StrategyRealtimeQuote {
+  const record = asRecord(value);
+  const fetchInfo = asRecord(record.fetch);
+  const dataQuality = asRecord(record.data_quality);
+  return {
+    symbol: asString(record.symbol),
+    secid: typeof record.secid === 'string' ? record.secid : null,
+    name: typeof record.name === 'string' ? record.name : null,
+    assetType: asString(record.asset_type, 'stock'),
+    market: asString(record.market, 'UNKNOWN'),
+    source: asString(record.source, 'unknown'),
+    currency: asString(record.currency, 'CNY'),
+    timezone: asString(record.timezone, 'Asia/Shanghai'),
+    price: asNumber(record.price),
+    open: asNumber(record.open),
+    high: asNumber(record.high),
+    low: asNumber(record.low),
+    previousClose: asNumber(record.previous_close),
+    changePercent: asNumber(record.change_percent),
+    changeAmount: asNumber(record.change_amount),
+    amplitude: asNumber(record.amplitude),
+    turnover: asNumber(record.turnover),
+    volume: asNumber(record.volume),
+    amount: asNumber(record.amount),
+    marketCap: asNumber(record.market_cap),
+    floatMarketCap: asNumber(record.float_market_cap),
+    quoteTime: typeof record.quote_time === 'string' ? record.quote_time : null,
+    asOf: typeof record.as_of === 'string' ? record.as_of : null,
+    fetchedAt: asString(record.fetched_at, new Date().toISOString()),
+    cacheStatus: typeof fetchInfo.cache_status === 'string' ? fetchInfo.cache_status : null,
+    cacheTtlSeconds: asNumber(fetchInfo.cache_ttl_seconds),
+    dataQualityStatus: typeof dataQuality.status === 'string' ? dataQuality.status : null,
   };
 }
 
@@ -3339,6 +3414,43 @@ export async function getStrategySymbolDividends(params: {
     throw new Error(`market API ${response.status}: ${text.slice(0, 200)}`);
   }
   return mapDividendEventsResponse(await response.json());
+}
+
+export async function getStrategyRealtimeQuote(params: {
+  symbol: string;
+}): Promise<StrategyRealtimeQuote> {
+  const symbol = params.symbol.trim();
+  if (!symbol) throw new Error('缺少实时行情标的');
+  const payload = await fetchMarketApiJson<unknown>(
+    `/api/v1/quotes/realtime/${encodeURIComponent(symbol)}`
+  );
+  return mapRealtimeQuote(payload);
+}
+
+export async function getStrategyIntradayBars(params: {
+  symbol: string;
+  period?: string;
+  limit?: number;
+  refresh?: boolean;
+}): Promise<StrategyLocalKlineResponse> {
+  const symbol = params.symbol.trim();
+  if (!symbol) throw new Error('缺少分时行情标的');
+  const period = params.period || 'minute1';
+  if (!['minute1', 'minute5', 'minute15', 'minute30', 'minute60'].includes(period)) {
+    throw new Error(`不支持的分时周期：${period}`);
+  }
+  const query = new URLSearchParams({
+    period,
+    adjustment: 'none',
+    limit: String(Math.max(1, Math.min(params.limit ?? 241, 1000))),
+  });
+  if (params.refresh) {
+    query.set('refresh', 'true');
+  }
+  const payload = await fetchMarketApiJson<unknown>(
+    `/api/v1/quotes/history/${encodeURIComponent(symbol)}?${query.toString()}`
+  );
+  return mapLocalKlineResponse(payload);
 }
 
 export async function runStrategyParameterScan(params: {

@@ -46,6 +46,7 @@ import type {
   StrategyIngestionJob,
   StrategyLocalKlineBar,
   StrategyLocalKlineResponse,
+  StrategyRealtimeQuote,
   StrategySectorCapitalFlowDetail,
   StrategySectorCapitalFlowItem,
   StrategySectorCapitalFlowMarketSummary,
@@ -161,6 +162,22 @@ function formatDateTime(value?: string | null) {
   return `${partMap.year}-${partMap.month}-${partMap.day} ${partMap.hour}:${partMap.minute}:${partMap.second}`;
 }
 
+function formatIntradayTime(value?: string | null) {
+  if (!value) return "-";
+  const match = /(\d{2}):(\d{2})/.exec(value);
+  if (match) return `${match[1]}:${match[2]}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${partMap.hour}:${partMap.minute}`;
+}
+
 function todayInputValue() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
@@ -212,6 +229,12 @@ function formatNumberValue(value?: number | null, digits = 2) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+}
+
+function formatSignedNumberValue(value?: number | null, digits = 2) {
+  const number = finiteNumber(value);
+  if (number === null) return "-";
+  return `${number >= 0 ? "+" : ""}${formatNumberValue(number, digits)}`;
 }
 
 function formatLargeValue(value?: number | null, digits = 2) {
@@ -634,6 +657,7 @@ function StrategyRow({ strategy, onClick }: { strategy: StrategyCatalogItem; onC
 const UNIVERSE_PAGE_SIZE = 10;
 const DETAIL_ANIMATION_MS = 260;
 const KLINE_TIMEFRAMES = [
+  { id: "realtime", label: "实时" },
   { id: "daily", label: "日线" },
   { id: "weekly", label: "周线" },
   { id: "monthly", label: "月线" },
@@ -1511,19 +1535,17 @@ function UniverseView({
             </div>
           )}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1500px] text-left text-sm">
+            <table className="w-full min-w-[1300px] text-left text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
                   <th className="w-[9%] px-5 py-3 font-medium">标的名称</th>
                   <th className="w-[8%] px-3 py-3 font-medium">代码</th>
-                  <th className="w-[29%] px-3 py-3 font-medium">所属板块</th>
+                  <th className="w-[38%] px-3 py-3 font-medium">所属板块</th>
                   <th className="w-[9%] px-3 py-3 font-medium">行情</th>
                   <th className="w-[10%] px-3 py-3 font-medium">强弱</th>
                   <th className="w-[9%] px-3 py-3 font-medium">趋势</th>
                   <th className="w-[10%] px-3 py-3 font-medium">流动性</th>
-                  <th className="w-[8%] px-3 py-3 font-medium">估值</th>
-                  <th className="w-[6%] px-3 py-3 font-medium">状态</th>
-                  <th className="w-[12%] px-3 py-3 font-medium">数据覆盖</th>
+                  <th className="w-[7%] px-3 py-3 font-medium">估值</th>
                 </tr>
               </thead>
               <tbody>
@@ -1594,9 +1616,10 @@ function UniverseView({
                             <Badge variant="outline" className={trendClass(member.trendStatus)}>
                               {trendLabel(member.trendStatus)}
                             </Badge>
-                            <p className="text-xs tabular-nums text-slate-400">
-                              MA20 {formatNumberValue(member.ma20)} / MA60 {formatNumberValue(member.ma60)}
-                            </p>
+                            <div className="space-y-0.5 text-xs tabular-nums text-slate-400">
+                              <p>MA20 {formatNumberValue(member.ma20)}</p>
+                              <p>MA60 {formatNumberValue(member.ma60)}</p>
+                            </div>
                           </div>
                         </td>
                         <td className="px-3 py-3">
@@ -1608,20 +1631,10 @@ function UniverseView({
                         <td className="px-3 py-3">
                           <p className="text-xs font-semibold tabular-nums text-slate-700">{valuationSummary(member)}</p>
                         </td>
-                        <td className="px-3 py-3">
-                          <Badge variant="outline" className={tradeStatusClass(member)}>
-                            {tradeStatusLabel(member)}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-3">
-                          <p className="text-slate-700">
-                            {formatDataDate(member.firstTs)} 至 {formatDataDate(member.lastTs)}
-                          </p>
-                        </td>
                       </tr>
                       {shouldRenderDetail && (
                         <tr key={`${member.symbol}-detail`} className="border-t border-slate-100">
-                          <td colSpan={10} className="p-0">
+                          <td colSpan={8} className="p-0">
                             <div
                               className={cn(
                                 "grid transition-[grid-template-rows,opacity] duration-300 ease-out",
@@ -1648,7 +1661,7 @@ function UniverseView({
                 })}
                 {!pagedMembers.length && (
                   <tr className="border-t border-slate-100">
-                    <td colSpan={10} className="px-5 py-12 text-center text-sm text-slate-500">
+                    <td colSpan={8} className="px-5 py-12 text-center text-sm text-slate-500">
                       {isLoadingMembers ? "正在读取股票池..." : "没有匹配的股票"}
                     </td>
                   </tr>
@@ -1667,6 +1680,7 @@ function klineTimeframeLabel(value: string) {
 }
 
 function klineFetchLimit(timeframe: KlineTimeframe) {
+  if (timeframe === "realtime") return 0;
   if (timeframe === "daily") return 1260;
   if (timeframe === "weekly") return 260;
   return 120;
@@ -1674,6 +1688,7 @@ function klineFetchLimit(timeframe: KlineTimeframe) {
 
 const KLINE_DETAIL_CACHE_TTL_MS = 60 * 1000;
 const KLINE_DETAIL_CACHE_MAX = 96;
+const REALTIME_QUOTE_REFRESH_MS = 15 * 1000;
 const klineDetailCache = new Map<string, { data: StrategyLocalKlineResponse; expiresAt: number }>();
 const klineDetailPromises = new Map<string, Promise<StrategyLocalKlineResponse>>();
 const dividendEventsCache = new Map<string, { data: StrategyDividendEvent[]; expiresAt: number }>();
@@ -1769,7 +1784,7 @@ function klineAggregationKey(bar: StrategyLocalKlineBar, timeframe: KlineTimefra
 }
 
 function aggregateKlineBars(bars: StrategyLocalKlineBar[], timeframe: KlineTimeframe) {
-  if (timeframe === "daily") return bars;
+  if (timeframe === "daily" || timeframe === "realtime") return bars;
   const grouped = new Map<string, StrategyLocalKlineBar[]>();
   for (const bar of bars) {
     const key = klineAggregationKey(bar, timeframe);
@@ -1843,6 +1858,7 @@ function deriveKlineResponse(
   timeframe: KlineTimeframe,
   limit: number
 ): StrategyLocalKlineResponse {
+  if (timeframe === "realtime") return dailyDetail;
   if (timeframe === "daily") {
     const bars = dailyDetail.bars.slice(-limit).map((bar) => ({ ...bar, metadata: {} }));
     const windowSummary = buildKlineSummary(bars);
@@ -1952,6 +1968,44 @@ async function loadCachedDividendEvents(symbol: string) {
   } finally {
     dividendEventsPromises.delete(key);
   }
+}
+
+function strategyApiErrorMessage(payload: unknown, fallback: string) {
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const message = typeof record.message === "string" ? record.message.trim() : "";
+  const error = typeof record.error === "string" ? record.error.trim() : "";
+  return message || error || fallback;
+}
+
+async function fetchRealtimeQuote(symbol: string): Promise<StrategyRealtimeQuote> {
+  const response = await fetch(`${API_BASE}/api/quant/strategies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "realtime-quote",
+      symbol,
+    }),
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.success) throw new Error(strategyApiErrorMessage(payload, "读取实时行情失败"));
+  return payload.data as StrategyRealtimeQuote;
+}
+
+async function fetchIntradayBars(symbol: string, options?: { forceRefresh?: boolean }): Promise<StrategyLocalKlineResponse> {
+  const response = await fetch(`${API_BASE}/api/quant/strategies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "intraday-bars",
+      symbol,
+      period: "minute1",
+      limit: 260,
+      refresh: options?.forceRefresh === true,
+    }),
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.success) throw new Error(strategyApiErrorMessage(payload, "读取分时行情失败"));
+  return payload.data as StrategyLocalKlineResponse;
 }
 
 function resolveDividendMarkerIndex(
@@ -2397,6 +2451,341 @@ function KlineMiniChart({
   );
 }
 
+function IntradayTimeShareChart({
+  detail,
+  previousClose,
+}: {
+  detail: StrategyLocalKlineResponse;
+  previousClose?: number | null;
+}) {
+  const cleanBars = useMemo(
+    () => detail.bars.filter((bar) =>
+      [bar.open, bar.high, bar.low, bar.close, bar.volume].every(
+        (value) => typeof value === "number" && Number.isFinite(value)
+      )
+    ),
+    [detail.bars]
+  );
+  const points = useMemo(() => {
+    let cumulativeAmount = 0;
+    let cumulativeVolume = 0;
+    return cleanBars.map((bar) => {
+      const amount = finiteNumber(bar.amount);
+      if (amount !== null) cumulativeAmount += amount;
+      cumulativeVolume += bar.volume;
+      const averagePrice = cumulativeAmount > 0 && cumulativeVolume > 0
+        ? cumulativeAmount / (cumulativeVolume * 100)
+        : bar.close;
+      return { bar, averagePrice };
+    });
+  }, [cleanBars]);
+  const [selectedIndex, setSelectedIndex] = useState(Math.max(0, points.length - 1));
+  const [crosshairX, setCrosshairX] = useState<number | null>(null);
+  const resolvedSelectedIndex = clampNumber(selectedIndex, 0, Math.max(0, points.length - 1));
+  const selectedPoint = points[resolvedSelectedIndex] ?? points.at(-1) ?? null;
+  const baseline = finiteNumber(previousClose) ?? finiteNumber(detail.summary.previousClose) ?? points[0]?.bar.open ?? null;
+
+  useEffect(() => {
+    setSelectedIndex(Math.max(0, points.length - 1));
+    setCrosshairX(null);
+  }, [points.length]);
+
+  if (!points.length) {
+    return (
+      <div className="flex h-[320px] items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+        暂无可展示的分时数据
+      </div>
+    );
+  }
+
+  const width = 1320;
+  const height = 360;
+  const left = 66;
+  const right = 28;
+  const chartTop = 24;
+  const chartHeight = 215;
+  const volumeTop = 278;
+  const volumeHeight = 46;
+  const dateLabelY = height - 11;
+  const chartWidth = width - left - right;
+  const priceValues = [
+    ...points.flatMap((point) => [point.bar.high, point.bar.low, point.bar.close, point.averagePrice]),
+    ...(baseline !== null ? [baseline] : []),
+  ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const highest = Math.max(...priceValues);
+  const lowest = Math.min(...priceValues);
+  const padding = Math.max((highest - lowest) * 0.08, highest * 0.002, 0.02);
+  const priceHigh = highest + padding;
+  const priceLow = lowest - padding;
+  const priceRange = Math.max(priceHigh - priceLow, 0.01);
+  const maxVolume = Math.max(...points.map((point) => point.bar.volume), 1);
+  const step = points.length > 1 ? chartWidth / (points.length - 1) : chartWidth;
+  const barWidth = Math.max(2, Math.min(7, chartWidth / points.length * 0.55));
+  const priceY = (price: number) => chartTop + ((priceHigh - price) / priceRange) * chartHeight;
+  const pointX = (index: number) => left + index * step;
+  const buildPath = (values: number[]) =>
+    values.reduce((path, value, index) => {
+      const x = pointX(index);
+      const y = priceY(value);
+      return `${path}${path ? " L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+    }, "");
+  const pricePath = buildPath(points.map((point) => point.bar.close));
+  const averagePath = buildPath(points.map((point) => point.averagePrice));
+  const selectedPointX = pointX(resolvedSelectedIndex);
+  const selectedX = crosshairX ?? selectedPointX;
+  const selectedBar = selectedPoint?.bar ?? null;
+  const selectedAverage = selectedPoint?.averagePrice ?? null;
+  const selectedChangePct = selectedBar && baseline
+    ? ((selectedBar.close - baseline) / baseline) * 100
+    : selectedBar?.changePercent ?? null;
+  const selectedMetrics = selectedBar
+    ? [
+        { label: "时间", value: formatIntradayTime(selectedBar.ts) },
+        { label: "价格", value: formatNumberValue(selectedBar.close), className: signedToneClass(selectedChangePct) },
+        { label: "均价", value: formatNumberValue(selectedAverage), className: "text-amber-600" },
+        { label: "涨跌", value: formatSignedPercent(selectedChangePct), className: signedToneClass(selectedChangePct) },
+        { label: "成交量", value: formatLargeValue(selectedBar.volume, 0) },
+        { label: "成交额", value: formatLargeValue(selectedBar.amount, 1) },
+        { label: "换手", value: formatPercentValue(selectedBar.turnover) },
+      ]
+    : [];
+  const selectFromPointer = (event: PointerEvent<SVGSVGElement>) => {
+    const svg = event.currentTarget;
+    const screenMatrix = svg.getScreenCTM();
+    if (!screenMatrix) return;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const localPoint = point.matrixTransform(screenMatrix.inverse());
+    const localX = localPoint.x;
+    const nextX = clampNumber(localX, left, width - right);
+    const rawIndex = Math.round((nextX - left) / step);
+    setCrosshairX(nextX);
+    setSelectedIndex(clampNumber(rawIndex, 0, points.length - 1));
+  };
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+          <span>{formatIntradayTime(points[0]?.bar.ts)} 至 {formatIntradayTime(points.at(-1)?.bar.ts)}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-blue-600" />
+            分时价
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+            均价
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-slate-300" />
+            昨收 {formatNumberValue(baseline)}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedMetrics.map((item) => (
+            <div key={item.label} className="inline-flex items-baseline gap-1 rounded bg-slate-50 px-2 py-1">
+              <span className="text-xs text-slate-500">{item.label}</span>
+              <span className={cn("text-sm font-semibold tabular-nums text-slate-950", item.className)}>
+                {item.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-[360px] w-full touch-pan-y select-none"
+        role="img"
+        aria-label="分时行情图"
+        onPointerMove={selectFromPointer}
+        onPointerDown={selectFromPointer}
+        onPointerLeave={() => {
+          setSelectedIndex(Math.max(0, points.length - 1));
+          setCrosshairX(null);
+        }}
+      >
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+          const y = chartTop + ratio * chartHeight;
+          const price = priceHigh - ratio * priceRange;
+          const change = baseline ? ((price - baseline) / baseline) * 100 : null;
+          return (
+            <g key={ratio}>
+              <line x1={left} x2={width - right} y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="3 4" />
+              <text x={12} y={y + 5} className="fill-slate-400 text-[13px]">
+                {price.toFixed(2)}
+              </text>
+              <text x={width - right + 4} y={y + 5} className={cn("fill-current text-[12px]", signedToneClass(change))}>
+                {formatSignedPercent(change)}
+              </text>
+            </g>
+          );
+        })}
+        {baseline !== null && (
+          <line
+            x1={left}
+            x2={width - right}
+            y1={priceY(baseline)}
+            y2={priceY(baseline)}
+            stroke="#94a3b8"
+            strokeDasharray="5 5"
+            strokeWidth={1}
+          />
+        )}
+        <line x1={left} x2={width - right} y1={volumeTop - 10} y2={volumeTop - 10} stroke="#e2e8f0" />
+        {points.map((point, index) => {
+          const x = pointX(index);
+          const isUp = point.bar.close >= point.bar.open;
+          const volumeHeightPx = (point.bar.volume / maxVolume) * volumeHeight;
+          return (
+            <rect
+              key={`${point.bar.ts}-${index}-volume`}
+              x={x - barWidth / 2}
+              y={volumeTop + volumeHeight - volumeHeightPx}
+              width={barWidth}
+              height={Math.max(1, volumeHeightPx)}
+              fill={isUp ? "#fecdd3" : "#a7f3d0"}
+            />
+          );
+        })}
+        <path
+          d={pricePath}
+          fill="none"
+          stroke="#2563eb"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.8}
+        />
+        <path
+          d={averagePath}
+          fill="none"
+          stroke="#f59e0b"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.6}
+        />
+        {selectedBar && (
+          <g pointerEvents="none">
+            <line
+              x1={selectedX}
+              x2={selectedX}
+              y1={chartTop}
+              y2={volumeTop + volumeHeight}
+              stroke="#2563eb"
+              strokeDasharray="4 4"
+              strokeWidth={1.1}
+            />
+            <circle
+              cx={selectedPointX}
+              cy={priceY(selectedBar.close)}
+              r={4.5}
+              fill="#2563eb"
+              stroke="#ffffff"
+              strokeWidth={2}
+            />
+          </g>
+        )}
+        <text x={left} y={dateLabelY} className="fill-slate-500 text-[13px]">
+          {formatIntradayTime(points[0]?.bar.ts)}
+        </text>
+        <text x={width / 2} y={dateLabelY} textAnchor="middle" className="fill-slate-400 text-[13px]">
+          11:30 / 13:00
+        </text>
+        <text x={width - right} y={dateLabelY} textAnchor="end" className="fill-slate-500 text-[13px]">
+          {formatIntradayTime(points.at(-1)?.bar.ts)}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+function RealtimeQuotePanel({
+  quote,
+  member,
+  isRefreshing,
+  onRefresh,
+}: {
+  quote: StrategyRealtimeQuote;
+  member: StrategyUniverseMember;
+  isRefreshing: boolean;
+  onRefresh: () => void;
+}) {
+  const tone = signedToneClass(quote.changePercent);
+  const quoteTime = quote.quoteTime ?? quote.asOf ?? quote.fetchedAt;
+  const cards = [
+    { label: "最新价", value: formatNumberValue(quote.price), className: tone },
+    { label: "涨跌幅", value: formatSignedPercent(quote.changePercent), className: tone },
+    { label: "涨跌额", value: formatSignedNumberValue(quote.changeAmount), className: tone },
+    { label: "开盘", value: formatNumberValue(quote.open) },
+    { label: "最高", value: formatNumberValue(quote.high), className: "text-red-600" },
+    { label: "最低", value: formatNumberValue(quote.low), className: "text-emerald-600" },
+    { label: "前收", value: formatNumberValue(quote.previousClose) },
+    { label: "振幅", value: formatPercentValue(quote.amplitude) },
+    { label: "换手", value: formatPercentValue(quote.turnover) },
+    { label: "成交量", value: formatLargeValue(quote.volume, 1) },
+    { label: "成交额", value: formatLargeValue(quote.amount, 1) },
+    { label: "流通市值", value: formatLargeValue(quote.floatMarketCap, 1) },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+        <div>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <p className="text-base font-semibold text-slate-950">{quote.name ?? member.name ?? member.symbol}</p>
+            <span className="font-mono text-sm text-slate-500">{member.symbol}</span>
+            <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
+              {quote.source}
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            行情时间 {formatDateTime(quoteTime)} · {quote.market || member.exchange} · {quote.currency}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className="gap-2"
+        >
+          <RefreshCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+          刷新
+        </Button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {cards.map((card) => (
+          <div key={card.label} className="rounded-md border border-slate-100 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm text-slate-500">{card.label}</p>
+            <p className={cn("mt-1 text-xl font-semibold tabular-nums text-slate-950", card.className)}>
+              {card.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border border-slate-100 bg-white px-4 py-3">
+          <p className="text-sm text-slate-500">总市值</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-slate-950">{formatLargeValue(quote.marketCap, 1)}</p>
+        </div>
+        <div className="rounded-md border border-slate-100 bg-white px-4 py-3">
+          <p className="text-sm text-slate-500">数据质量</p>
+          <p className="mt-1 text-lg font-semibold text-slate-950">{quote.dataQualityStatus ?? "-"}</p>
+        </div>
+        <div className="rounded-md border border-slate-100 bg-white px-4 py-3">
+          <p className="text-sm text-slate-500">刷新状态</p>
+          <p className="mt-1 text-lg font-semibold text-slate-950">
+            {isRefreshing ? "刷新中" : `约 ${Math.round(REALTIME_QUOTE_REFRESH_MS / 1000)} 秒`}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StockKlineDetail({
   member,
   universe,
@@ -2410,13 +2799,74 @@ function StockKlineDetail({
   const adjustment = universe.defaultAdjustment || "qfq";
   const [detailTimeframe, setDetailTimeframe] = useState<KlineTimeframe>("daily");
   const [detail, setDetail] = useState<StrategyLocalKlineResponse | null>(null);
+  const [realtimeQuote, setRealtimeQuote] = useState<StrategyRealtimeQuote | null>(null);
+  const [intradayDetail, setIntradayDetail] = useState<StrategyLocalKlineResponse | null>(null);
   const [selectedBarTs, setSelectedBarTs] = useState<string | null>(null);
   const [dividendEvents, setDividendEvents] = useState<StrategyDividendEvent[]>([]);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isLoadingRealtime, setIsLoadingRealtime] = useState(false);
+  const [isLoadingIntraday, setIsLoadingIntraday] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [realtimeError, setRealtimeError] = useState<string | null>(null);
+  const [intradayError, setIntradayError] = useState<string | null>(null);
   const detailRequestIdRef = useRef(0);
+  const realtimeRequestIdRef = useRef(0);
+  const intradayRequestIdRef = useRef(0);
+
+  const loadRealtimeQuote = useCallback(async (options?: { silent?: boolean }) => {
+    const requestId = realtimeRequestIdRef.current + 1;
+    realtimeRequestIdRef.current = requestId;
+    setRealtimeError(null);
+    if (!options?.silent) {
+      setIsLoadingRealtime(true);
+    }
+    try {
+      const quote = await fetchRealtimeQuote(member.symbol);
+      if (realtimeRequestIdRef.current !== requestId) return;
+      setRealtimeQuote(quote);
+    } catch (error) {
+      if (realtimeRequestIdRef.current !== requestId) return;
+      setRealtimeError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (realtimeRequestIdRef.current === requestId) {
+        setIsLoadingRealtime(false);
+      }
+    }
+  }, [member.symbol]);
+
+  const loadIntradayDetail = useCallback(async (options?: { silent?: boolean; forceRefresh?: boolean }) => {
+    const requestId = intradayRequestIdRef.current + 1;
+    intradayRequestIdRef.current = requestId;
+    setIntradayError(null);
+    if (!options?.silent) {
+      setIsLoadingIntraday(true);
+    }
+    try {
+      const nextDetail = await fetchIntradayBars(member.symbol, { forceRefresh: options?.forceRefresh });
+      if (intradayRequestIdRef.current !== requestId) return;
+      setIntradayDetail(nextDetail);
+    } catch (error) {
+      if (intradayRequestIdRef.current !== requestId) return;
+      setIntradayError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (intradayRequestIdRef.current === requestId) {
+        setIsLoadingIntraday(false);
+      }
+    }
+  }, [member.symbol]);
+
+  const refreshRealtimeView = useCallback((options?: { silent?: boolean; forceRefresh?: boolean }) => {
+    void loadRealtimeQuote(options);
+    void loadIntradayDetail(options);
+  }, [loadIntradayDetail, loadRealtimeQuote]);
 
   const loadDetail = useCallback(async (timeframe: KlineTimeframe) => {
+    if (timeframe === "realtime") {
+      setDetailTimeframe("realtime");
+      setSelectedBarTs(null);
+      setDetailError(null);
+      return;
+    }
     const requestId = detailRequestIdRef.current + 1;
     detailRequestIdRef.current = requestId;
     setDetailTimeframe(timeframe);
@@ -2464,6 +2914,18 @@ function StockKlineDetail({
     void loadDividendEvents();
   }, [loadDividendEvents]);
 
+  useEffect(() => {
+    if (detailTimeframe !== "realtime") return;
+    refreshRealtimeView({ forceRefresh: true });
+    const timer = setInterval(() => {
+      refreshRealtimeView({ silent: true, forceRefresh: true });
+    }, REALTIME_QUOTE_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [detailTimeframe, refreshRealtimeView]);
+
+  const isRealtimeView = detailTimeframe === "realtime";
+  const isInitialRealtimeLoading =
+    (isLoadingRealtime && !realtimeQuote) || (isLoadingIntraday && !intradayDetail);
   const selectedBarIndex = detail
     ? detail.bars.findIndex((bar) => bar.ts === selectedBarTs)
     : -1;
@@ -2477,7 +2939,7 @@ function StockKlineDetail({
     ? returnPctForBar(detail.bars, resolvedSelectedBarIndex)
     : null;
   const selectedDateLabel = selectedBar ? formatDataDate(selectedBar.ts) : null;
-  const metricCards = detail && selectedBar
+  const metricCards = !isRealtimeView && detail && selectedBar
     ? [
         { label: "收盘", value: formatNumberValue(selectedBar.close) },
         {
@@ -2507,13 +2969,13 @@ function StockKlineDetail({
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
             <p className="shrink-0 text-sm font-semibold text-slate-950">
               K 线详情
-              {selectedDateLabel && (
+              {!isRealtimeView && selectedDateLabel && (
                 <span className="ml-2 align-middle text-xs font-medium text-slate-500">
                   {selectedDateLabel}
                 </span>
               )}
             </p>
-            {detail && (
+            {metricCards.length > 0 && (
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 {metricCards.map((item) => (
                   <div key={item.label} className="inline-flex items-baseline gap-1.5 rounded-md bg-slate-50 px-2.5 py-1.5">
@@ -2536,13 +2998,13 @@ function StockKlineDetail({
                     void loadDetail(option.id);
                   }
                 }}
-                disabled={isLoadingDetail}
+                disabled={isLoadingDetail || isLoadingRealtime || isLoadingIntraday}
                 className={cn(
                   "rounded px-3 text-sm font-medium transition-colors",
                   detailTimeframe === option.id
                     ? "bg-white text-blue-700 shadow-sm"
                     : "text-slate-500 hover:text-slate-700",
-                  isLoadingDetail && "cursor-wait opacity-70"
+                  (isLoadingDetail || isLoadingRealtime || isLoadingIntraday) && "cursor-wait opacity-70"
                 )}
               >
                 {option.label}
@@ -2551,7 +3013,42 @@ function StockKlineDetail({
           </div>
         </div>
 
-        {isLoadingDetail ? (
+        {isRealtimeView && isInitialRealtimeLoading ? (
+          <div className="flex h-80 items-center justify-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            正在读取实时行情和分时数据...
+          </div>
+        ) : isRealtimeView ? (
+          <div className="space-y-4 p-5">
+            {(realtimeError || intradayError) && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                {intradayError ?? realtimeError}
+              </div>
+            )}
+            {intradayDetail ? (
+              <IntradayTimeShareChart
+                detail={intradayDetail}
+                previousClose={realtimeQuote?.previousClose ?? detail?.summary.previousClose}
+              />
+            ) : (
+              <div className="flex h-72 items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+                暂无分时数据
+              </div>
+            )}
+            {realtimeQuote ? (
+              <RealtimeQuotePanel
+                quote={realtimeQuote}
+                member={member}
+                isRefreshing={isLoadingRealtime || isLoadingIntraday}
+                onRefresh={() => refreshRealtimeView({ forceRefresh: true })}
+              />
+            ) : (
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                暂无实时读数
+              </div>
+            )}
+          </div>
+        ) : isLoadingDetail ? (
           <div className="flex h-80 items-center justify-center gap-2 text-sm text-slate-500">
             <Loader2 className="h-4 w-4 animate-spin" />
             正在读取本地 TimescaleDB K 线...
