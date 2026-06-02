@@ -133,6 +133,91 @@ function resolveProjectRoot(
   return path.join(PROJECTS_DIR_ABSOLUTE, projectId);
 }
 
+function canUsePrefetchedSelectionDashboard(params: {
+  instruction: string;
+  runPlan: Awaited<ReturnType<typeof writeInitialRunPlan>>;
+  prefetchSkipped: boolean;
+}): boolean {
+  if (params.prefetchSkipped) {
+    return false;
+  }
+  const normalized = params.instruction.replace(/\s+/g, "");
+  return (
+    params.runPlan.visualization?.templateId === "stock-selection" &&
+    params.runPlan.symbols.length === 0 &&
+    /全A|A股股票池|股票池|选股|筛选|候选|短线候选|次日|买股|买入策略|短线/.test(
+      normalized,
+    )
+  );
+}
+
+async function publishQuantPipelineToolMessage(params: {
+  projectId: string;
+  requestId: string;
+  conversationId?: string | null;
+  cliSource?: string | null;
+  toolName: string;
+  summary: string;
+  target?: string;
+  input?: unknown;
+  output?: unknown;
+}) {
+  const stringifyDetail = (value: unknown) => {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === "string") return value;
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  };
+  const metadata = {
+    toolName: params.toolName,
+    tool_name: params.toolName,
+    action: "Executed",
+    summary: params.summary,
+    ...(params.target
+      ? {
+          target: params.target,
+          filePath: params.target,
+        }
+      : {}),
+    ...(params.input !== undefined
+      ? {
+          toolInput: params.input,
+          tool_input: params.input,
+          input: params.input,
+        }
+      : {}),
+    ...(params.output !== undefined
+      ? {
+          toolOutput: stringifyDetail(params.output),
+          tool_output: stringifyDetail(params.output),
+          output: stringifyDetail(params.output),
+        }
+      : {}),
+    isQuantPilotPipelineStep: true,
+  };
+
+  const message = await createMessage({
+    projectId: params.projectId,
+    role: "assistant",
+    messageType: "tool_result",
+    content: params.summary,
+    conversationId: params.conversationId ?? undefined,
+    cliSource: params.cliSource ?? undefined,
+    metadata,
+    requestId: params.requestId,
+  });
+
+  streamManager.publish(params.projectId, {
+    type: "message",
+    data: serializeMessage(message, { requestId: params.requestId }),
+  });
+
+  return message;
+}
+
 function runValidationAfterExecution(params: {
   execution: Promise<void>;
   repairExecutor: (
@@ -151,6 +236,7 @@ function runValidationAfterExecution(params: {
   requestId: string;
   conversationId?: string | null;
   cliSource?: string | null;
+  agentExecutionSuccessSummary?: string;
 }): Promise<void> {
   const validateAndRepair = async (executionError?: unknown) => {
     if (await isUserRequestCancelled(params.requestId)) {
@@ -182,7 +268,8 @@ function runValidationAfterExecution(params: {
       status: executionError ? "failed" : "success",
       summary: executionError
         ? "Agent 执行异常结束，进入验证确认产物状态。"
-        : "Agent 执行完成，进入自动验证。",
+        : params.agentExecutionSuccessSummary ??
+          "Agent 执行完成，进入自动验证。",
       ...(executionError
         ? {
             errorMessage:
@@ -1183,6 +1270,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       project.preferredCli ?? "claude",
       project.selectedModel ?? undefined,
     );
+    let usePrefetchedSelectionDashboard = false;
 
     try {
       await updateQuantGenerationStep({
@@ -1279,6 +1367,25 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           expectedArtifacts: runPlan.expectedArtifacts,
         },
       });
+      await publishQuantPipelineToolMessage({
+        projectId: project_id,
+        requestId,
+        conversationId,
+        cliSource: cliPreference,
+        toolName: "quant-run-planner",
+        target: ".quantpilot/run_plan.json",
+        summary: `生成 ${runPlan.capabilityId} 执行计划，准备进入数据源选择和预取。`,
+        input: {
+          question: runPlan.question,
+          capabilityId: runPlan.capabilityId,
+        },
+        output: {
+          templateId: runPlan.visualization?.templateId,
+          symbols: runPlan.symbols,
+          dataRequirements: runPlan.dataRequirements,
+          analysisSteps: runPlan.analysisSteps,
+        },
+      });
       await updateQuantGenerationStep({
         projectPath,
         projectId: project_id,
@@ -1290,6 +1397,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       const prefetch = await prefetchQuantDataForRunPlan({
         projectPath,
         plan: runPlan,
+      });
+      usePrefetchedSelectionDashboard = canUsePrefetchedSelectionDashboard({
+        instruction: effectiveInstruction,
+        runPlan,
+        prefetchSkipped: prefetch.skipped,
       });
       await updateQuantGenerationStep({
         projectPath,
@@ -1304,10 +1416,97 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           symbols: prefetch.skipped ? undefined : prefetch.symbols,
           finalDataPath: prefetch.skipped ? undefined : prefetch.finalDataPath,
           rawFiles: prefetch.skipped ? undefined : prefetch.rawFiles,
+          deterministicDashboard: usePrefetchedSelectionDashboard || undefined,
         },
       });
       if (!prefetch.skipped) {
         await ensureQuantDashboardTemplate(projectPath);
+      }
+      if (prefetch.skipped) {
+        await publishQuantPipelineToolMessage({
+          projectId: project_id,
+          requestId,
+          conversationId,
+          cliSource: cliPreference,
+          toolName: "quant-data-registry",
+          target: "本地数据预取",
+          summary: prefetch.summary,
+          output: {
+            skipped: true,
+            reason: prefetch.summary,
+          },
+        });
+      } else {
+        const symbols = prefetch.symbols?.length
+          ? prefetch.symbols
+          : prefetch.symbol
+            ? [prefetch.symbol]
+            : [];
+        await publishQuantPipelineToolMessage({
+          projectId: project_id,
+          requestId,
+          conversationId,
+          cliSource: cliPreference,
+          toolName: "quant-data-registry",
+          target:
+            "/api/v1/research/screeners/a-share/short-term-candidates",
+          summary: symbols.length
+            ? `调用本地选股接口，得到候选标的：${symbols.join("、")}。`
+            : "调用本地选股接口并完成候选筛选。",
+          input: {
+            question: runPlan.question,
+            templateId: runPlan.visualization?.templateId,
+          },
+          output: {
+            symbols,
+            rawFiles: prefetch.rawFiles?.filter((file) =>
+              file.includes("a-share-screener"),
+            ),
+          },
+        });
+        await publishQuantPipelineToolMessage({
+          projectId: project_id,
+          requestId,
+          conversationId,
+          cliSource: cliPreference,
+          toolName: "quant-market-data",
+          target: "data_file/final/dashboard-data.json",
+          summary: prefetch.summary,
+          input: {
+            endpoints: [
+              "/api/v1/quotes/realtime",
+              "/api/v1/quotes/history/{symbol}",
+              "/api/v1/indicators/technical/{symbol}",
+              "/api/v1/fundamentals/financials/{symbol}",
+            ],
+            symbols,
+          },
+          output: {
+            finalDataPath: prefetch.finalDataPath,
+            rawFiles: prefetch.rawFiles,
+          },
+        });
+        if (usePrefetchedSelectionDashboard) {
+          await publishQuantPipelineToolMessage({
+            projectId: project_id,
+            requestId,
+            conversationId,
+            cliSource: cliPreference,
+            toolName: "quant-visualization-html",
+            target: "app/page.tsx",
+            summary:
+              "平台已基于本地选股数据生成标准选股看板，后续直接进入自动验证。",
+            input: {
+              templateId: "stock-selection",
+              variantId: runPlan.visualization?.variantId,
+              symbols,
+            },
+            output: {
+              finalDataPath: prefetch.finalDataPath,
+              deterministicDashboard: true,
+            },
+          });
+        }
       }
       if (!prefetch.skipped) {
         streamManager.publish(project_id, {
@@ -1401,10 +1600,24 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
               requestId,
               stepId: "agent_execution",
               status: "running",
-              summary: isInitialPrompt
-                ? "开始初始化并生成工作空间。"
-                : "开始让 Agent 修改工作空间。",
+              summary: usePrefetchedSelectionDashboard
+                ? "平台已完成选股数据预取和标准看板生成，跳过 Agent 生成。"
+                : isInitialPrompt
+                  ? "开始初始化并生成工作空间。"
+                  : "开始让 Agent 修改工作空间。",
             });
+            if (usePrefetchedSelectionDashboard) {
+              streamManager.publish(project_id, {
+                type: "status",
+                data: {
+                  status: "prefetched_selection_dashboard_ready",
+                  message:
+                    "已基于本地选股接口和数据库数据生成标准选股看板，正在进入自动验证。",
+                  requestId,
+                },
+              });
+              return;
+            }
             if (isInitialPrompt) {
               await cliRuntime.initializeNextJsProject(
                 project_id,
@@ -1434,6 +1647,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           requestId,
           conversationId,
           cliSource: cliPreference,
+          agentExecutionSuccessSummary: usePrefetchedSelectionDashboard
+            ? "平台已完成本地选股、行情预取和标准看板生成，跳过 Agent 生成并进入自动验证。"
+            : undefined,
         });
       },
     }).catch((error) => {

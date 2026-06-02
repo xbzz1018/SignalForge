@@ -992,7 +992,7 @@ const handleToolPlaceholderMessage = async (
   return true;
 };
 
-function resolveModelId(model?: string | null): string {
+function resolveRequestedModelId(model?: string | null): string {
   if (model && model.trim().length > 0) {
     return normalizeClaudeModelId(model);
   }
@@ -1001,6 +1001,85 @@ function resolveModelId(model?: string | null): string {
     return anthropicModelOverride;
   }
   return normalizeClaudeModelId(model);
+}
+
+type ClaudeRuntimeModelResolution = {
+  requestedModel: string;
+  runtimeModel: string;
+  fallbackModel?: string;
+  reason?: string;
+};
+
+function normalizeRuntimeAliasKey(model: string): string {
+  return model.trim().toLowerCase().replace(/[\s_]+/g, '-');
+}
+
+function parseRuntimeModelAliases(value?: string | null): Record<string, string> {
+  if (!value || value.trim().length === 0) {
+    return {};
+  }
+
+  return value
+    .split(/[,\n;]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .reduce<Record<string, string>>((aliases, entry) => {
+      const separator = entry.includes('=>') ? '=>' : entry.includes('=') ? '=' : ':';
+      const [from, to] = entry.split(separator).map((part) => part.trim());
+      if (!from || !to) {
+        return aliases;
+      }
+      aliases[normalizeRuntimeAliasKey(normalizeClaudeModelId(from))] = normalizeClaudeModelId(to);
+      return aliases;
+    }, {});
+}
+
+function resolveClaudeRuntimeModel(model?: string | null): ClaudeRuntimeModelResolution {
+  const requestedModel = resolveRequestedModelId(model);
+  const fallbackModel = process.env.CLAUDE_CODE_MODEL_FALLBACK?.trim()
+    ? normalizeClaudeModelId(process.env.CLAUDE_CODE_MODEL_FALLBACK)
+    : undefined;
+  const aliases = parseRuntimeModelAliases(process.env.CLAUDE_CODE_MODEL_ALIASES);
+  const aliasTarget = aliases[normalizeRuntimeAliasKey(requestedModel)];
+  const runtimeModel = aliasTarget ?? requestedModel;
+
+  if (runtimeModel !== requestedModel) {
+    const requestedLabel = getClaudeModelDisplayName(requestedModel);
+    const runtimeLabel = getClaudeModelDisplayName(runtimeModel);
+    return {
+      requestedModel,
+      runtimeModel,
+      fallbackModel,
+      reason: `当前 Claude-compatible 网关暂不支持 ${requestedLabel}，已按本地配置改用 ${runtimeLabel} 执行。`,
+    };
+  }
+
+  return {
+    requestedModel,
+    runtimeModel,
+    fallbackModel,
+  };
+}
+
+function buildClaudeRuntimeEnv(runtimeModel: string): Record<string, string | undefined> {
+  const authToken = process.env.ANTHROPIC_AUTH_TOKEN?.trim();
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim() || authToken;
+  const baseUrl = process.env.ANTHROPIC_BASE_URL?.trim();
+
+  return {
+    ...process.env,
+    ...(baseUrl ? { ANTHROPIC_BASE_URL: baseUrl } : {}),
+    ...(authToken ? { ANTHROPIC_AUTH_TOKEN: authToken } : {}),
+    ...(apiKey ? { ANTHROPIC_API_KEY: apiKey } : {}),
+    ANTHROPIC_MODEL: runtimeModel,
+    ANTHROPIC_SMALL_FAST_MODEL: runtimeModel,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: runtimeModel,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: runtimeModel,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: runtimeModel,
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:
+      process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC?.trim() || '1',
+    CLAUDE_AGENT_SDK_CLIENT_APP: 'QuantPilot/1.0',
+  };
 }
 
 function inferImageMediaType(image: ClaudeImageAttachment): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | null {
@@ -1089,9 +1168,15 @@ export async function executeClaude(
   console.log(`\n========================================`);
   console.log(`[ClaudeService] 🚀 Starting Claude Agent SDK`);
   console.log(`[ClaudeService] Project: ${projectId}`);
-  const resolvedModel = resolveModelId(model);
+  const modelResolution = resolveClaudeRuntimeModel(model);
+  const resolvedModel = modelResolution.runtimeModel;
   const modelLabel = getClaudeModelDisplayName(resolvedModel);
-  const aliasNote = resolvedModel !== model ? ` (alias for ${model})` : '';
+  const aliasNote =
+    modelResolution.requestedModel !== resolvedModel
+      ? ` (runtime fallback for ${getClaudeModelDisplayName(modelResolution.requestedModel)} [${modelResolution.requestedModel}])`
+      : resolvedModel !== model
+        ? ` (alias for ${model})`
+        : '';
   console.log(`[ClaudeService] Model: ${modelLabel} [${resolvedModel}]${aliasNote}`);
   console.log(`[ClaudeService] Session ID: ${sessionId || 'new session'}`);
   console.log(`[ClaudeService] Instruction: ${instruction.substring(0, 100)}...`);
@@ -1347,6 +1432,24 @@ export async function executeClaude(
     // Send ready notification via SSE
     publishStatus('ready', 'Project verified. Starting AI...');
 
+    if (modelResolution.reason) {
+      publishStatus('model_fallback', modelResolution.reason);
+      await dispatchToolMessage({
+        projectId,
+        metadata: {
+          toolName: '模型运行时降级',
+          tool_name: 'model_runtime_fallback',
+          requestedModel: modelResolution.requestedModel,
+          runtimeModel: modelResolution.runtimeModel,
+        },
+        content: modelResolution.reason,
+        requestId,
+        persist: true,
+        isStreaming: false,
+        messageType: 'tool_result',
+      });
+    }
+
     const availableSkills = await ensureClaudeSkillsForProject(absoluteProjectPath);
     const quantManifest = await readQuantPilotManifest(absoluteProjectPath);
 
@@ -1378,15 +1481,20 @@ export async function executeClaude(
         cwd: absoluteProjectPath,
         additionalDirectories: [absoluteProjectPath],
         model: resolvedModel,
+        fallbackModel:
+          modelResolution.fallbackModel && modelResolution.fallbackModel !== resolvedModel
+            ? modelResolution.fallbackModel
+            : undefined,
         resume: sessionId, // Resume previous session
         permissionMode: 'default',
         canUseTool: guardClaudeToolUse,
-        settingSources: ['project'],
+        settingSources: ['project', 'user'],
         skills: availableSkills,
         mcpServers: mcpServers as any,
         systemPrompt: buildQuantPilotSystemPrompt(),
         maxOutputTokens,
         maxTurns,
+        env: buildClaudeRuntimeEnv(resolvedModel),
         // Capture SDK stderr so we can surface real errors instead of just exit code
         stderr: (data: string) => {
           const line = String(data).trimEnd();
@@ -1835,11 +1943,11 @@ export async function executeClaude(
 
       // Detect Claude Code CLI not installed
       if (errorMessage.includes('command not found') || errorMessage.includes('not found: claude')) {
-        errorMessage = `Claude Code CLI is not installed.\n\nInstallation instructions:\n1. npm install -g @anthropic-ai/claude-code\n2. Configure MiniMax environment variables such as ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN`;
+        errorMessage = `Claude Code CLI is not installed.\n\nInstallation instructions:\n1. npm install -g @anthropic-ai/claude-code\n2. Configure Claude-compatible environment variables such as ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN`;
       }
       // Detect authentication failure
       else if (errorMessage.includes('not authenticated') || errorMessage.includes('authentication')) {
-        errorMessage = `Claude Code MiniMax configuration required.\n\nPlease configure ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN in .env/.env.local or ~/.claude/settings.json.`;
+        errorMessage = `Claude Code Claude-compatible configuration required.\n\nPlease configure ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN in .env/.env.local or ~/.claude/settings.json.`;
       }
       // Permission error
       else if (errorMessage.includes('permission') || errorMessage.includes('EACCES')) {
@@ -1855,7 +1963,7 @@ export async function executeClaude(
         const tail = stderrBuffer.slice(-15).join('\n');
         // Common auth hints
         if (/auth\s+login|not\s+logged\s+in|sign\s+in/i.test(tail)) {
-          errorMessage = `Claude Code MiniMax configuration required.\n\nPlease configure ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN.\n\nDetailed log:\n${tail}`;
+          errorMessage = `Claude Code Claude-compatible configuration required.\n\nPlease configure ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN.\n\nDetailed log:\n${tail}`;
         } else if (/network|ENOTFOUND|ECONN|timeout/i.test(tail)) {
           errorMessage = `Failed to run Claude Code due to network error. Please check your network connection and try again.\n\nDetailed log:\n${tail}`;
         } else if (/permission|EACCES|EPERM|denied/i.test(tail)) {
@@ -1890,7 +1998,7 @@ export async function executeClaude(
  * @param projectId - Project ID
  * @param projectPath - Project directory path
  * @param initialPrompt - Initial prompt
- * @param model - Claude Code runtime model to use (default: MiniMax-M2.7)
+ * @param model - Claude Code runtime model to use (default: mimo-v2.5-pro)
  * @param requestId - (Optional) User request tracking ID
  */
 export async function initializeNextJsProject(
@@ -1920,7 +2028,7 @@ Set up the basic project structure and implement the requested features.
  * @param projectId - Project ID
  * @param projectPath - Project directory path
  * @param instruction - Change request command
- * @param model - Claude Code runtime model to use (default: MiniMax-M2.7)
+ * @param model - Claude Code runtime model to use (default: mimo-v2.5-pro)
  * @param sessionId - Session ID
  * @param requestId - (Optional) User request tracking ID
  */

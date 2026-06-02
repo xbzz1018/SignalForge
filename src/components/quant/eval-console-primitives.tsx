@@ -28,9 +28,9 @@ export const CLI_LABELS: Record<string, string> = {
 export const FALLBACK_RUNTIME: QuantEvalRuntimeOption = {
   cli: 'claude',
   label: 'Claude Code',
-  defaultModel: 'MiniMax-M2.7',
+  defaultModel: 'mimo-v2.5-pro',
   supportsReasoningEffort: false,
-  models: [{ id: 'MiniMax-M2.7', name: 'MiniMax M2.7', description: null }],
+  models: [{ id: 'mimo-v2.5-pro', name: 'Mimo V2.5 Pro', description: null }],
 };
 
 export const selectClassName =

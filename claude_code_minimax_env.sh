@@ -12,8 +12,10 @@ NVM_VERSION="v0.40.3"
 CLAUDE_PACKAGE="@anthropic-ai/claude-code"
 CONFIG_DIR="$HOME/.claude"
 CONFIG_FILE="$CONFIG_DIR/settings.json"
-API_BASE_URL="https://api.minimaxi.com/anthropic"
-MODEL_NAME="MiniMax-M2.7"
+API_BASE_URL="https://w.ciykj.cn/v1"
+MODEL_NAME="mimo-v2.5-pro"
+FALLBACK_MODEL_NAME=""
+MODEL_ALIASES=""
 API_TIMEOUT_MS=3000000
 
 # ========================
@@ -132,12 +134,12 @@ configure_claude_json(){
 }
 
 # ========================
-#     MiniMax 配置
+#     Claude-compatible 配置
 # ========================
 
 configure_claude() {
-    log_info "正在配置 Claude Code 直连 MiniMax..."
-    read -s -p "🔑 请输入 MiniMax API Token: " api_key
+    log_info "正在配置 Claude Code 直连 Mimo..."
+    read -s -p "🔑 请输入 Mimo API Token: " api_key
     echo
 
     if [ -z "$api_key" ]; then
@@ -172,7 +174,9 @@ configure_claude() {
                 ANTHROPIC_SMALL_FAST_MODEL: "'"$MODEL_NAME"'",
                 ANTHROPIC_DEFAULT_SONNET_MODEL: "'"$MODEL_NAME"'",
                 ANTHROPIC_DEFAULT_OPUS_MODEL: "'"$MODEL_NAME"'",
-                ANTHROPIC_DEFAULT_HAIKU_MODEL: "'"$MODEL_NAME"'"
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: "'"$MODEL_NAME"'",
+                CLAUDE_CODE_MODEL_FALLBACK: "'"$FALLBACK_MODEL_NAME"'",
+                CLAUDE_CODE_MODEL_ALIASES: "'"$MODEL_ALIASES"'"
             }
         }, null, 2), "utf-8");
     ' || {
@@ -180,7 +184,11 @@ configure_claude() {
         exit 1
     }
 
-    log_success "Claude Code 已配置为 MiniMax Anthropic-compatible 接口"
+    if [ -n "$FALLBACK_MODEL_NAME" ]; then
+        log_success "Claude Code 已配置为 Mimo Anthropic-compatible 接口；协议端不支持 Mimo 时会兜底到 $FALLBACK_MODEL_NAME"
+    else
+        log_success "Claude Code 已配置为 Mimo Anthropic-compatible 接口"
+    fi
 }
 
 # ========================

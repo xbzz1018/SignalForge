@@ -22,13 +22,18 @@ const EVAL_RUNTIME_OPTIONS: QuantEvalRuntimeOption[] = [
   {
     cli: 'claude',
     label: 'Claude Code',
-    defaultModel: 'MiniMax-M2.7',
+    defaultModel: 'mimo-v2.5-pro',
     supportsReasoningEffort: false,
     models: [
       {
+        id: 'mimo-v2.5-pro',
+        name: 'Mimo V2.5 Pro',
+        description: '通过 Anthropic 兼容协议接入 Claude Code 的 Mimo 模型',
+      },
+      {
         id: 'MiniMax-M2.7',
         name: 'MiniMax M2.7',
-        description: '通过 Anthropic 兼容协议接入 Claude Code 的 MiniMax 模型',
+        description: '保留的 MiniMax 兼容模型选项',
       },
     ],
   },
@@ -423,7 +428,7 @@ function defaultScheduleConfig(): QuantEvalScheduleConfig {
     enabled: false,
     intervalHours: 24,
     cli: 'claude',
-    model: 'MiniMax-M2.7',
+    model: 'mimo-v2.5-pro',
     reasoningEffort: '',
     selectedCases: [],
     limit: null,
@@ -1257,7 +1262,7 @@ async function readScheduleConfig(): Promise<QuantEvalScheduleConfig> {
         ? Math.min(168, Math.max(1, Math.floor(record.intervalHours)))
         : 24,
     cli: stringValue(record.cli, 'claude'),
-    model: stringValue(record.model, 'MiniMax-M2.7'),
+    model: stringValue(record.model, 'mimo-v2.5-pro'),
     reasoningEffort: normalizeEvalReasoningEffort(stringValue(record.cli, 'claude'), stringValue(record.reasoningEffort)),
     selectedCases: stringArray(record.selectedCases),
     limit: typeof record.limit === 'number' ? record.limit : null,

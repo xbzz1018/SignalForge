@@ -7,6 +7,7 @@ import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliMode
 const DATA_DIR = process.env.SETTINGS_DIR || path.join(process.cwd(), 'data');
 const SETTINGS_FILE = path.join(DATA_DIR, 'global-settings.json');
 const GLOBAL_SETTINGS_KEY = 'global';
+const LEGACY_DEFAULT_CLAUDE_MODELS = new Set(['MiniMax-M2.7']);
 
 export type CLISettings = Record<string, Record<string, unknown>>;
 
@@ -37,13 +38,18 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 };
 
 function migrateStoredModelDefaults(settings: GlobalSettings): GlobalSettings {
+  const claudeSettings = settings.cli_settings?.claude ?? {};
+  const normalizedClaudeModel = normalizeModelId(
+    'claude',
+    typeof claudeSettings.model === 'string' ? claudeSettings.model : undefined
+  );
   const codexSettings = settings.cli_settings?.codex ?? {};
   const normalizedCodexModel = normalizeModelId(
     'codex',
     typeof codexSettings.model === 'string' ? codexSettings.model : undefined
   );
 
-  if (codexSettings.model === normalizedCodexModel) {
+  if (claudeSettings.model === normalizedClaudeModel && codexSettings.model === normalizedCodexModel) {
     return settings;
   }
 
@@ -51,6 +57,10 @@ function migrateStoredModelDefaults(settings: GlobalSettings): GlobalSettings {
     ...settings,
     cli_settings: {
       ...settings.cli_settings,
+      claude: {
+        ...claudeSettings,
+        model: normalizedClaudeModel,
+      },
       codex: {
         ...codexSettings,
         model: normalizedCodexModel,
@@ -72,7 +82,11 @@ function applyEnvironmentModelDefaults(settings: GlobalSettings): GlobalSettings
         ? claudeSettings.model.trim()
         : undefined;
 
-    if (!currentModel || currentModel === DEFAULT_SETTINGS.cli_settings.claude.model) {
+    if (
+      !currentModel ||
+      currentModel === DEFAULT_SETTINGS.cli_settings.claude.model ||
+      LEGACY_DEFAULT_CLAUDE_MODELS.has(currentModel)
+    ) {
       nextSettings = {
         ...nextSettings,
         default_cli: nextSettings.default_cli || 'claude',

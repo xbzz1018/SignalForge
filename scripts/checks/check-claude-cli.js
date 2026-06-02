@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Claude Code CLI 与 MiniMax 环境检查脚本
+ * Claude Code CLI 与 Claude-compatible 环境检查脚本
  *
  * 运行：npm run check-cli
  */
@@ -55,7 +55,7 @@ function hasCodexApiKey() {
   }
 }
 
-console.log('\n🔍 Claude Code CLI 与 MiniMax 配置检查\n');
+console.log('\n🔍 Claude Code CLI 与 Claude-compatible 配置检查\n');
 
 console.log('1️⃣  检查 Claude Code CLI 是否已安装...');
 try {
@@ -76,7 +76,7 @@ try {
   console.log('   ⚠️  CLI 运行时出现异常。\n');
 }
 
-console.log('3️⃣  检查 MiniMax 相关环境变量');
+console.log('3️⃣  检查 Claude-compatible 相关环境变量');
 const requiredEnv = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_MODEL'];
 for (const key of requiredEnv) {
   const value = readEnvValue(key);
@@ -88,6 +88,10 @@ for (const key of requiredEnv) {
     console.log(`   ✅ ${key}=${value}`);
   }
 }
+const fallbackModel = readEnvValue('CLAUDE_CODE_MODEL_FALLBACK');
+const modelAliases = readEnvValue('CLAUDE_CODE_MODEL_ALIASES');
+console.log(fallbackModel ? `   ✅ CLAUDE_CODE_MODEL_FALLBACK=${fallbackModel}` : '   ⚠️  CLAUDE_CODE_MODEL_FALLBACK 未设置');
+console.log(modelAliases ? `   ✅ CLAUDE_CODE_MODEL_ALIASES=${modelAliases}` : '   ⚠️  CLAUDE_CODE_MODEL_ALIASES 未设置');
 
 console.log('\n4️⃣  检查 Codex CLI 与第三方 OpenAI-compatible GPT 配置');
 try {
@@ -110,11 +114,11 @@ console.log(hasCodexApiKey() ? '   ✅ Codex API Key=已设置' : '   ⚠️  Co
 
 console.log('\n✨ QuantPilot 已准备好使用 Claude Code 运行时。\n');
 console.log('   下一步：');
-console.log('   1. 确认 .env/.env.local 或 ~/.claude/settings.json 中已配置 MiniMax Token');
+console.log('   1. 确认 .env/.env.local 或 ~/.claude/settings.json 中已配置 Claude-compatible Token');
 console.log('   2. 如需使用 Codex，确认 .env.local 或 ~/.codex/auth.json 中已配置 OpenAI-compatible API Key');
 console.log('   3. npm run dev - 启动开发服务');
 console.log('   4. 访问 http://localhost:3000\n');
 
 console.log('────────────────────────────────────────────────────────────');
-console.log('💡 提示：当前默认使用 Claude Code + MiniMax；Codex CLI 可通过 OpenAI-compatible Base URL 接入第三方 GPT。');
+console.log('💡 提示：当前默认展示 Claude Code + Mimo；如果 Claude Code 协议端不支持 Mimo，会按 CLAUDE_CODE_MODEL_ALIASES 兜底到可用模型。Codex CLI 可通过 OpenAI-compatible Base URL 接入第三方 GPT。');
 console.log('────────────────────────────────────────────────────────────\n');

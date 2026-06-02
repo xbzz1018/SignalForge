@@ -269,11 +269,19 @@ async function main() {
 
   const envRequired = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_MODEL'];
   const missingEnv = envRequired.filter((key) => !readEnvValue(key));
+  const fallbackModel = readEnvValue('CLAUDE_CODE_MODEL_FALLBACK');
+  const modelAliases = readEnvValue('CLAUDE_CODE_MODEL_ALIASES');
   addCheck(
-    'Claude / MiniMax 环境',
-    missingEnv.length ? 'warn' : 'ok',
-    missingEnv.length ? `缺少 ${missingEnv.join(', ')}` : '必需环境变量已配置。',
-    missingEnv.map((key) => `${key} 未设置。`)
+    'Claude / Mimo 环境',
+    missingEnv.length || !fallbackModel || !modelAliases ? 'warn' : 'ok',
+    missingEnv.length
+      ? `缺少 ${missingEnv.join(', ')}`
+      : `必需环境变量已配置；fallback=${fallbackModel || '-'} aliases=${modelAliases || '-'}`,
+    [
+      ...missingEnv.map((key) => `${key} 未设置。`),
+      fallbackModel ? null : 'CLAUDE_CODE_MODEL_FALLBACK 未设置；Claude Code 协议端不支持展示模型时会直接失败。',
+      modelAliases ? null : 'CLAUDE_CODE_MODEL_ALIASES 未设置；建议配置 mimo-v2.5-pro:deepseek-v4-pro。',
+    ]
   );
 
   const claudeVersion = commandOutput('claude', ['--version']);

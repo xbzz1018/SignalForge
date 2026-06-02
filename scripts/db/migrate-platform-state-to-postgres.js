@@ -217,7 +217,7 @@ async function migrateEvalQueue() {
     const data = {
       status: item.status || 'failed',
       cli: item.cli || 'claude',
-      model: item.model || 'MiniMax-M2.7',
+      model: item.model || 'mimo-v2.5-pro',
       reasoningEffort: item.reasoningEffort || '',
       selectedCases: Array.isArray(item.selectedCases) ? item.selectedCases : [],
       limit: typeof item.limit === 'number' ? item.limit : null,
@@ -281,7 +281,7 @@ async function migrateEvalSchedule() {
     enabled: Boolean(schedule.enabled),
     intervalHours: Number(schedule.intervalHours || 24),
     cli: schedule.cli || 'claude',
-    model: schedule.model || 'MiniMax-M2.7',
+    model: schedule.model || 'mimo-v2.5-pro',
     reasoningEffort: schedule.reasoningEffort || '',
     selectedCases: Array.isArray(schedule.selectedCases) ? schedule.selectedCases : [],
     limit: typeof schedule.limit === 'number' ? schedule.limit : null,

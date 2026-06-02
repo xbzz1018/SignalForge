@@ -11,7 +11,7 @@ const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 const projectId = process.env.PROJECT_ID || process.argv[2] || '';
 const baseUrl = (process.env.QUANTPILOT_WEB_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const cli = process.env.CLI || 'claude';
-const model = process.env.MODEL || 'MiniMax-M2.7';
+const model = process.env.MODEL || 'mimo-v2.5-pro';
 
 function fail(message, details = []) {
   console.error(`\n❌ 项目可视化截图检查失败：${message}`);

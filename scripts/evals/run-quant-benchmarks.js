@@ -37,7 +37,7 @@ function parseArgs(argv) {
   let limit = null;
   let keepProjects = false;
   let cli = process.env.QUANTPILOT_EVAL_CLI || 'claude';
-  let model = process.env.QUANTPILOT_EVAL_MODEL || 'MiniMax-M2.7';
+  let model = process.env.QUANTPILOT_EVAL_MODEL || 'mimo-v2.5-pro';
   let reasoningEffort = process.env.QUANTPILOT_EVAL_REASONING_EFFORT || '';
   let trigger = process.env.QUANTPILOT_EVAL_TRIGGER || 'cli';
 
@@ -289,7 +289,7 @@ async function ensureBenchmarkProject({ projectId, projectPath, testCase }) {
   await prisma.project.deleteMany({ where: { id: projectId } });
 
   await scaffoldBasicNextApp(projectPath, projectId);
-  const selectedModel = 'MiniMax-M2.7';
+  const selectedModel = 'mimo-v2.5-pro';
   await prisma.project.create({
     data: {
       id: projectId,
@@ -702,7 +702,7 @@ function runRuntimeRegistryCase(testCase) {
       'Codex config args 应包含 model_reasoning_effort="low"。',
       failures
     );
-  assertCondition(claudeModels.some((model) => model.id === 'MiniMax-M2.7'), 'Claude Code 模型列表应包含 MiniMax-M2.7。', failures);
+  assertCondition(claudeModels.some((model) => model.id === 'mimo-v2.5-pro'), 'Claude Code 模型列表应包含 mimo-v2.5-pro。', failures);
 
   return {
     id: testCase.id,
