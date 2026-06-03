@@ -116,7 +116,7 @@ npm run db:init
 
 `db:init` 会先执行 `sqls/*.sql`，再运行 `prisma db push` 同步 Prisma 管理的应用表。
 
-当前 SQL 入口详见 [sqls/README.md](../sqls/README.md)。核心包括：
+当前 SQL 入口详见 [sqls/README.md](../sqls/README.md)，字段口径详见 [数据字典](data-dictionary.md)。核心包括：
 
 - `quant.stock_bars`
 - `quant.stock_bars` 内的高价值 K 线字段包括 `amount`、`amplitude`、`change_percent`、`change_amount` 和 `turnover`，字段来源与补数策略见 `docs/market-data-source-knowledge.md`。

@@ -89,10 +89,13 @@ npm run dev
 - [文档写作风格指南](docs/documentation-style-guide.md)
 - [架构总览](docs/architecture.md)
 - [项目结构与分层边界](docs/project-structure.md)
+- [API 总览](docs/api-reference.md)
+- [数据字典](docs/data-dictionary.md)
 - [基础设施配置](docs/infrastructure.md)
 - [行情数据源采集知识库](docs/market-data-source-knowledge.md)
 - [策略平台使用与设计指南](docs/strategy-platform-guide.md)
 - [运维平台使用与评分指南](docs/ops-platform-guide.md)
+- [运行手册](docs/operations-runbook.md)
 - [生成工作空间契约](docs/generated-workspace-contract.md)
 - [Skills 治理规范](docs/skills-governance.md)
 - [Skills 编写与迭代教程](docs/learning/07-skills-authoring.md)
@@ -112,6 +115,7 @@ npm run dev
 | 理解内部组件 | [内部组件学习指南](docs/internal-components.md) | 把页面、服务、数据、Skills、验证和运维串起来 |
 | 学会生成链路 | [AI 工作空间生成链路](docs/learning/02-ai-workspace-generation.md) | 理解 run plan、data、evidence、validation 和 repair plan |
 | 学会数据与策略 | [市场数据与策略平台](docs/learning/03-market-data-and-strategy-platform.md) | 理解股票池、K 线、补数、因子和基础组件 |
+| 学会查接口和字段 | [API 总览](docs/api-reference.md) / [数据字典](docs/data-dictionary.md) | 知道页面读哪个接口、字段来自哪里 |
 | 学会 Skills | [Skills 编写与迭代教程](docs/learning/07-skills-authoring.md) | 知道如何修改、发布、打包和验证 skill |
 
 文档维护也算项目能力的一部分。改代码时如果改变了页面入口、组件职责、数据字段、环境变量、SQL 或 skill 行为，请同步更新对应文档；具体写法见 [文档写作风格指南](docs/documentation-style-guide.md)。

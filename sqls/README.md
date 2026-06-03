@@ -36,6 +36,8 @@ npm run db:doctor
 
 `npm run db:init` 会按顺序执行 `sqls/*.sql`，然后运行 `prisma db push` 同步 Prisma 管理的应用表。已有数据库也可以重复执行该命令。
 
+表字段、来源和页面使用位置见 [数据字典](../docs/data-dictionary.md)。如果新增 SQL 表、字段或因子定义，需要同步更新这里和数据字典。
+
 ## 规则
 
 - SQL 必须使用 `IF NOT EXISTS` 或等价方式，避免重复执行失败。

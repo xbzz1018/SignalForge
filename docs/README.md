@@ -14,6 +14,9 @@
 | 想理解数据和策略平台 | [教学 03：市场数据与策略平台](learning/03-market-data-and-strategy-platform.md) |
 | 想优化生成页面 | [教学 04：Skills 与可视化看板](learning/04-skills-and-visual-dashboard.md) |
 | 想做评测和运维 | [教学 05：评测、运维与质量门](learning/05-evaluation-and-operations.md) |
+| 想查页面和后端接口 | [API 总览](api-reference.md) |
+| 想查数据库字段口径 | [数据字典](data-dictionary.md) |
+| 想执行补数、验证或排障流程 | [运行手册](operations-runbook.md) |
 | 想参与开发 | [教学 06：开发者协作手册](learning/06-developer-playbook.md) |
 | 想学习怎么写 Skills | [教学 07：Skills 编写与迭代教程](learning/07-skills-authoring.md) |
 | 想深入策略平台 | [策略平台使用与设计指南](strategy-platform-guide.md) |
@@ -26,10 +29,13 @@
 | 总体架构 | [架构总览](architecture.md) | 主链路、运行时、数据层、控制台和质量门 |
 | 内部组件 | [内部组件学习指南](internal-components.md) | 页面、服务、数据、Skills、验证、运维和降级如何协作 |
 | 项目结构 | [项目结构与分层边界](project-structure.md) | 前端、后端、量化领域层、脚本和生成工作空间边界 |
+| API | [API 总览](api-reference.md) | Next.js API、market-data API、调用方和排查路径 |
+| 数据字典 | [数据字典](data-dictionary.md) | Prisma 表、quant schema、字段来源、因子和数据质量口径 |
 | 基础设施 | [基础设施配置](infrastructure.md) | PostgreSQL、TimescaleDB、Redis、Loki/Grafana/Alloy、SQL 初始化和降级模式 |
 | 行情数据 | [行情数据源采集知识库](market-data-source-knowledge.md) | 东方财富、Baostock、AKShare、字段口径和补数规则 |
 | 策略平台 | [策略平台使用与设计指南](strategy-platform-guide.md) | 股票池、ETF/指数池、策略目录、因子目录、补数控制和策略数据依赖 |
 | 运维平台 | [运维平台使用与评分指南](ops-platform-guide.md) | 工作空间健康、运维评分、日志、降级模式和排查路径 |
+| Runbook | [运行手册](operations-runbook.md) | 长任务、补数、缓存、验证、skills 和提交前质量门 |
 | 工作空间契约 | [生成工作空间契约](generated-workspace-contract.md) | run plan、数据文件、证据、验证、视觉检查和修复计划 |
 | Skills | [Skills 治理规范](skills-governance.md) / [Skills 教程](learning/07-skills-authoring.md) | skill 元数据、版本、发布、回滚、锁文件和编写方法 |
 | 评测 | [Agent 评测指南](evals-guide.md) | 用例、评测集、评测器、队列、运行记录和 CI 门禁 |

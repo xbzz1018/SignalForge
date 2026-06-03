@@ -155,7 +155,7 @@ curl -X POST 'http://127.0.0.1:8000/api/v1/ingestion/baostock/history' \
   -d '{"symbols":["002156.SZ","002555.SZ"],"period":"daily","adjustment":"qfq","lookback_years":5,"limit":1260,"request_delay_seconds":0.2}'
 ```
 
-更完整的 provider 选择和字段口径见项目根目录的 `docs/market-data-source-knowledge.md`。
+更完整的 provider 选择、字段口径和 API 总览见项目根目录的 `docs/market-data-source-knowledge.md`、`docs/data-dictionary.md` 和 `docs/api-reference.md`。
 
 ### 基础组件
 
