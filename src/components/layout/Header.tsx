@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import ProjectSettings from '@/components/settings/ProjectSettings';
 import { usePathname } from 'next/navigation';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export default function Header() {
   const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
@@ -54,6 +55,7 @@ export default function Header() {
             <nav className="flex items-center gap-3" />
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle compact />
             {/* 全局设置 */}
             <button
               className="flex items-center justify-center w-10 h-10 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-all duration-200"

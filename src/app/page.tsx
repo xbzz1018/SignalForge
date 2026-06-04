@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { TaskDrawer } from "@/components/task/TaskDrawer";
 import { CreateTaskForm } from "@/components/task/CreateTaskForm";
 import type { UploadedImage } from "@/components/task/CreateTaskForm";
@@ -637,6 +638,9 @@ export default function HomePage() {
           </Button>
 
           <div className="mx-1 hidden h-4 w-px bg-border sm:block" />
+
+          <ThemeToggle compact className="sm:hidden" />
+          <ThemeToggle className="hidden sm:inline-flex" />
 
           <Button
             type="button"

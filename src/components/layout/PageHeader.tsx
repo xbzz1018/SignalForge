@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { cn } from "@/lib/utils"
 
 interface PageHeaderProps {
@@ -24,7 +25,7 @@ function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <header className={cn("border-b border-slate-200 bg-white", className)}>
+    <header className={cn("border-b border-border bg-background", className)}>
       <div className="flex min-h-14 flex-col items-stretch justify-between gap-3 px-4 py-3 lg:flex-row lg:items-center lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           {backHref !== false && (
@@ -36,19 +37,20 @@ function PageHeader({
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="truncate text-lg font-semibold tracking-normal text-slate-950">
+              <h1 className="truncate text-lg font-semibold tracking-normal text-foreground">
                 {title}
               </h1>
               {badge}
             </div>
             {subtitle && (
-              <p className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitle}</p>
             )}
           </div>
         </div>
-        {children && (
-          <div className="flex flex-wrap items-center gap-2">{children}</div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <ThemeToggle compact />
+          {children}
+        </div>
       </div>
     </header>
   )

@@ -1,5 +1,6 @@
 import './globals.css'
 import GlobalSettingsProvider from '@/contexts/GlobalSettingsContext'
+import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AuthProvider } from '@/contexts/AuthContext'
 import Header from '@/components/layout/Header'
 
@@ -7,17 +8,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        {/* next-rspack 当前会输出缺少分号的 Tailwind CSS，这里加载稳定生成的兜底样式。 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var m=localStorage.getItem('quantpilot-color-mode')==='dark'?'dark':'light';document.documentElement.classList.toggle('dark',m==='dark');document.documentElement.style.colorScheme=m;}catch(e){}`,
+          }}
+        />
+        {/* 加载稳定生成的 Tailwind CSS 兜底样式，避免开发时样式退化。 */}
         {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link rel="stylesheet" href="/generated/quantpilot-tailwind.css" />
       </head>
-      <body className="bg-slate-50 text-slate-900 min-h-screen">
-        <AuthProvider>
-          <GlobalSettingsProvider>
-            <Header />
-            <main>{children}</main>
-          </GlobalSettingsProvider>
-        </AuthProvider>
+      <body className="min-h-screen bg-background text-foreground">
+        <ThemeProvider>
+          <AuthProvider>
+            <GlobalSettingsProvider>
+              <Header />
+              <main>{children}</main>
+            </GlobalSettingsProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

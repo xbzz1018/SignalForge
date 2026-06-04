@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCompactDate as formatTime } from "@/components/quant/console-primitives";
 import {
@@ -472,6 +473,8 @@ export default function SkillsManagementClient({ initialData }: { initialData: S
           </div>
 
           <div className="h-4 w-px bg-border hidden md:block" />
+
+          <ThemeToggle compact />
 
           <Button variant="ghost" size="sm" onClick={refreshDashboard} className="gap-1.5 text-xs">
             <RefreshCcw className="h-3.5 w-3.5" />
