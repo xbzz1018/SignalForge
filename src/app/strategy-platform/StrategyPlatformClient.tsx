@@ -4536,6 +4536,7 @@ function FinancialKnowledgeView() {
   const [selectedType, setSelectedType] = useState<FinancialWikiPageType | "all">("all");
   const [selectedPageId, setSelectedPageId] = useState<string>(FINANCIAL_WIKI_PAGES[0]?.id ?? "");
   const [query, setQuery] = useState("");
+  const [showProtocol, setShowProtocol] = useState(false);
   const pageById = useMemo(() => new Map(FINANCIAL_WIKI_PAGES.map((page) => [page.id, page])), []);
   const pageByTitle = useMemo(() => new Map(FINANCIAL_WIKI_PAGES.map((page) => [page.title, page])), []);
   const selectedCollection = FINANCIAL_WIKI_COLLECTIONS.find((collection) => collection.id === selectedCollectionId);
@@ -4580,7 +4581,17 @@ function FinancialKnowledgeView() {
         .map((link) => pageByTitle.get(parseWikiLinkTitle(link)))
         .filter((page): page is FinancialWikiPage => Boolean(page))
     : [];
-  const selectedCollectionName = selectedCollection?.name ?? "全部页面";
+  const selectedPageIndex = filteredPages.findIndex((p) => p.id === selectedPage?.id);
+
+  const navigatePage = useCallback(
+    (direction: -1 | 1) => {
+      const nextIdx = selectedPageIndex + direction;
+      if (nextIdx >= 0 && nextIdx < filteredPages.length) {
+        setSelectedPageId(filteredPages[nextIdx].id);
+      }
+    },
+    [selectedPageIndex, filteredPages],
+  );
 
   if (!selectedPage) {
     return <EmptyState title="知识库暂无页面" description="补充页面后会出现在这里" className="border-0" />;
@@ -4588,40 +4599,58 @@ function FinancialKnowledgeView() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <BookOpen className="h-5 w-5 text-blue-500" />
-              <h2 className="text-lg font-semibold text-slate-950">{FINANCIAL_WIKI_PURPOSE.title}</h2>
-              <Badge variant="outline" className="bg-white text-slate-500">LLM Wiki</Badge>
+      {/* ── Compact Header ─────────────────────────────────────── */}
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 ring-1 ring-blue-100">
+              <BookOpen className="h-4 w-4 text-blue-500" />
             </div>
-            <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600">{FINANCIAL_WIKI_PURPOSE.statement}</p>
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-right">
-            {[
-              { label: "页面", value: FINANCIAL_WIKI_PAGES.length },
-              { label: "来源", value: sourceCount },
-              { label: "链接", value: linkGraphEdges },
-            ].map((item) => (
-              <div key={item.label} className="min-w-[74px] rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-[11px] text-slate-500">{item.label}</p>
-                <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-950">{item.value}</p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900">{FINANCIAL_WIKI_PURPOSE.title}</h2>
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600 ring-1 ring-blue-100">
+                  {FINANCIAL_WIKI_PAGES.length} 页
+                </span>
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600 ring-1 ring-emerald-100">
+                  {sourceCount} 来源
+                </span>
+                <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-600 ring-1 ring-violet-100">
+                  {linkGraphEdges} 链接
+                </span>
               </div>
-            ))}
+              <p className="mt-0.5 max-w-xl text-xs text-slate-500 line-clamp-1">{FINANCIAL_WIKI_PURPOSE.statement}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative w-64">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索知识页面..."
+                className="h-8 border-slate-200 bg-white pl-8 text-xs"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowProtocol((v) => !v)}
+              className={cn(
+                "flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-medium transition-colors",
+                showProtocol
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                  : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+              )}
+            >
+              <DatabaseZap className="h-3.5 w-3.5" />
+              协议
+            </button>
           </div>
         </div>
-        <div className="grid gap-4 px-5 py-4 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)]">
-          <div className="relative h-11 self-start">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索：均线、ATR、资金流、回测、数据源..."
-              className="h-11 border-slate-200 bg-white pl-10 text-sm"
-            />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+
+        {/* Entry Points */}
+        <div className="border-t border-slate-100 px-5 py-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {FINANCIAL_WIKI_ENTRY_POINTS.map((entry) => {
               const firstPage = pageById.get(entry.pageIds[0]);
               return (
@@ -4634,10 +4663,13 @@ function FinancialKnowledgeView() {
                     setQuery("");
                     if (firstPage) setSelectedPageId(firstPage.id);
                   }}
-                  className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left transition-colors hover:border-blue-200 hover:bg-blue-50"
+                  className="group flex items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-left transition-all hover:border-blue-200 hover:bg-blue-50"
                 >
-                  <p className="truncate text-sm font-semibold text-slate-900">{entry.title}</p>
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{entry.description}</p>
+                  <div className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-400 group-hover:bg-blue-500" />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-slate-800 group-hover:text-blue-700">{entry.title}</p>
+                    <p className="mt-0.5 line-clamp-1 text-[11px] leading-4 text-slate-500">{entry.description}</p>
+                  </div>
                 </button>
               );
             })}
@@ -4645,58 +4677,92 @@ function FinancialKnowledgeView() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[280px_minmax(360px,0.92fr)_minmax(420px,1.08fr)]">
-        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-4 py-3">
-              <p className="text-sm font-semibold text-slate-950">index.md</p>
-              <p className="mt-1 text-xs text-slate-500">{selectedCollectionName}</p>
+      {/* ── Protocol Panel (collapsible) ──────────────────────── */}
+      {showProtocol && (
+        <section className="grid gap-3 lg:grid-cols-[1fr_320px]">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-slate-950">Ingest / Query / Lint 生命周期</h3>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">protocol</span>
             </div>
-            <div className="space-y-2 p-3">
-              <button
-                type="button"
-                onClick={() => setSelectedCollectionId("all")}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors",
-                  selectedCollectionId === "all"
-                    ? "border-blue-200 bg-blue-50 text-blue-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                )}
-              >
-                <span className="font-medium">全部页面</span>
-                <span className="tabular-nums text-slate-400">{FINANCIAL_WIKI_PAGES.length}</span>
-              </button>
-              {FINANCIAL_WIKI_COLLECTIONS.map((collection) => (
-                <button
-                  key={collection.id}
-                  type="button"
-                  onClick={() => setSelectedCollectionId(collection.id)}
-                  className={cn(
-                    "w-full rounded-md border px-3 py-2 text-left transition-colors",
-                    selectedCollectionId === collection.id
-                      ? "border-blue-200 bg-blue-50 text-blue-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="font-medium">{collection.name}</span>
-                    <span className="tabular-nums text-slate-400">{collection.pages.length}</span>
+            <div className="mt-3 grid gap-2.5 lg:grid-cols-3">
+              {FINANCIAL_WIKI_OPERATIONS.map((operation) => (
+                <article key={operation.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs font-bold text-slate-900">{operation.title}</p>
+                  <p className="mt-1.5 text-xs leading-5 text-slate-600">{operation.description}</p>
+                  <div className="mt-2 space-y-1">
+                    {operation.checks.map((check) => (
+                      <p key={`${operation.id}-${check}`} className="flex gap-1.5 text-[11px] leading-4 text-slate-600">
+                        <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
+                        <span>{check}</span>
+                      </p>
+                    ))}
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">{collection.description}</p>
-                </button>
+                </article>
               ))}
             </div>
           </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold text-slate-950">log.md</p>
+            <div className="mt-2.5 space-y-2">
+              {FINANCIAL_WIKI_LOG.map((item) => (
+                <div key={`${item.date}-${item.event}`} className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+                  <p className="font-mono text-[11px] font-semibold text-slate-500">{item.date}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-slate-700">{item.event}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm font-semibold text-slate-950">页面类型</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+      {/* ── Main: Left nav+list | Right detail ─────────────────── */}
+      <section className="grid gap-4 xl:grid-cols-[340px_1fr]">
+        {/* Left: Filters + Page List */}
+        <aside className="space-y-3 xl:sticky xl:top-24 xl:self-start">
+          {/* Filter Bar */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            {/* Collection Tabs */}
+            <div className="border-b border-slate-100 px-3 py-2">
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCollectionId("all")}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    selectedCollectionId === "all"
+                      ? "bg-slate-900 text-white"
+                      : "text-slate-500 hover:bg-slate-100"
+                  )}
+                >
+                  全部
+                </button>
+                {FINANCIAL_WIKI_COLLECTIONS.map((collection) => (
+                  <button
+                    key={collection.id}
+                    type="button"
+                    onClick={() => setSelectedCollectionId(collection.id)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                      selectedCollectionId === collection.id
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-500 hover:bg-slate-100"
+                    )}
+                  >
+                    {collection.name}
+                    <span className="ml-1 text-[10px] opacity-60">{collection.pages.length}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Type Chips */}
+            <div className="flex flex-wrap gap-1 border-b border-slate-100 px-3 py-2">
               <button
                 type="button"
                 onClick={() => setSelectedType("all")}
                 className={cn(
-                  "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
-                  selectedType === "all" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"
+                  "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
+                  selectedType === "all" ? "bg-blue-50 text-blue-700" : "text-slate-400 hover:bg-slate-50"
                 )}
               >
                 全部
@@ -4707,44 +4773,25 @@ function FinancialKnowledgeView() {
                   type="button"
                   onClick={() => setSelectedType(type)}
                   className={cn(
-                    "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
-                    selectedType === type ? pageTypeClass(type) : "border-slate-200 bg-white text-slate-600"
+                    "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
+                    selectedType === type ? pageTypeClass(type) : "text-slate-400 hover:bg-slate-50"
                   )}
                 >
                   {FINANCIAL_WIKI_PAGE_TYPE_LABELS[type]}
                 </button>
               ))}
             </div>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <DatabaseZap className="h-4 w-4 text-emerald-500" />
-              <p className="text-sm font-semibold text-slate-950">sources</p>
-            </div>
-            <div className="mt-3 space-y-2 text-xs leading-5 text-slate-600">
-              {FINANCIAL_WIKI_PURPOSE.scope.map((item) => (
-                <p key={item}>{item}</p>
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-950">pages/</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {filteredPages.length} / {FINANCIAL_WIKI_PAGES.length} 页 · {selectedCollectionName}
+            {/* Page Count */}
+            <div className="px-3 py-1.5">
+              <p className="text-[11px] text-slate-400">
+                {filteredPages.length} / {FINANCIAL_WIKI_PAGES.length} 页
               </p>
             </div>
-            <Badge variant="outline" className="bg-white text-slate-500">
-              {selectedType === "all" ? "全部类型" : FINANCIAL_WIKI_PAGE_TYPE_LABELS[selectedType]}
-            </Badge>
           </div>
 
-          <div className="max-h-[calc(100vh-280px)] overflow-y-auto p-3">
-            <div className="space-y-2">
+          {/* Page List */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="max-h-[calc(100vh-340px)] overflow-y-auto divide-y divide-slate-100">
               {filteredPages.map((page) => {
                 const active = selectedPage.id === page.id;
                 return (
@@ -4753,173 +4800,180 @@ function FinancialKnowledgeView() {
                     type="button"
                     onClick={() => setSelectedPageId(page.id)}
                     className={cn(
-                      "w-full rounded-lg border p-4 text-left transition-colors",
-                      active
-                        ? "border-blue-300 bg-blue-50 shadow-sm shadow-blue-100"
-                        : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50"
+                      "flex w-full items-start gap-3 px-3.5 py-3 text-left transition-colors",
+                      active ? "bg-blue-50/80" : "hover:bg-slate-50"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className={pageTypeClass(page.type)}>
-                            {FINANCIAL_WIKI_PAGE_TYPE_LABELS[page.type]}
-                          </Badge>
-                          <span className="text-xs text-slate-400">{page.domain}</span>
-                        </div>
-                        <h3 className="mt-2 truncate text-base font-bold text-slate-950">{page.title}</h3>
+                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{
+                      backgroundColor:
+                        page.type === "indicator" ? "#3b82f6" :
+                        page.type === "workflow" ? "#8b5cf6" :
+                        page.type === "risk" ? "#ef4444" :
+                        page.type === "source" ? "#10b981" : "#94a3b8"
+                    }} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <h3 className={cn("truncate text-sm font-semibold", active ? "text-blue-700" : "text-slate-900")}>
+                          {page.title}
+                        </h3>
+                        <span className="shrink-0 text-[10px] text-slate-400">{page.domain}</span>
                       </div>
-                      <ArrowRight className={cn("mt-1 h-4 w-4 shrink-0", active ? "text-blue-500" : "text-slate-300")} />
+                      <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{page.summary}</p>
                     </div>
-                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{page.summary}</p>
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                      <span className="rounded bg-slate-100 px-2 py-1 text-slate-500">{page.sources.length} sources</span>
-                      <span className="rounded bg-slate-100 px-2 py-1 text-slate-500">{page.links.length} wikilinks</span>
-                      <span className="rounded bg-slate-100 px-2 py-1 text-slate-500">status: maintained</span>
-                    </div>
+                    <ArrowRight className={cn("mt-1 h-3 w-3 shrink-0", active ? "text-blue-500" : "text-transparent")} />
                   </button>
                 );
               })}
-
               {!filteredPages.length && (
-                <EmptyState title="没有匹配的知识页面" description="调整目录、类型或搜索关键词" className="border-0" />
+                <div className="px-4 py-8 text-center text-xs text-slate-400">没有匹配的页面</div>
               )}
             </div>
           </div>
-        </div>
+        </aside>
 
-        <article className="rounded-lg border border-slate-200 bg-white shadow-sm xl:sticky xl:top-24 xl:self-start">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className={pageTypeClass(selectedPage.type)}>
-                {FINANCIAL_WIKI_PAGE_TYPE_LABELS[selectedPage.type]}
-              </Badge>
-              <Badge variant="outline" className="bg-white text-slate-500">{selectedPage.domain}</Badge>
-              <code className="rounded bg-slate-50 px-2 py-1 font-mono text-[11px] text-slate-500">
-                {selectedPage.id}.md
-              </code>
+        {/* Right: Page Detail */}
+        <article className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          {/* Detail Header */}
+          <div className="border-b border-slate-100 px-6 py-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={cn("rounded-md px-2 py-0.5 text-[11px] font-medium", pageTypeClass(selectedPage.type))}>
+                  {FINANCIAL_WIKI_PAGE_TYPE_LABELS[selectedPage.type]}
+                </span>
+                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{selectedPage.domain}</span>
+                <code className="rounded bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">{selectedPage.id}.md</code>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => navigatePage(-1)}
+                  disabled={selectedPageIndex <= 0}
+                  className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="min-w-[48px] text-center text-[11px] tabular-nums text-slate-400">
+                  {selectedPageIndex + 1} / {filteredPages.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigatePage(1)}
+                  disabled={selectedPageIndex >= filteredPages.length - 1}
+                  className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            <h3 className="mt-3 text-xl font-bold text-slate-950">{selectedPage.title}</h3>
+            <h3 className="mt-3 text-2xl font-bold tracking-tight text-slate-950">{selectedPage.title}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">{selectedPage.summary}</p>
           </div>
 
-          <div className="max-h-[calc(100vh-260px)] overflow-y-auto p-5">
-            <div className="grid gap-3">
-              {selectedPage.formula && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">formula</p>
-                  <code className="mt-2 block whitespace-pre-wrap font-mono text-xs leading-6 text-slate-800">
-                    {selectedPage.formula}
-                  </code>
-                </div>
-              )}
+          {/* Detail Body */}
+          <div className="px-6 py-5">
+            <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+              {/* Main column */}
+              <div className="space-y-4">
+                {/* Formula */}
+                {selectedPage.formula && (
+                  <div className="rounded-lg border border-violet-200 bg-violet-50/60 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">公式 Formula</p>
+                    <code className="mt-2 block whitespace-pre-wrap rounded-md bg-white/80 px-3 py-2.5 font-mono text-xs leading-6 text-violet-900 ring-1 ring-violet-100">
+                      {selectedPage.formula}
+                    </code>
+                  </div>
+                )}
 
-              <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-500">decision use</p>
-                <p className="mt-2 text-sm leading-6 text-blue-950">{selectedPage.decisionUse}</p>
-              </div>
-
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">quality gate</p>
-                  <p className="mt-2 text-sm leading-6 text-emerald-950">{selectedPage.qualityGate}</p>
+                {/* Decision Use */}
+                <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-blue-500">决策用途</p>
+                  <p className="mt-2 text-sm leading-6 text-blue-950">{selectedPage.decisionUse}</p>
                 </div>
-                <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">caveats</p>
-                  <div className="mt-2 space-y-1 text-sm leading-6 text-amber-950">
-                    {selectedPage.caveats.map((caveat) => <p key={`${selectedPage.id}-caveat-${caveat}`}>{caveat}</p>)}
+
+                {/* Caveats */}
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-600">注意事项</p>
+                  <div className="mt-2 space-y-1.5">
+                    {selectedPage.caveats.map((caveat) => (
+                      <p key={`${selectedPage.id}-caveat-${caveat}`} className="flex gap-2 text-sm leading-6 text-amber-950">
+                        <span className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
+                        <span>{caveat}</span>
+                      </p>
+                    ))}
                   </div>
                 </div>
-              </div>
 
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">sources</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedPage.sources.map((source) => (
-                    <code key={`${selectedPage.id}-source-${source}`} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-mono text-[11px] text-slate-600">
-                      {source}
-                    </code>
-                  ))}
+                {/* Wikilinks */}
+                <div className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-3.5 w-3.5 text-blue-500" />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">关联页面</p>
+                  </div>
+                  {relatedPages.length > 0 ? (
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {relatedPages.map((page) => (
+                        <button
+                          key={`${selectedPage.id}-related-${page.id}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCollectionId("all");
+                            setSelectedType("all");
+                            setQuery("");
+                            setSelectedPageId(page.id);
+                          }}
+                          className="group flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-left transition-all hover:border-blue-300 hover:bg-blue-50"
+                        >
+                          <div className="h-1.5 w-1.5 shrink-0 rounded-full" style={{
+                            backgroundColor:
+                              page.type === "indicator" ? "#3b82f6" :
+                              page.type === "workflow" ? "#8b5cf6" :
+                              page.type === "risk" ? "#ef4444" :
+                              page.type === "source" ? "#10b981" : "#94a3b8"
+                          }} />
+                          <span className="text-xs font-medium text-slate-700 group-hover:text-blue-700">{page.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-400">暂无关联页面</p>
+                  )}
                 </div>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2">
-                  <GitBranch className="h-4 w-4 text-blue-500" />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">wikilinks</p>
+              {/* Right sidebar: metadata */}
+              <div className="space-y-3">
+                {/* Quality Gate */}
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600">质量门</p>
+                  <p className="mt-1.5 text-xs leading-5 text-emerald-950">{selectedPage.qualityGate}</p>
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {relatedPages.map((page) => (
-                    <button
-                      key={`${selectedPage.id}-related-${page.id}`}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCollectionId("all");
-                        setSelectedType("all");
-                        setQuery("");
-                        setSelectedPageId(page.id);
-                      }}
-                      className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left transition-colors hover:border-blue-200 hover:bg-blue-50"
-                    >
-                      <p className="truncate text-sm font-semibold text-slate-900">{page.title}</p>
-                      <p className="mt-1 text-xs text-slate-500">{FINANCIAL_WIKI_PAGE_TYPE_LABELS[page.type]} · {page.domain}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">agent context</p>
-                <div className="mt-3 rounded-md border border-slate-200 bg-white p-3 font-mono text-[11px] leading-5 text-slate-600">
-                  <p>page: {selectedPage.title}</p>
-                  <p>type: {selectedPage.type}</p>
-                  <p>qualityGate: {selectedPage.qualityGate}</p>
-                  <p>sources: {selectedPage.sources.join(", ")}</p>
+                {/* Sources */}
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">数据来源</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {selectedPage.sources.map((source) => (
+                      <code key={`${selectedPage.id}-source-${source}`} className="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-600 ring-1 ring-slate-200">
+                        {source}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Agent Context */}
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Agent 上下文</p>
+                  <div className="mt-2 rounded-md bg-white p-2.5 font-mono text-[10px] leading-5 text-slate-600 ring-1 ring-slate-200">
+                    <p>page: {selectedPage.title}</p>
+                    <p>type: {selectedPage.type}</p>
+                    <p>qualityGate: {selectedPage.qualityGate}</p>
+                    <p>sources: {selectedPage.sources.join(", ")}</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </article>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-950">Ingest / Query / Lint</h3>
-              <p className="mt-1 text-sm text-slate-500">知识页面按摄入、查询和检查的固定生命周期维护。</p>
-            </div>
-            <Badge variant="outline" className="bg-white text-slate-500">protocol</Badge>
-          </div>
-          <div className="mt-4 grid gap-3 lg:grid-cols-3">
-            {FINANCIAL_WIKI_OPERATIONS.map((operation) => (
-              <article key={operation.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-bold text-slate-950">{operation.title}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{operation.description}</p>
-                <div className="mt-3 space-y-1">
-                  {operation.checks.map((check) => (
-                    <p key={`${operation.id}-${check}`} className="flex gap-2 text-xs leading-5 text-slate-600">
-                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                      <span>{check}</span>
-                    </p>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-semibold text-slate-950">log.md</p>
-          <div className="mt-3 space-y-3">
-            {FINANCIAL_WIKI_LOG.map((item) => (
-              <div key={`${item.date}-${item.event}`} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="font-mono text-xs font-semibold text-slate-500">{item.date}</p>
-                <p className="mt-1 text-sm leading-6 text-slate-700">{item.event}</p>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
     </div>
   );
