@@ -67,20 +67,21 @@ function shouldRefreshScaffoldFile(filePath: string, existing: string): boolean 
       existing.includes('const useRspack = process.env.NEXT_RSPACK ===') ||
       existing.includes('Rspack dev mode enabled') ||
       existing.includes('const devEnv =') ||
-      /'next',\s*'dev'/.test(existing) ||
-      !existing.includes("commandArgs.push('--turbo')") ||
+      existing.includes("commandArgs.push('--turbo')") ||
+      existing.includes('delete runtimeEnv.NEXT_RSPACK') ||
+      existing.includes('delete runtimeEnv.TURBOPACK') ||
       !existing.includes('QUANTPILOT_WORKSPACE_ROOT') ||
-      !existing.includes('delete runtimeEnv.NEXT_RSPACK') ||
       !existing.includes("fs.existsSync(path.join(projectRoot, '.next', 'BUILD_ID'))")
     );
   }
 
   if (normalizedPath.endsWith('/scripts/run-build.js')) {
     return (
+      existing.includes('delete buildEnv.NEXT_RSPACK') ||
+      existing.includes('delete buildEnv.TURBOPACK') ||
       !existing.includes("NODE_ENV: 'production'") ||
       !existing.includes('QUANTPILOT_WORKSPACE_ROOT') ||
       !existing.includes('NEXT_PRIVATE_BUILD_WORKER') ||
-      !existing.includes('delete buildEnv.NEXT_RSPACK') ||
       !existing.includes("['next', 'build'")
     );
   }
@@ -112,9 +113,6 @@ const buildEnv = {
   NEXT_PRIVATE_BUILD_WORKER: '1',
   NEXT_TELEMETRY_DISABLED: '1',
 };
-
-delete buildEnv.NEXT_RSPACK;
-delete buildEnv.TURBOPACK;
 
 const child = spawn(
   'npx',
@@ -5764,9 +5762,6 @@ function resolvePort(preferredPort) {
   const commandArgs = hasProductionBuild
     ? ['next', 'start', '--port', String(port), ...passthrough]
     : ['next', 'dev', '--port', String(port), ...passthrough];
-  if (!hasProductionBuild && !commandArgs.includes('--turbo') && !commandArgs.includes('--turbopack')) {
-    commandArgs.push('--turbo');
-  }
   const runtimeEnv = {
     ...process.env,
     PORT: String(port),
@@ -5776,8 +5771,6 @@ function resolvePort(preferredPort) {
       process.env.QUANTPILOT_WORKSPACE_ROOT || path.resolve(projectRoot, '../../..'),
     NEXT_TELEMETRY_DISABLED: '1',
   };
-  delete runtimeEnv.NEXT_RSPACK;
-  delete runtimeEnv.TURBOPACK;
 
   const child = spawn(
     'npx',

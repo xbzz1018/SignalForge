@@ -392,10 +392,6 @@ async function clearProjectPreviewArtifacts(
   }
 
   await Promise.all([
-    fs.rm(path.join(projectPath, '.next', 'dev', 'cache', 'rspack'), {
-      recursive: true,
-      force: true,
-    }),
     fs.rm(path.join(projectPath, '.next', 'cache'), {
       recursive: true,
       force: true,
@@ -760,8 +756,6 @@ async function waitForPreviewReady(
 
 function buildPreviewCommandEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const commandEnv: Record<string, string | undefined> = { ...env };
-  delete commandEnv.NEXT_RSPACK;
-  delete commandEnv.TURBOPACK;
   delete commandEnv.NODE_ENV;
   commandEnv.NEXT_TELEMETRY_DISABLED = '1';
   return commandEnv as NodeJS.ProcessEnv;

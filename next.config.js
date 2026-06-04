@@ -1,5 +1,3 @@
-const withRspack = require('next-rspack');
-
 const isStandaloneBuild = process.env.QUANTPILOT_STANDALONE_BUILD === '1';
 const skipRouteOutputTracing = process.env.QUANTPILOT_SKIP_ROUTE_TRACING !== '0' && !isStandaloneBuild;
 const projectRoot = __dirname;
@@ -53,8 +51,7 @@ const nextConfig = {
     webpackBuildWorker: true,
   },
   // Next 16 defaults dev mode to Turbopack and errors when a webpack() hook
-  // exists without a turbopack key. next-rspack still uses TURBOPACK=auto as
-  // its activation signal, so keep this empty config to satisfy that check.
+  // exists without a turbopack key.
   turbopack: {},
   outputFileTracingRoot: projectRoot,
   // 工作区数据、历史项目、本地缓存和 Git 元数据不属于构建产物，避免 trace 扫全仓库。
@@ -87,8 +84,4 @@ const nextConfig = {
   },
 };
 
-const shouldUseRspack =
-  process.env.QUANTPILOT_DISABLE_RSPACK !== '1' &&
-  process.env.TURBOPACK === 'auto';
-
-module.exports = shouldUseRspack ? withRspack(nextConfig) : nextConfig;
+module.exports = nextConfig;

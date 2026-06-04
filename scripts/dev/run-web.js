@@ -313,18 +313,8 @@ async function clearStaleNextDevLock() {
   await fs.rm(nextDevLockFile, { force: true });
 }
 
-async function clearRspackCaches() {
-  await Promise.all([
-    fs.rm(path.join(rootDir, '.next', 'dev', 'cache', 'rspack'), { recursive: true, force: true }),
-    fs.rm(path.join(rootDir, '.next', 'dev', 'cache', 'webpack'), { recursive: true, force: true }),
-    fs.rm(path.join(rootDir, '.next', 'cache'), { recursive: true, force: true }),
-    clearStaleNextDevLock(),
-  ]);
-}
-
 async function clearNextDevStartupCaches() {
   await Promise.all([
-    fs.rm(path.join(rootDir, '.next', 'dev', 'cache', 'rspack'), { recursive: true, force: true }),
     fs.rm(path.join(rootDir, '.next', 'dev', 'cache', 'webpack'), { recursive: true, force: true }),
     clearStaleNextDevLock(),
   ]);
@@ -360,7 +350,6 @@ async function startWebDevServer({
   passthrough = [],
   stdio = 'inherit',
   onOutput,
-  bundler = 'rspack',
 } = {}) {
   const { port, url } = await ensureEnvironment({
     preferredPort,
@@ -380,31 +369,7 @@ async function startWebDevServer({
 
   console.log(`🚀 Starting Next.js dev server on ${resolvedUrl}`);
 
-  const useRspack = bundler === 'rspack';
-  const useTurbo = bundler === 'turbo';
-  const useWebpack = bundler === 'webpack';
-  const bundlerEnv = {
-    ...process.env,
-    QUANTPILOT_DISABLE_RSPACK: useRspack ? '0' : '1',
-  };
-  if (useRspack) {
-    bundlerEnv.TURBOPACK = 'auto';
-    delete bundlerEnv.NEXT_RSPACK;
-  } else if (useTurbo) {
-    bundlerEnv.TURBOPACK = '1';
-    delete bundlerEnv.NEXT_RSPACK;
-  } else if (useWebpack) {
-    delete bundlerEnv.TURBOPACK;
-    delete bundlerEnv.NEXT_RSPACK;
-  }
-
   const devArgs = ['next', 'dev', '--port', resolvedPort.toString(), ...passthrough];
-  if (useTurbo && !devArgs.includes('--turbo') && !devArgs.includes('--turbopack')) {
-    devArgs.push('--turbo');
-  }
-  if (useWebpack && !devArgs.includes('--webpack')) {
-    devArgs.push('--webpack');
-  }
 
   const child = spawn(
     'npx',
@@ -414,7 +379,7 @@ async function startWebDevServer({
       stdio: onOutput ? ['inherit', 'pipe', 'pipe'] : stdio,
       shell: isWindows,
       env: {
-        ...bundlerEnv,
+        ...process.env,
         PORT: resolvedPort.toString(),
         WEB_PORT: resolvedPort.toString(),
         NEXT_PUBLIC_APP_URL: resolvedUrl,
@@ -448,89 +413,26 @@ async function startWebDevServer({
 async function runFromCli() {
   const argv = process.argv.slice(2);
   const { preferredPort, passthrough } = parseCliArgs(argv);
-  let restartedAfterRspackPanic = false;
-  let recentOutput = '';
-  let activeChild = null;
-  let activeBundler =
-    process.env.QUANTPILOT_BUNDLER === 'turbo'
-      ? 'turbo'
-      : process.env.QUANTPILOT_BUNDLER === 'webpack'
-        ? 'webpack'
-        : 'rspack';
+  const { child } = await startWebDevServer({
+    preferredPort,
+    passthrough,
+    stdio: 'inherit',
+  });
 
-  const hasRspackPanicOutput = () =>
-    /rspack/i.test(recentOutput) &&
-    (/Panic occurred at runtime/i.test(recentOutput) || /should mgm exist/i.test(recentOutput));
+  child.on('error', (error) => {
+    console.error('\n❌ Failed to start Next.js dev server');
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
 
-  const launch = async () => {
-    const { child, port, url } = await startWebDevServer({
-      preferredPort,
-      passthrough,
-      stdio: 'inherit',
-      bundler: activeBundler,
-      onOutput(chunk) {
-        const text = chunk.toString();
-        recentOutput = `${recentOutput}${text}`.slice(-16_000);
-        process.stdout.write(text);
-      },
-    });
-    activeChild = child;
+  child.on('exit', (code) => {
+    if (typeof code !== 'number' || code === 0) {
+      return;
+    }
 
-    setTimeout(async () => {
-      if (restartedAfterRspackPanic || !hasRspackPanicOutput()) {
-        return;
-      }
-
-      const healthy = await probeUrl(url);
-      if (healthy) {
-        return;
-      }
-
-      restartedAfterRspackPanic = true;
-      activeBundler = 'turbo';
-      console.warn('\n⚠️  检测到 Rspack 缓存死锁，正在切换到 Next Turbopack 稳定模式...');
-      stopChild(activeChild);
-      await delay(1200);
-      await clearRspackCaches();
-      recentOutput = '';
-      process.env.PORT = String(port);
-      process.env.WEB_PORT = String(port);
-      await launch();
-    }, 5_000);
-
-    child.on('error', (error) => {
-      console.error('\n❌ Failed to start Next.js dev server');
-      console.error(error instanceof Error ? error.message : error);
-      process.exit(1);
-    });
-
-    child.on('exit', async (code) => {
-      const rspackCachePanic =
-        /rspack/i.test(recentOutput) &&
-        (/Panic occurred at runtime/i.test(recentOutput) || /should mgm exist/i.test(recentOutput));
-
-      if (!restartedAfterRspackPanic && rspackCachePanic) {
-        restartedAfterRspackPanic = true;
-        activeBundler = 'turbo';
-        console.warn('\n⚠️  检测到 Rspack 开发缓存异常，正在切换到 Next Turbopack 稳定模式...');
-        await clearRspackCaches();
-        recentOutput = '';
-        process.env.PORT = String(port);
-        process.env.WEB_PORT = String(port);
-        await launch();
-        return;
-      }
-
-      if (typeof code !== 'number' || code === 0) {
-        return;
-      }
-
-      console.error(`\n❌ Next.js dev server exited with code ${code}`);
-      process.exit(code);
-    });
-  };
-
-  await launch();
+    console.error(`\n❌ Next.js dev server exited with code ${code}`);
+    process.exit(code);
+  });
 }
 
 if (require.main === module) {

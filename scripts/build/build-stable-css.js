@@ -3,9 +3,8 @@
 /**
  * 生成一份浏览器可稳定解析的 Tailwind CSS。
  *
- * next-rspack 目前在 dev 输出里可能把 Tailwind 多声明规则的分号剥掉，
- * 浏览器会因此丢弃大量工具类。这里使用 Tailwind/PostCSS 官方链路生成兜底样式，
- * 让 Rspack 继续负责快速 JS 构建，同时保证页面视觉不退化。
+ * 使用 Tailwind/PostCSS 官方链路生成兜底样式，保证开发与预览环境中
+ * 页面视觉不会因为临时构建缓存或样式注入问题退化。
  */
 
 const fs = require('fs/promises');

@@ -33,7 +33,7 @@ function run(command, args, env = {}) {
 
 async function main() {
   await withNextArtifactLock(rootDir, 'type-check', async () => {
-    await run('npx', ['next', 'typegen'], { TURBOPACK: 'auto' });
+    await run('npx', ['next', 'typegen']);
     await run('npx', ['tsc', '--noEmit']);
   });
 }

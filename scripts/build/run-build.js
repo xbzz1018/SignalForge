@@ -116,7 +116,6 @@ async function runNextBuild(args, { standalone } = {}) {
         shell: isWindows,
         env: {
           ...process.env,
-          TURBOPACK: process.env.TURBOPACK || 'auto',
           QUANTPILOT_STANDALONE_BUILD: standalone ? '1' : '0',
           QUANTPILOT_SKIP_ROUTE_TRACING:
             process.env.QUANTPILOT_SKIP_ROUTE_TRACING || (standalone ? '0' : '1'),

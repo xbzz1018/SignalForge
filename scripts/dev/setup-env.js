@@ -259,7 +259,6 @@ async function ensureEnvironment(options = {}) {
   if (!hasEnvKey(envContents, 'QUANTPILOT_REDIS_REQUIRED')) {
     envDefaults.QUANTPILOT_REDIS_REQUIRED = '0';
   }
-
   const portStartCandidates = [
     parsePortValue(process.env.PREVIEW_PORT_START),
     extractPort(envContents, ['PREVIEW_PORT_START']),
