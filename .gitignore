@@ -22,6 +22,9 @@ prisma/data/
 public/uploads/
 public/generated/
 tmp/
+test-results/
+playwright-report/
+coverage/
 
 # logs
 npm-debug.log*

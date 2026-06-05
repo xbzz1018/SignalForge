@@ -70,6 +70,21 @@ PREVIEW_PORT_END=4999
 | 对象存储 | 后续用于原始行情文件、回测产物和大报告 |
 | ClickHouse | 后续用于超大量 tick、盘口快照和研究分析面板 |
 
+## 服务目录和轻量发现
+
+当前不引入 Dubbo3 这类 Java 服务治理栈。QuantPilot 会长期保持 Python/FastAPI + Node/Next.js 的主线，所以服务注册、配置中心和依赖发现先用更轻的方式落地：
+
+| 文件或入口 | 作用 |
+| --- | --- |
+| `config/service-catalog.json` | 服务目录单一事实源，记录组件职责、runtime、默认 endpoint、Docker service、启动命令和依赖关系 |
+| `src/lib/platform/service-catalog.ts` | Node 侧解析、脱敏、依赖边和配置校验 |
+| `/api/infrastructure/service-catalog` | 运维和设置页可读取的服务目录 API |
+| `npm run check:service-catalog` | 检查服务目录、Docker compose、API、ops 页面和文档是否同步 |
+
+这套机制覆盖当前真正需要的能力：本地服务发现、端口和环境变量收敛、必需/可降级组件区分、依赖图展示和 CI guardrail。新增基础组件时先更新 `config/service-catalog.json`，再补 Docker、health probe、文档和页面入口。
+
+Dubbo3 暂时不适合当前项目，因为它主要服务 Java 微服务体系；为了一个本地 Python/Node 产品栈引入额外注册中心、RPC 协议、网关和部署复杂度，会比收益更大。后续只有在多后端服务、多副本部署、跨机器服务发现和强治理需求都真实出现后，再评估 Consul、etcd、Kubernetes service discovery 或其他更重方案。
+
 ## 主前端启动器
 
 `npm run dev` 通过 `scripts/dev/run-web.js` 启动主前端。它不是额外 bundler，而是本地启动保护层：

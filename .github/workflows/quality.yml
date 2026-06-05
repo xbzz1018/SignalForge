@@ -30,6 +30,15 @@ jobs:
       - name: Type check
         run: npm run type-check
 
+      - name: Quant guardrails
+        run: npm run check:quant-guardrails
+
+      - name: Backend architecture guardrails
+        run: npm run check:backend-architecture
+
+      - name: Service catalog guardrails
+        run: npm run check:service-catalog
+
       - name: Build
         run: npm run build
 

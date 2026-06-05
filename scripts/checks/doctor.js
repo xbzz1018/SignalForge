@@ -179,6 +179,20 @@ function requestHead(url, timeoutMs = 8000) {
   });
 }
 
+function requestGetOk(url, timeoutMs = 2500) {
+  return new Promise((resolve) => {
+    const request = http.get(url, { timeout: timeoutMs }, (response) => {
+      response.resume();
+      resolve({ ok: response.statusCode >= 200 && response.statusCode < 400, statusCode: response.statusCode });
+    });
+    request.on('timeout', () => {
+      request.destroy();
+      resolve({ ok: false, statusCode: null, error: 'timeout' });
+    });
+    request.on('error', (error) => resolve({ ok: false, statusCode: null, error: error.message }));
+  });
+}
+
 function requestJson(url, timeoutMs = 2500) {
   return new Promise((resolve) => {
     const request = http.get(url, { timeout: timeoutMs }, (response) => {
@@ -320,7 +334,7 @@ async function main() {
 
   if (degradation.observability.enabled) {
     const lokiUrl = readEnvValue('LOKI_URL') || 'http://127.0.0.1:3100';
-    const loki = await requestHead(`${lokiUrl.replace(/\/$/, '')}/ready`, 2500);
+    const loki = await requestGetOk(`${lokiUrl.replace(/\/$/, '')}/ready`, 2500);
     addCheck(
       'Loki 可观测性',
       loki.ok ? 'ok' : unavailableStatus(degradation.observability),
@@ -353,6 +367,9 @@ async function main() {
   });
   checkCommand('Benchmark 覆盖', 'node', ['scripts/checks/check-quant-benchmark-coverage.js'], {
     successSummary: '固定评测覆盖达标。',
+  });
+  checkCommand('服务目录', 'node', ['scripts/checks/check-service-catalog.js'], {
+    successSummary: '服务边界、依赖和文档同步通过。',
   });
   checkCommand('Eval 定时器', 'node', ['scripts/checks/check-eval-schedule.js'], {
     successSummary: '定时评测检查通过。',

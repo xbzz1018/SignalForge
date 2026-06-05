@@ -13,6 +13,7 @@
 | `data/projects/` | 用户生成的工作空间源码和产物 | 不提交；需要迁移索引时运行 `npm run db:sync-workspaces` |
 | `data/strategy-scans/` | 本地策略扫描历史文件 | 新数据应优先迁入 PostgreSQL，历史文件可按需归档 |
 | `tmp/` | 评测报告、队列、修复单、视觉截图和临时文件 | 可按需清理；重要报告应导出或入库后再删 |
+| `test-results/`、`playwright-report/`、`coverage/` | Playwright、测试和覆盖率产物 | 可随时删除，重新运行测试会再生成 |
 | `prisma/data/` | 旧本地数据库或临时数据目录 | SQLite 路径已废弃，确认无历史依赖后可删除 |
 | `public/generated/` | 稳定 CSS 等前端生成资源 | 运行 `npm run styles:build` 会重新生成 |
 | `public/uploads/` | 本地上传和图片附件 | 不提交，必要时迁移到对象存储 |
@@ -21,10 +22,30 @@
 | `*.tsbuildinfo`、`.eslintcache` | TypeScript / ESLint 缓存 | 可随时删除 |
 | `.env`、`.env.local` | 本地密钥、端口和数据库连接 | 不提交，只提交 `.env.example` |
 
-建议的轻量清理命令：
+建议先预览清理范围：
 
 ```bash
-rm -rf .next out tmp public/generated .ruff_cache .pytest_cache __pycache__ *.tsbuildinfo .eslintcache
+npm run clean:local:dry-run
+```
+
+执行轻量清理：
+
+```bash
+npm run clean:local
+```
+
+如果要同步清理 `data/projects/*` 内部生成工作空间的 `.next/`、`node_modules/`、`dist/`、`build/`、`out/`，使用：
+
+```bash
+npm run clean:workspaces
+```
+
+这不会删除 `data/projects/*` 本身，也不会删除 `data_file/`、`.quantpilot/`、`evidence/` 等可追溯产物。
+
+等价的手工轻量清理命令：
+
+```bash
+rm -rf .next out tmp public/generated test-results playwright-report coverage .ruff_cache .pytest_cache __pycache__ *.tsbuildinfo .eslintcache
 ```
 
 如果只是在排查前端启动缓存，不需要清掉整个 `.next/`，可以先删开发锁和缓存：

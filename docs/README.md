@@ -22,6 +22,7 @@
 | 想学习怎么写 Skills | [教学 07：Skills 编写与迭代教程](learning/07-skills-authoring.md) |
 | 想深入策略平台 | [策略平台使用与设计指南](strategy-platform-guide.md) |
 | 想深入运维平台 | [运维平台使用与评分指南](ops-platform-guide.md) |
+| 想优化后端能力边界 | [后端能力架构与持续优化边界](backend-capability-architecture.md) |
 
 ## 知识地图
 
@@ -30,6 +31,7 @@
 | 总体架构 | [架构总览](architecture.md) | 主链路、运行时、数据层、控制台和质量门 |
 | 内部组件 | [内部组件学习指南](internal-components.md) | 页面、服务、数据、Skills、验证、运维和降级如何协作 |
 | 项目结构 | [项目结构与分层边界](project-structure.md) | 前端、后端、量化领域层、脚本和生成工作空间边界 |
+| 后端能力 | [后端能力架构与持续优化边界](backend-capability-architecture.md) | Python 后端、设计模式、模块落点、ClickHouse 和迁移路线 |
 | API | [API 总览](api-reference.md) | Next.js API、market-data API、调用方和排查路径 |
 | 数据字典 | [数据字典](data-dictionary.md) | Prisma 表、quant schema、字段来源、因子和数据质量口径 |
 | 基础设施 | [基础设施配置](infrastructure.md) | PostgreSQL、TimescaleDB、Redis、Loki/Grafana/Alloy、SQL 初始化和降级模式 |

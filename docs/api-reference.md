@@ -61,6 +61,7 @@
 | `/api/evals/runs/[runId]` | `GET` | 评测平台 | 单次评测报告详情 |
 | `/api/ops/platform` | `GET` | 运维平台 | 基础环境、日志、健康和降级状态 |
 | `/api/infrastructure/health` | `GET` | 设置/运维 | PostgreSQL、market-data、Redis、Loki 等组件健康 |
+| `/api/infrastructure/service-catalog` | `GET` | 设置/运维 | 服务目录、Python/Node runtime、endpoint、依赖边和配置校验结果 |
 
 ### Skills、设置和集成
 

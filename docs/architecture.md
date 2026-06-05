@@ -9,6 +9,9 @@ flowchart LR
   W --> R[Agent Runtime]
   R --> S[QuantPilot Skills]
   W --> M[市场数据后端 :8000]
+  W --> SC[服务目录 config/service-catalog.json]
+  SC --> W
+  SC --> M
   M --> DB
   W --> L[(Loki / Grafana / Alloy)]
   R --> P[data/projects/project-*]
@@ -37,7 +40,7 @@ flowchart LR
 ## 主链路
 
 1. 用户输入问题，必要时上传截图。
-2. Agent 使用 `quant-run-planner` 判断意图是否清晰。
+2. Agent 使用 `run-planner` 判断意图是否清晰。
 3. 信息不足时进入澄清，用户补充后自动承接上一轮问题。
 4. 信息完整后生成 `.quantpilot/run_plan.json`。
 5. 平台根据 run plan 调用 `8000` 后端获取真实数据。
@@ -59,6 +62,17 @@ flowchart LR
 - `src/lib/constants/cliModels.ts`
 - `src/lib/services/cli/claude.ts`
 - `src/lib/services/cli/codex.ts`
+
+## 服务目录
+
+QuantPilot 当前采用 Python/Node 长期主线，不引入 Dubbo3 作为配置中心、服务发现或服务注册。对应能力由轻量服务目录承担：
+
+- `config/service-catalog.json` 记录 web、market-data、TimescaleDB、Redis、ClickHouse、Loki、Grafana 和 Alloy 的职责、runtime、endpoint、启动命令和依赖。
+- `src/lib/platform/service-catalog.ts` 负责 Node 侧解析、环境变量覆盖、endpoint 脱敏、依赖图和配置校验。
+- `/api/infrastructure/service-catalog` 暴露给运维平台和设置页，避免页面继续散落硬编码端口。
+- `npm run check:service-catalog` 作为 CI guardrail，确保服务目录、Docker、API、ops 页面和文档同步。
+
+这相当于项目内的轻量注册表：足够支撑本地开发、单机部署、可降级组件和运维可视化。只有当后端演进成多服务多副本、跨机器部署、服务自动伸缩和统一流量治理时，才需要评估 Consul、etcd、Kubernetes service discovery 或更重的 RPC/注册中心方案。
 
 ## 数据层
 
@@ -82,7 +96,7 @@ flowchart LR
 - 行情字段来源、补数优先级和 provider 边界见 [行情数据源采集知识库](market-data-source-knowledge.md)。
 - 根目录 `sqls/` 保存组件默认需要的基础 SQL，Docker 首次创建容器时会执行；已有数据库可通过 `npm run db:init` 补齐 SQL 对象并同步 Prisma 应用表。
 
-更多细节见 [基础设施配置](infrastructure.md)。
+更多细节见 [基础设施配置](infrastructure.md)。后端能力分层、设计模式和持续优化路线见 [后端能力架构与持续优化边界](backend-capability-architecture.md)。
 
 ## 设计取舍
 
@@ -95,8 +109,28 @@ QuantPilot 当前最重要的取舍是“本地事实库优先”。外部接口
 | Redis 先做短期缓存 | 股票池摘要、板块资金和任务进度适合缓存，但长期结果仍写回数据库 |
 | Loki 可选但推荐 | 本地开发可以降级到文件日志，排复杂问题时集中日志更省时间 |
 | Skills 作为生成规则层 | 同类页面问题不应每次只修代码，要沉淀成下一次生成能复用的规则 |
+| Python 作为市场数据后端主语言 | 当前瓶颈主要是外部数据源、IO、缓存、批处理和存储形态，不是 CPU 密集计算；优先强化 FastAPI + async/批处理 + Redis/TimescaleDB/ClickHouse，而不是过早引入 Go 或 Rust |
 
 这个架构允许组件分阶段增强：没有 Loki 时平台还能看本地日志；没有 Redis 时可以直读数据库；没有市场数据后端时部分页面会降级展示注册表。但数据库和生成工作空间契约是核心，一旦缺失就很难保证结果可追溯。
+
+## 后端语言边界
+
+`services/market-data` 继续以 Python 为主线。短期不要为了“可能的性能问题”拆出 Go 或 Rust 服务，除非已经通过 profiling 证明瓶颈是 Python 运行时本身。
+
+优先优化顺序：
+
+1. 批量接口和批量写入，减少逐标的串行 IO。
+2. Redis 做短 TTL 热点缓存，TimescaleDB 做事实库。
+3. ClickHouse 承接 append-only 的评测事件、生成事件和大规模研究分析。
+4. 后台队列拆分长任务，避免阻塞请求链路。
+5. 只有在 CPU 密集计算、极高并发网关或二进制协议服务成为明确瓶颈后，再考虑 Rust/Go。
+
+Go/Rust 的合理引入场景：
+
+- Rust：高频指标计算、列式文件解析、极重 CPU 回测内核。
+- Go：高并发轻量网关、长连接代理、独立任务 worker。
+
+在这些场景出现前，保持 Python 单后端可以减少部署、调试、类型契约和团队认知成本。
 
 ## 工作空间产物
 
@@ -155,7 +189,7 @@ npm run build:standalone
 
 GitHub Actions 当前包含：
 
-- 前端：`npm ci`、`npm run lint`、`npm run type-check`、`npm run build`。
+- 前端：`npm ci`、`npm run lint`、`npm run type-check`、`npm run check:quant-guardrails`、`npm run check:backend-architecture`、`npm run build`。
 - 后端：`uv sync --locked --all-groups`、`uv run ruff check .`、`uv run pytest`。
 
 Dependabot 每周检查：

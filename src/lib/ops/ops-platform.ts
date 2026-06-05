@@ -12,6 +12,15 @@ import {
   componentModeSummary,
   getRuntimeDegradationConfig,
 } from '@/lib/config/degradation';
+import {
+  buildServiceDependencyEdges,
+  getResolvedServiceCatalog,
+  getServiceRawEndpoint,
+  validateServiceCatalog,
+  type ResolvedServiceCatalogEntry,
+  type ServiceCatalogValidation,
+  type ServiceDependencyEdge,
+} from '@/lib/platform/service-catalog';
 
 const execFileAsync = promisify(execFile);
 
@@ -86,17 +95,17 @@ export interface OpsPlatformDashboard {
   healthProfiles: OpsHealthProfile[];
   systemChecks: OpsCheck[];
   capabilityChecks: OpsCheck[];
+  serviceCatalog: ResolvedServiceCatalogEntry[];
+  serviceDependencyEdges: ServiceDependencyEdge[];
+  serviceCatalogValidation: ServiceCatalogValidation;
   logSources: OpsLogSource[];
 }
 
-const ROOT = process.cwd();
-const MARKET_API_BASE_URL =
-  process.env.QUANTPILOT_MARKET_API_URL ||
-  process.env.QUANTPILOT_MARKET_API_BASE_URL ||
-  'http://127.0.0.1:8000';
-const LOKI_BASE_URL = process.env.LOKI_URL || 'http://127.0.0.1:3100';
+const ROOT = path.resolve(/*turbopackIgnore: true*/ process.cwd());
+const MARKET_API_BASE_URL = getServiceRawEndpoint('market-data') || 'http://127.0.0.1:8000';
+const LOKI_BASE_URL = getServiceRawEndpoint('loki') || 'http://127.0.0.1:3100';
 const LOKI_QUERY = (process.env.LOKI_QUERY || '{app="quantpilot"}').replace(/\\"/g, '"');
-const GRAFANA_BASE_URL = process.env.GRAFANA_URL || `http://127.0.0.1:${process.env.GRAFANA_PORT || '3001'}`;
+const GRAFANA_BASE_URL = getServiceRawEndpoint('grafana') || `http://127.0.0.1:${process.env.GRAFANA_PORT || '3001'}`;
 
 function relativePath(filePath: string): string {
   return path.relative(ROOT, filePath) || '.';
@@ -665,6 +674,9 @@ export async function getOpsPlatformDashboard(params: {
   workspaceHealth?: WorkspaceHealthDashboard | Promise<WorkspaceHealthDashboard>;
 } = {}): Promise<OpsPlatformDashboard> {
   const degradation = getRuntimeDegradationConfig();
+  const serviceCatalog = getResolvedServiceCatalog();
+  const serviceCatalogValidation = validateServiceCatalog();
+  const serviceDependencyEdges = buildServiceDependencyEdges(serviceCatalog);
   const marketApi = degradation.components.marketApi;
   const observability = degradation.components.observability;
   const database = degradation.components.database;
@@ -692,7 +704,10 @@ export async function getOpsPlatformDashboard(params: {
     collectLogSources(),
   ]);
 
-  const projectsDir = path.resolve(ROOT, process.env.PROJECTS_DIR || './data/projects');
+  const projectsDir = path.resolve(
+    /*turbopackIgnore: true*/ process.cwd(),
+    process.env.PROJECTS_DIR || './data/projects'
+  );
   const projectCount = await countDirectoryItems(projectsDir, 'project-');
   const requiredFiles = await Promise.all([
     fileExists(path.join(ROOT, '.env')),
@@ -748,6 +763,16 @@ export async function getOpsPlatformDashboard(params: {
       status: 'ok',
       summary: `${degradation.mode} · DB ${componentModeSummary(database)} · Market API ${componentModeSummary(marketApi)} · Observability ${componentModeSummary(observability)}`,
       detail: 'auto 适合本地开发；strict 适合 CI/生产；offline 会跳过外部组件探测并使用文件/内置注册表兜底。',
+    },
+    {
+      id: 'service-catalog',
+      label: '服务目录',
+      status: serviceCatalogValidation.errors.length
+        ? 'failed'
+        : serviceCatalogValidation.warnings.length ? 'warning' : 'ok',
+      summary: `${serviceCatalogValidation.enabledCount}/${serviceCatalogValidation.serviceCount} 个服务启用 · ${serviceCatalogValidation.requiredCount} 个硬依赖 · ${serviceCatalogValidation.dependencyCount} 条依赖`,
+      detail: [...serviceCatalogValidation.errors, ...serviceCatalogValidation.warnings].slice(0, 4).join('；') || '服务边界、默认端口、依赖关系和启动命令已登记。',
+      actions: serviceCatalogValidation.errors.length ? ['检查 config/service-catalog.json 和 .env/.env.local。'] : [],
     },
     {
       id: 'database',
@@ -865,6 +890,9 @@ export async function getOpsPlatformDashboard(params: {
     healthProfiles,
     systemChecks,
     capabilityChecks,
+    serviceCatalog,
+    serviceDependencyEdges,
+    serviceCatalogValidation,
     logSources,
   };
 }
