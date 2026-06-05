@@ -53,6 +53,7 @@
     "check:validation-stale": "node scripts/checks/check-validation-stale-report.js",
     "check:generated-artifacts": "node scripts/checks/check-generated-artifact-policy.js",
     "check:backend-architecture": "node scripts/checks/check-backend-architecture.js",
+    "check:module-boundaries": "node scripts/checks/check-module-boundaries.js",
     "check:service-catalog": "node scripts/checks/check-service-catalog.js",
     "check:quant-guardrails": "node scripts/checks/check-quant-research-guardrails.js",
     "check:benchmark-coverage": "node scripts/checks/check-quant-benchmark-coverage.js",

@@ -371,6 +371,9 @@ async function main() {
   checkCommand('服务目录', 'node', ['scripts/checks/check-service-catalog.js'], {
     successSummary: '服务边界、依赖和文档同步通过。',
   });
+  checkCommand('模块边界', 'node', ['scripts/checks/check-module-boundaries.js'], {
+    successSummary: '模块清单、反向依赖和大文件预算通过。',
+  });
   checkCommand('Eval 定时器', 'node', ['scripts/checks/check-eval-schedule.js'], {
     successSummary: '定时评测检查通过。',
   });

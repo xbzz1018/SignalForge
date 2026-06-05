@@ -74,6 +74,18 @@ QuantPilot 当前采用 Python/Node 长期主线，不引入 Dubbo3 作为配置
 
 这相当于项目内的轻量注册表：足够支撑本地开发、单机部署、可降级组件和运维可视化。只有当后端演进成多服务多副本、跨机器部署、服务自动伸缩和统一流量治理时，才需要评估 Consul、etcd、Kubernetes service discovery 或更重的 RPC/注册中心方案。
 
+## 模块化单体
+
+QuantPilot 当前采用模块化单体，而不是微服务化。运行态继续保持 `Next.js + Python market-data`，代码侧按模块治理：
+
+- `config/module-boundaries.json` 定义 shared-kernel、ui-kit、product-shell、platform-core、agent-runtime、quant-core、eval-core、ops-core 和 market-data-backend。
+- `npm run check:module-boundaries` 检查反向依赖、通用 UI 污染和大文件预算。
+- 领域模块不能反向依赖 `src/app/**` 页面层。
+- `ui-kit` 只能承载无领域知识组件，不直接依赖量化、运维或运行时服务。
+- Python 后端只通过 HTTP/API 契约和 Node 侧协作，不依赖 Next.js 源码。
+
+详细规则见 [模块边界与模块化单体治理](module-boundaries.md)。
+
 ## 数据层
 
 后端位于 `services/market-data`，当前默认以东方财富为主数据源，并提供候选免费信源探针。核心响应统一携带：
@@ -86,6 +98,14 @@ QuantPilot 当前采用 Python/Node 长期主线，不引入 Dubbo3 作为配置
 - `data_quality`
 
 主要接口见 [量化数据后端 README](../services/market-data/README.md)。
+
+后端代码按 Controller / Use Case / Repository / Core Helper 分层推进：
+
+- `routers/` 只处理 HTTP 参数、状态码和响应模型。
+- `services/` 编排 provider、缓存策略、降级和响应聚合。
+- `repositories/` 承接 TimescaleDB/PostgreSQL SQL、ClickHouse 同步、分页、批量写入和读模型缓存。
+- `database_core.py` 只保留连接、日期、Decimal、JSON 和证券元数据解析等无业务状态基础函数。
+- `database.py` 目前是兼容门面，只导出历史 public surface；新增 SQL 不再写入这个文件。
 
 本地基础设施默认使用 Docker 中的 PostgreSQL + TimescaleDB + Redis + Loki/Grafana/Alloy：
 
@@ -121,7 +141,7 @@ QuantPilot 当前最重要的取舍是“本地事实库优先”。外部接口
 
 1. 批量接口和批量写入，减少逐标的串行 IO。
 2. Redis 做短 TTL 热点缓存，TimescaleDB 做事实库。
-3. ClickHouse 承接 append-only 的评测事件、生成事件和大规模研究分析。
+3. ClickHouse 承接短线筛选、append-only 的评测事件、生成事件和大规模研究分析；启用时优先查询 ClickHouse，按需补齐分析表新鲜度，失败后显式回退 TimescaleDB。
 4. 后台队列拆分长任务，避免阻塞请求链路。
 5. 只有在 CPU 密集计算、极高并发网关或二进制协议服务成为明确瓶颈后，再考虑 Rust/Go。
 
