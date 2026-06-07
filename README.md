@@ -85,29 +85,16 @@ npm run dev
 
 ## 文档导航
 
-项目知识集中放在 `docs/`：
+项目知识集中放在 `docs/`。根 README 只放少量入口，完整索引看 [文档总览](docs/README.md)。
 
-- [文档总览](docs/README.md)
-- [教学路径](docs/learning/README.md)
-- [项目学习地图](docs/learning/00-project-study-map.md)
-- [内部组件学习指南](docs/internal-components.md)
-- [文档写作风格指南](docs/documentation-style-guide.md)
-- [架构总览](docs/architecture.md)
-- [项目结构与分层边界](docs/project-structure.md)
-- [API 总览](docs/api-reference.md)
-- [数据字典](docs/data-dictionary.md)
-- [基础设施配置](docs/infrastructure.md)
-- [行情数据源采集知识库](docs/market-data-source-knowledge.md)
-- [策略平台使用与设计指南](docs/strategy-platform-guide.md)
-- [运维平台使用与评分指南](docs/ops-platform-guide.md)
-- [运行手册](docs/operations-runbook.md)
-- [生成工作空间契约](docs/generated-workspace-contract.md)
-- [Skills 治理规范](docs/skills-governance.md)
-- [Skills 编写与迭代教程](docs/learning/07-skills-authoring.md)
-- [Agent 评测指南](docs/evals-guide.md)
-- [本地产物与生成文件边界](docs/local-generated-files.md)
-- [故障排查](docs/troubleshooting.md)
-- [市场数据服务](services/market-data/README.md)
+| 你要做什么 | 入口 |
+| --- | --- |
+| 不知道从哪篇开始 | [文档导读](docs/START_HERE.md) |
+| 想系统学习项目 | [教学路径](docs/learning/README.md) |
+| 想参与开发或判断代码放哪 | [项目结构与分层边界](docs/project-structure.md) / [模块边界](docs/module-boundaries.md) |
+| 想查接口、字段或数据源口径 | [API 总览](docs/api-reference.md) / [数据字典](docs/data-dictionary.md) / [行情数据源知识库](docs/market-data-source-knowledge.md) |
+| 想排障或做发布前检查 | [运行手册](docs/operations-runbook.md) / [故障排查](docs/troubleshooting.md) |
+| 想看后续优先级 | [持续完善路线图](docs/ROADMAP.md) |
 
 ## 推荐学习路径
 
@@ -115,6 +102,7 @@ npm run dev
 
 | 阶段 | 文档 | 目标 |
 | --- | --- | --- |
+| 先找阅读路径 | [文档导读](docs/START_HERE.md) | 按启动、开发、排障、策略、评测、skills 等目标选择阅读顺序 |
 | 先建立全局图 | [项目学习地图](docs/learning/00-project-study-map.md) | 知道产品、数据、生成和质量四条主线 |
 | 再跑通本地环境 | [本地启动与健康检查](docs/learning/01-quick-start.md) | 拉起数据库、后端、前端和可选观测组件 |
 | 理解内部组件 | [内部组件学习指南](docs/internal-components.md) | 把页面、服务、数据、Skills、验证和运维串起来 |
@@ -122,6 +110,7 @@ npm run dev
 | 学会数据与策略 | [市场数据与策略平台](docs/learning/03-market-data-and-strategy-platform.md) | 理解股票池、K 线、补数、因子和基础组件 |
 | 学会查接口和字段 | [API 总览](docs/api-reference.md) / [数据字典](docs/data-dictionary.md) | 知道页面读哪个接口、字段来自哪里 |
 | 学会 Skills | [Skills 编写与迭代教程](docs/learning/07-skills-authoring.md) | 知道如何修改、发布、打包和验证 skill |
+| 看后续优先级 | [持续完善路线图](docs/ROADMAP.md) | 知道哪些事该先做，哪些事暂时不该做 |
 
 文档维护也算项目能力的一部分。改代码时如果改变了页面入口、组件职责、数据字段、环境变量、SQL 或 skill 行为，请同步更新对应文档；具体写法见 [文档写作风格指南](docs/documentation-style-guide.md)。
 

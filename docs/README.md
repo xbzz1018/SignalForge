@@ -6,8 +6,12 @@
 
 ## 先读哪几篇
 
+如果你第一次打开 `docs/`，先看 [QuantPilot 文档导读](START_HERE.md)。它会按“启动项目、接手开发、改后端、改策略平台、修生成页面、跑评测、排障”等目标告诉你该读哪条路径。
+
 | 目标 | 文档 |
 | --- | --- |
+| 不知道从哪篇开始 | [QuantPilot 文档导读](START_HERE.md) |
+| 想看后续持续完善路线 | [持续完善路线图](ROADMAP.md) |
 | 想建立全局学习路线 | [教学 00：项目学习地图](learning/00-project-study-map.md) |
 | 想快速跑起来 | [教学 01：本地启动与健康检查](learning/01-quick-start.md) |
 | 想确认当前前端启动模式 | [基础设施配置](infrastructure.md#主前端启动器) / [架构总览](architecture.md#构建与开发模式) |
@@ -32,6 +36,7 @@
 | 内部组件 | [内部组件学习指南](internal-components.md) | 页面、服务、数据、Skills、验证、运维和降级如何协作 |
 | 项目结构 | [项目结构与分层边界](project-structure.md) | 前端、后端、量化领域层、脚本和生成工作空间边界 |
 | 模块边界 | [模块边界与模块化单体治理](module-boundaries.md) | 模块清单、允许依赖、质量门和拆分顺序 |
+| 路线图 | [持续完善路线图](ROADMAP.md) | 后续优先级、验收标准和暂不建议事项 |
 | 后端能力 | [后端能力架构与持续优化边界](backend-capability-architecture.md) | Python 后端、设计模式、模块落点、ClickHouse 和迁移路线 |
 | API | [API 总览](api-reference.md) | Next.js API、market-data API、调用方和排查路径 |
 | 数据字典 | [数据字典](data-dictionary.md) | Prisma 表、quant schema、字段来源、因子和数据质量口径 |
