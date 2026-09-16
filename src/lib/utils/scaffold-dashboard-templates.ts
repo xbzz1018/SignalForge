@@ -314,7 +314,7 @@ export default async function Home() {
     <main className="comparison-shell" data-visual-language="financial-workbench" data-market-proxy="/api/market" data-source-file={DATA_FILE}>
       <header className="comparison-header">
         <div>
-          <p className="eyebrow">QuantPilot 多标的对比</p>
+          <p className="eyebrow">SignalForge 多标的对比</p>
           <h1>多标的相对强弱看板</h1>
           <p>覆盖 {requestedSymbols.length || rows.length} 个标的：{requestedSymbols.join('、') || rows.map((row) => String(row.symbol)).join('、')}</p>
         </div>
@@ -687,7 +687,7 @@ export default async function Home() {
     <main className="selection-shell" data-visual-language="financial-workbench" data-market-proxy="/api/market" data-source-file={DATA_FILE} data-template={isStrategyResearch ? 'strategy-research' : 'stock-selection'}>
       <header className="selection-header">
         <div>
-          <p className="eyebrow">{isStrategyResearch ? 'QuantPilot 策略研究' : 'QuantPilot 多标的对比'}</p>
+          <p className="eyebrow">{isStrategyResearch ? 'SignalForge 策略研究' : 'SignalForge 多标的对比'}</p>
           <h1>{isStrategyResearch ? '可证伪的候选筛选研究' : topRanking ? String(topRanking.name ?? topRanking.symbol) + ' 暂列研究优先级第一' : '多标的研究看板'}</h1>
           <p>覆盖 {requestedSymbols.length || rows.length} 个标的：{requestedSymbols.join('、') || rows.map((row) => String(row.symbol)).join('、')}。以下排序仅用于研究，不构成交易指令。</p>
         </div>
@@ -2052,7 +2052,7 @@ export default async function Home() {
     <main className="holding-shell" data-visual-language="financial-workbench" data-market-proxy="/api/market" data-source-file={DATA_FILE} data-template="holding-analysis">
       <header className="holding-header">
         <div>
-          <p className="eyebrow">QuantPilot 持仓分析</p>
+          <p className="eyebrow">SignalForge 持仓分析</p>
           <h1>组合持仓风险看板</h1>
           <p>覆盖 {holdings.length} 只持仓：{holdings.map((h) => String(h.name ?? h.symbol)).join('、')}。以下分析仅用于研究，不构成交易指令。</p>
         </div>

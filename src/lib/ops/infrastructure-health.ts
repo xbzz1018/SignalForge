@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { prisma } from '@/lib/db/client';
+import { getRuntimeDegradationConfig } from '@/lib/config/degradation';
 
 const execFileAsync = promisify(execFile);
 
@@ -104,6 +105,15 @@ export async function getInfrastructureHealth(): Promise<InfrastructureHealthRes
     databaseUrl.startsWith('postgresql://') || databaseUrl.startsWith('postgres://')
       ? 'postgresql'
       : 'unsupported';
+
+  if (!getRuntimeDegradationConfig().components.database.enabled) {
+    return {
+      success: false,
+      status: 503,
+      data: baseHealth(databaseUrl, docker),
+      error: '数据库已按离线配置停用；启动 TimescaleDB 后可恢复数据库检查。',
+    };
+  }
 
   try {
     await prisma.project.findFirst({ select: { id: true } });

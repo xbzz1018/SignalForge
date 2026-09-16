@@ -201,7 +201,7 @@ async function main() {
     const page = await fs.readFile(path.join(projectPath, 'app/page.tsx'), 'utf8');
     const css = await fs.readFile(path.join(projectPath, 'app/globals.css'), 'utf8');
 
-    assert(/QuantPilot 多标的对比/.test(page), 'generated page should use research comparison wording');
+    assert(/SignalForge 多标的对比/.test(page), 'generated page should use research comparison wording');
     assert(/区间收益/.test(page), 'generated page should use period return wording');
     assert(/不构成交易指令/.test(page), 'generated page should keep research disclaimer');
     assert(!/TradingPlanPanel|getTradingPlanRows|tradingRows|短线交易计划|买入区间|止损|目标价|仓位上限/.test(page), 'generated page should not contain trading plan UI');

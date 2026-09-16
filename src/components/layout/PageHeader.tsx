@@ -41,7 +41,7 @@ function PageHeader({
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {backHref !== false && (
             <Button variant="ghost" size="icon" asChild className="shrink-0">
-              <Link href={backHref} aria-label={backHref === "/" ? "返回研究工作台" : "返回上一页"}>
+              <Link href={backHref} aria-label={backHref === "/" ? "返回信号台" : "返回上一页"}>
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>

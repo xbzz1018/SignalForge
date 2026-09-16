@@ -115,7 +115,7 @@ export const QUANT_CAPABILITIES: QuantCapability[] = [
     name: '个股诊断',
     shortName: '个股',
     description: '围绕单只股票完成行情、K 线、财务和公告的综合诊断。',
-    inputHint: '例如：贵州茅台最近财务怎么样？生成一个个股诊断看板。',
+    inputHint: '例如：复盘 510300 最近一年的均线突破，生成一份可复核的策略看板。',
     tags: ['实时行情', 'K 线', '财务', '公告'],
     status: 'ready',
     groupId: 'core_analysis',

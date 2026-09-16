@@ -67,6 +67,18 @@ bind_workspace() {
   mount -o remount,bind,rw,nosuid,nodev,noexec "$target/.next"
 }
 
+bind_workspace_metadata() {
+  # Next.js refreshes this generated type shim whenever a dev server starts.
+  # Keep the source tree read-only while exposing only this single generated
+  # file as writable inside the namespace.
+  local source="$workspace/next-env.d.ts"
+  [[ -e "$source" ]] || return 0
+  local target="$sandbox_root$source"
+  mkdir -p "$(dirname "$target")"
+  mount --bind "$source" "$target"
+  mount -o remount,bind,rw,nosuid,nodev,noexec "$target"
+}
+
 bind_device() {
   local source="$1"
   local target="$sandbox_root$source"
@@ -99,6 +111,7 @@ bind_read_only "$node_modules"
 bind_read_only "$preview_bridge"
 bind_read_only "$market_bridge"
 bind_workspace
+bind_workspace_metadata
 mount -t proc -o nosuid,nodev,noexec proc "$sandbox_root/proc"
 for device in /dev/null /dev/zero /dev/random /dev/urandom; do
   bind_device "$device"

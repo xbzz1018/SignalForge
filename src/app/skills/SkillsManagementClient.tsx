@@ -960,7 +960,7 @@ export default function SkillsManagementClient({ initialData }: { initialData: S
                   </div>
                   <h1 className="mt-3 text-2xl font-bold tracking-[-0.025em] text-foreground sm:text-3xl">Skills Market</h1>
                   <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                    浏览和维护 QuantPilot 的研究能力。每个 Skill 都提供适用边界、输入输出、验证规则与交付状态。
+                    浏览和维护 SignalForge 的研究能力。每个 Skill 都提供适用边界、输入输出、验证规则与交付状态。
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
@@ -1614,7 +1614,7 @@ export default function SkillsManagementClient({ initialData }: { initialData: S
                     <div className="flex flex-wrap items-center gap-2"><SkillScopeBadge scope={catalogSkill.scope} /><span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600"><ShieldCheck className="h-3 w-3" />项目内置</span></div>
                     <h2 id="skill-detail-title" className="mt-2 text-xl font-black leading-tight tracking-tight text-foreground sm:text-2xl">{catalogSkill.name}</h2>
                     <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-muted-foreground sm:text-sm">
-                      <span className="font-mono">{catalogSkill.id}</span><span className="text-border">/</span><span>QuantPilot Core</span>
+                      <span className="font-mono">{catalogSkill.id}</span><span className="text-border">/</span><span>SignalForge Core</span>
                     </p>
                   </div>
                   <button

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AnimatePresence } from "framer-motion";
 import { MotionDiv } from "@/lib/motion";
-import { Settings } from 'lucide-react';
+import { Bot, Database, Info, KeyRound, Settings, X } from 'lucide-react';
 import ServiceConnectionModal from "@/components/modals/ServiceConnectionModal";
 import {
   normalizeGlobalAISettings,
@@ -19,6 +19,7 @@ import { ServicesTab, type ServiceToken } from "./tabs/ServicesTab";
 import { InfrastructureTab, type InfrastructureHealth } from "./tabs/InfrastructureTab";
 import { AboutTab } from "./tabs/AboutTab";
 import { InstallGuideModal } from "./InstallGuideModal";
+import { cn } from "@/lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
@@ -236,11 +237,11 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = "general"
   if (!isOpen) return null;
 
   const tabConfigs = [
-    { id: "general" as const, label: "生成与模型" },
-    { id: "ai-agents" as const, label: "智能体" },
-    { id: "services" as const, label: "服务令牌" },
-    { id: "infrastructure" as const, label: "基础组件" },
-    { id: "about" as const, label: "关于" },
+    { id: "general" as const, label: "生成与模型", icon: Settings },
+    { id: "ai-agents" as const, label: "智能体", icon: Bot },
+    { id: "services" as const, label: "服务令牌", icon: KeyRound },
+    { id: "infrastructure" as const, label: "基础组件", icon: Database },
+    { id: "about" as const, label: "关于", icon: Info },
   ];
 
   return (
@@ -249,56 +250,66 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = "general"
         <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
 
         <MotionDiv
-          className="relative flex h-[700px] w-full max-w-5xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          className="relative flex h-[min(760px,calc(100vh-2rem))] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-border/70 bg-background shadow-2xl"
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ duration: 0.2 }}
         >
           {/* Header */}
-          <div className="border-b border-slate-200 p-5">
+          <div className="border-b border-border/70 bg-primary/[0.035] p-5 sm:p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-slate-600">
-                  <Settings size={20} />
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                  <Settings className="h-5 w-5" />
                 </span>
                 <div>
-                  <h2 className="text-xl font-semibold text-slate-900">平台设置</h2>
-                  <p className="text-sm text-slate-600">管理生成工作空间使用的智能体、模型与服务令牌</p>
+                  <h2 className="text-xl font-semibold text-foreground">平台设置</h2>
+                  <p className="text-sm text-muted-foreground">管理生成工作空间使用的智能体、模型与服务令牌</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={onClose}
-                className="rounded-lg p-1 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                aria-label="关闭平台设置"
+                title="关闭平台设置"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
+                <X className="h-5 w-5" />
               </button>
             </div>
           </div>
 
-          {/* Tab navigation */}
-          <div className="border-b border-slate-200">
-            <nav className="flex px-5">
-              {tabConfigs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-all ${
-                    activeTab === tab.id
-                      ? "border-[#DE7356] text-slate-900"
-                      : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-700"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
+          <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+            {/* Tab navigation */}
+            <div className="shrink-0 border-b border-border/70 bg-muted/[0.16] md:w-56 md:border-b-0 md:border-r">
+              <nav className="flex gap-1 overflow-x-auto p-2 sm:p-3 md:flex-col" aria-label="平台设置分区">
+                {tabConfigs.map((tab) => {
+                  const TabIcon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors md:w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary shadow-sm"
+                          : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+                      )}
+                    >
+                      <TabIcon className="h-4 w-4 shrink-0" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
 
-          {/* Tab content */}
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+            {/* Tab content */}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent sm:p-6">
             {activeTab === "general" && (
               <GeneralTab
                 defaultCliName={defaultCli?.name ?? "未配置"}
@@ -363,6 +374,7 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = "general"
             )}
 
             {activeTab === "about" && <AboutTab />}
+            </div>
           </div>
         </MotionDiv>
 

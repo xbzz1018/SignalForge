@@ -2,13 +2,13 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'QuantPilot · 量化研究工作台',
-    short_name: 'QuantPilot',
-    description: '从真实行情与证据出发，生成、评测和治理可验证的量化研究看板。',
+    name: 'SignalForge · 个人量化研究台',
+    short_name: 'SignalForge',
+    description: '把市场假设拆成数据、指标和回测，沉淀可复核的个人量化研究记录。',
     start_url: '/',
     display: 'standalone',
     background_color: '#f8fafc',
-    theme_color: '#de5d48',
+    theme_color: '#167a6a',
     icons: [
       {
         src: '/icons/quantpilot-192.png',

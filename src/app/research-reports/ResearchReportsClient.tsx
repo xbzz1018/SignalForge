@@ -57,9 +57,16 @@ export type ResearchView = "overview" | "reports" | "insights" | "automation";
 type Props = {
   initialData: ResearchAutomationDashboard;
   initialView?: ResearchView;
+  initialError?: string;
 };
 
 type ApiResponse<T> = { success: boolean; data?: T; error?: string; message?: string };
+
+function researchRequestError(response: Response, payload: ApiResponse<unknown>, fallback: string) {
+  if (response.status >= 500) return '研究服务暂时不可用，请确认数据库已启动后重试。';
+  if (response.status === 401 || response.status === 403) return '当前账号没有查看研究报告的权限。';
+  return payload.message || payload.error || fallback;
+}
 
 const VIEW_ITEMS: SubNavItem[] = [
   { id: "overview", label: "研究总览", icon: <Gauge className="h-4 w-4" /> },
@@ -155,13 +162,15 @@ function OverviewView({ data, onViewChange, onSend, isSending }: {
   );
 }
 
-export default function ResearchReportsClient({ initialData, initialView = "overview" }: Props) {
+export default function ResearchReportsClient({ initialData, initialView = "overview", initialError }: Props) {
   const [view, setView] = useState<ResearchView>(initialView);
   const [data, setData] = useState(initialData);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "warning" | "error"; message: string } | null>(
+    initialError ? { type: "warning", message: initialError } : null,
+  );
   const [pendingDelivery, setPendingDelivery] = useState<{ reportId?: string } | null>(null);
   const sendInFlightRef = useRef(false);
 
@@ -193,8 +202,8 @@ export default function ResearchReportsClient({ initialData, initialView = "over
     setFeedback(null);
     try {
       const response = await fetch("/api/research/reports", { cache: "no-store" });
-      const payload = await response.json() as ApiResponse<ResearchAutomationDashboard>;
-      if (!response.ok || !payload.success || !payload.data) throw new Error(payload.message || payload.error || "刷新失败");
+      const payload = await response.json().catch(() => ({})) as ApiResponse<ResearchAutomationDashboard>;
+      if (!response.ok || !payload.success || !payload.data) throw new Error(researchRequestError(response, payload, "刷新研究状态失败。"));
       setData(payload.data);
       setFeedback({ type: "success", message: "研究状态已刷新" });
     } catch (error) {
@@ -209,8 +218,8 @@ export default function ResearchReportsClient({ initialData, initialView = "over
     setFeedback(null);
     try {
       const response = await fetch("/api/research/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "run-daily-report", dryRun: true }) });
-      const payload = await response.json() as ApiResponse<ResearchAutomationDashboard>;
-      if (!response.ok || !payload.success || !payload.data) throw new Error(payload.message || payload.error || "生成日报失败");
+      const payload = await response.json().catch(() => ({})) as ApiResponse<ResearchAutomationDashboard>;
+      if (!response.ok || !payload.success || !payload.data) throw new Error(researchRequestError(response, payload, "生成日报失败。"));
       setData(payload.data);
       setFeedback({ type: "success", message: "研究日报已生成，证据与 dry-run 推送记录已保存" });
     } catch (error) {
@@ -243,8 +252,8 @@ export default function ResearchReportsClient({ initialData, initialView = "over
           idempotencyKey: crypto.randomUUID(),
         }),
       });
-      const payload = await response.json() as ApiResponse<ResearchAutomationDashboard>;
-      if (!response.ok || !payload.success || !payload.data) throw new Error(payload.message || payload.error || "推送失败");
+      const payload = await response.json().catch(() => ({})) as ApiResponse<ResearchAutomationDashboard>;
+      if (!response.ok || !payload.success || !payload.data) throw new Error(researchRequestError(response, payload, "推送研究报告失败。"));
       setData(payload.data);
       setFeedback({ type: "success", message: "推送请求已完成，回执已更新" });
     } catch (error) {
@@ -266,7 +275,7 @@ export default function ResearchReportsClient({ initialData, initialView = "over
       <PageHeader compactOnMobile title="投研情报中心" badge={<Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">{data.summary.reports} 份研究报告</Badge>} subtitle={`观察池、证据、报告与交付闭环 · 更新于 ${formatResearchTime(generatedAt)}`} />
       <SubNav ariaLabel="投研报告视图" compactOnMobile items={VIEW_ITEMS} activeId={view} onChange={(id) => changeView(id as ResearchView)} actions={<div className="flex items-center gap-2"><Button aria-label="刷新研究状态" title="刷新研究状态" variant="outline" size="sm" onClick={refresh} disabled={isRefreshing || isRunning || isSending}><RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} /><span className="hidden sm:inline">刷新</span></Button><Button aria-label="生成研究日报" title="生成研究日报" size="sm" onClick={runDailyReport} disabled={isRunning || isRefreshing || isSending}>{isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}<span className="hidden sm:inline">生成日报</span></Button></div>} />
       <main id={subNavPanelId(view)} role="tabpanel" aria-labelledby={subNavTabId(view)} tabIndex={0} className="platform-content mx-auto max-w-[1520px] space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
-        {feedback && <div role="status" className={cn("rounded-xl border px-4 py-3 text-sm", feedback.type === "success" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-500" : "border-red-500/25 bg-red-500/10 text-red-500")}>{feedback.message}</div>}
+        {feedback && <div role="status" className={cn("rounded-xl border px-4 py-3 text-sm", feedback.type === "success" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-500" : feedback.type === "warning" ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border-red-500/25 bg-red-500/10 text-red-500")}>{feedback.message}</div>}
         {view === "overview" && <OverviewView data={data} onViewChange={changeView} onSend={requestReportDelivery} isSending={isSending} />}
         {view === "reports" && <ResearchReportLibrary reports={data.latestReports} onOpenAutomation={() => changeView("automation")} onSend={requestReportDelivery} isSending={isSending} />}
         {view === "insights" && <ResearchInsightsView data={data} />}

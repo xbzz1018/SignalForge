@@ -1691,7 +1691,7 @@ const persistProjectPreferences = useCallback(
                   void runAct(message, images, mode);
                 }}
                 disabled={false}
-                placeholder={mode === 'act' ? "向 QuantPilot 描述你的量化需求..." : "和 QuantPilot 讨论项目细节..."}
+                placeholder={mode === 'act' ? "向 SignalForge 描述你的量化需求..." : "和 SignalForge 讨论项目细节..."}
                 mode={mode}
                 onModeChange={setMode}
                 projectId={projectId}

@@ -23,8 +23,8 @@ export interface PiAgentModelDefinition {
 export const PI_AGENT_MODEL_DEFINITIONS: PiAgentModelDefinition[] = [
   {
     id: LOCAL_QWEN_MODEL_ID,
-    name: 'Qwen 3.5 9B (Local Q5_K_M)',
-    description: '通过本机 OpenAI-compatible API 接入的默认 Qwen 3.5 9B 量化模型',
+    name: 'Qwen 3.5 9B · 本地量化',
+    description: '本机 OpenAI-compatible 接口；当前设备的默认量化模型',
     supportsImages: false,
     provider: 'openai',
     runtime: 'modelport',
@@ -38,8 +38,8 @@ export const PI_AGENT_MODEL_DEFINITIONS: PiAgentModelDefinition[] = [
   },
   {
     id: MODELPORT_DEEPSEEK_MODEL_ID,
-    name: 'DeepSeek V4 Flash (ModelPort)',
-    description: '通过本机 ModelPort 转发到 DeepSeek 官方 Anthropic 协议的日常接入',
+    name: 'DeepSeek V4 Flash · ModelPort',
+    description: '经本机 ModelPort 转发；便于统一管理凭据与路由',
     supportsImages: false,
     provider: 'openai',
     runtime: 'modelport',
@@ -53,8 +53,8 @@ export const PI_AGENT_MODEL_DEFINITIONS: PiAgentModelDefinition[] = [
   },
   {
     id: DEEPSEEK_MODEL_ID,
-    name: 'DeepSeek V4 Flash (Official Direct)',
-    description: '可选的 DeepSeek 官方 API 直连；仅在显式提供官方凭据时启用',
+    name: 'DeepSeek V4 Flash · 官方直连',
+    description: '调用 DeepSeek 官方 API；需要配置 DEEPSEEK_API_KEY',
     supportsImages: false,
     provider: 'deepseek',
     runtime: 'deepseek-official',

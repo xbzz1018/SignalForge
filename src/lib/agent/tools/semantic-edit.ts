@@ -52,6 +52,8 @@ type SemanticEditInput =
       replacement: string;
     };
 
+type SemanticEditKind = SemanticEditInput['kind'];
+
 export interface SemanticEditOutput {
   path: string;
   kind: SemanticEditInput['kind'];
@@ -61,6 +63,10 @@ export interface SemanticEditOutput {
   beforeSha256: string;
   afterSha256: string;
   bytes: number;
+  /** True when a prepared custom CSS append was bounded to the tool limits. */
+  truncated?: boolean;
+  requestedChars?: number;
+  requestedLines?: number;
 }
 
 export interface PiAgentSemanticEditToolOptions extends Pick<
@@ -74,6 +80,10 @@ export interface PiAgentSemanticEditToolOptions extends Pick<
   | 'resourceLockWaitTimeoutMs'
 > {
   maxReplacementChars?: number;
+  /** Prepared custom surfaces may keep complete CSS rules up to the hard limit. */
+  cssAppendOverflow?: 'reject' | 'truncate';
+  /** Restrict the exposed semantic edit kinds for a narrowly scoped surface. */
+  allowedKinds?: readonly SemanticEditKind[];
 }
 
 function validateSha256(value: string): string {
@@ -465,11 +475,99 @@ function lineCount(content: string): number {
   return content.endsWith('\n') ? count - 1 : count;
 }
 
+function compactCss(value: string): string {
+  return value
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([{}:;,>])\s*/g, '$1')
+    .trim();
+}
+
+function boundCssAppendReplacement(
+  replacement: string,
+): { replacement: string; truncated: boolean; requestedChars: number; requestedLines: number } {
+  const requestedChars = replacement.length;
+  const requestedLines = lineCount(replacement);
+  if (
+    requestedChars <= DEFAULT_MAX_CSS_APPEND_CHARS &&
+    requestedLines <= DEFAULT_MAX_CSS_APPEND_LINES
+  ) {
+    return { replacement, truncated: false, requestedChars, requestedLines };
+  }
+
+  let root: postcss.Root;
+  try {
+    root = postcss.parse(replacement, { from: 'append.css' });
+  } catch {
+    throw new PiAgentToolError(
+      'SEMANTIC_REPLACEMENT_INVALID',
+      'css_append replacement must contain syntactically valid CSS.',
+    );
+  }
+  const nodes: string[] = [];
+  for (const node of root.nodes ?? []) {
+    const serialized = node.toString();
+    const candidate = [...nodes, serialized].filter(Boolean).join('\n');
+    if (
+      candidate.length > DEFAULT_MAX_CSS_APPEND_CHARS ||
+      lineCount(candidate) > DEFAULT_MAX_CSS_APPEND_LINES
+    ) {
+      const compact = compactCss(serialized);
+      const compactCandidate = [...nodes, compact].filter(Boolean).join('\n');
+      if (
+        compact &&
+        compactCandidate.length <= DEFAULT_MAX_CSS_APPEND_CHARS &&
+        lineCount(compactCandidate) <= DEFAULT_MAX_CSS_APPEND_LINES
+      ) {
+        nodes.push(compact);
+        continue;
+      }
+      // A single large @media block or comment should not prevent later
+      // complete rules from being retained on the prepared custom surface.
+      if (nodes.length === 0) continue;
+      break;
+    }
+    nodes.push(node.toString());
+  }
+  let bounded = nodes.join('\n').trim();
+  if (!bounded) {
+    const compact = compactCss(replacement);
+    if (
+      compact &&
+      compact.length <= DEFAULT_MAX_CSS_APPEND_CHARS &&
+      lineCount(compact) <= DEFAULT_MAX_CSS_APPEND_LINES
+    ) {
+      try {
+        postcss.parse(compact, { from: 'append.css' });
+        bounded = compact;
+      } catch {
+        // Fall through to the explicit unsafe error below.
+      }
+    }
+  }
+  if (!bounded) {
+    throw new PiAgentToolError(
+      'SEMANTIC_TARGET_UNSAFE',
+      `css_append has no complete rule within the ${DEFAULT_MAX_CSS_APPEND_CHARS}-character and ${DEFAULT_MAX_CSS_APPEND_LINES}-line safety limit.`,
+      { replacementChars: requestedChars, replacementLines: requestedLines },
+    );
+  }
+  return { replacement: bounded, truncated: true, requestedChars, requestedLines };
+}
+
 function appendCssOverride(
   filePath: string,
   content: string,
   replacement: string,
-): { content: string; startLine: number; endLine: number } {
+  overflow: 'reject' | 'truncate' = 'reject',
+): {
+  content: string;
+  startLine: number;
+  endLine: number;
+  truncated: boolean;
+  requestedChars: number;
+  requestedLines: number;
+} {
   if (!/\.css$/i.test(filePath)) {
     throw new PiAgentToolError(
       'SEMANTIC_EDIT_FILE_TYPE_MISMATCH',
@@ -483,24 +581,32 @@ function appendCssOverride(
       'css_append replacement cannot be empty or whitespace-only.',
     );
   }
-  const replacementLines = lineCount(normalized);
+  const bounded = overflow === 'truncate'
+    ? boundCssAppendReplacement(normalized)
+    : {
+        replacement: normalized,
+        truncated: false,
+        requestedChars: normalized.length,
+        requestedLines: lineCount(normalized),
+      };
+  const replacementLines = lineCount(bounded.replacement);
   if (
-    normalized.length > DEFAULT_MAX_CSS_APPEND_CHARS ||
+    bounded.replacement.length > DEFAULT_MAX_CSS_APPEND_CHARS ||
     replacementLines > DEFAULT_MAX_CSS_APPEND_LINES
   ) {
     throw new PiAgentToolError(
       'SEMANTIC_TARGET_UNSAFE',
       `css_append is limited to ${DEFAULT_MAX_CSS_APPEND_CHARS} characters and ${DEFAULT_MAX_CSS_APPEND_LINES} lines; append only the minimal override rules.`,
       {
-        replacementChars: normalized.length,
-        replacementLines,
+        replacementChars: bounded.requestedChars,
+        replacementLines: bounded.requestedLines,
         maxChars: DEFAULT_MAX_CSS_APPEND_CHARS,
         maxLines: DEFAULT_MAX_CSS_APPEND_LINES,
       },
     );
   }
   try {
-    postcss.parse(normalized, { from: `append-${filePath}` });
+    postcss.parse(bounded.replacement, { from: `append-${filePath}` });
   } catch {
     throw new PiAgentToolError(
       'SEMANTIC_REPLACEMENT_INVALID',
@@ -511,9 +617,12 @@ function appendCssOverride(
   const existing = content.replace(/\s+$/u, '');
   const startLine = lineCount(existing) + 2;
   return {
-    content: `${existing}${newline}${newline}${normalized}${newline}`,
+    content: `${existing}${newline}${newline}${bounded.replacement}${newline}`,
     startLine,
     endLine: startLine + replacementLines - 1,
+    truncated: bounded.truncated,
+    requestedChars: bounded.requestedChars,
+    requestedLines: bounded.requestedLines,
   };
 }
 
@@ -621,9 +730,26 @@ function validateEditedDocument(filePath: string, before: string, content: strin
 function applySemanticEdit(
   input: SemanticEditInput,
   content: string,
-): { content: string; startLine: number; endLine: number; target: string } {
+  options: { cssAppendOverflow?: 'reject' | 'truncate' } = {},
+): {
+  content: string;
+  startLine: number;
+  endLine: number;
+  target: string;
+  truncated?: boolean;
+  requestedChars?: number;
+  requestedLines?: number;
+} {
   assertSemanticSourceFile(input.path);
-  let edited: { content: string; startLine: number; endLine: number; target: string };
+  let edited: {
+    content: string;
+    startLine: number;
+    endLine: number;
+    target: string;
+    truncated?: boolean;
+    requestedChars?: number;
+    requestedLines?: number;
+  };
   switch (input.kind) {
     case 'typescript_symbol': {
       edited = {
@@ -641,7 +767,7 @@ function applySemanticEdit(
     }
     case 'css_append': {
       edited = {
-        ...appendCssOverride(input.path, content, input.replacement),
+        ...appendCssOverride(input.path, content, input.replacement, options.cssAppendOverflow),
         target: 'append',
       };
       break;
@@ -663,6 +789,10 @@ export function createSemanticEditTool(
   options: PiAgentSemanticEditToolOptions,
 ): PiAgentTool<SemanticEditInput, SemanticEditOutput> {
   const maxReplacementChars = options.maxReplacementChars ?? DEFAULT_MAX_REPLACEMENT_CHARS;
+  const cssAppendOverflow = options.cssAppendOverflow ?? 'reject';
+  const allowedKinds: SemanticEditKind[] = options.allowedKinds?.length
+    ? Array.from(new Set(options.allowedKinds))
+    : ['typescript_symbol', 'css_rule', 'css_append', 'line_range'];
   let policyPromise: Promise<PiAgentWorkspacePolicy> | undefined;
   const policy = () => policyPromise ??= PiAgentWorkspacePolicy.create({
     workspaceRoot: options.workspaceRoot,
@@ -678,7 +808,7 @@ export function createSemanticEditTool(
       type: 'object',
       properties: {
         path: { type: 'string', description: 'Workspace-relative source or stylesheet path.' },
-        kind: { type: 'string', enum: ['typescript_symbol', 'css_rule', 'css_append', 'line_range'] },
+        kind: { type: 'string', enum: allowedKinds },
         beforeSha256: { type: 'string', description: 'SHA-256 returned by the preceding targeted read.' },
         symbol: { type: 'string', description: 'Required only for typescript_symbol.' },
         selector: { type: 'string', description: 'Required only for css_rule.' },
@@ -689,7 +819,16 @@ export function createSemanticEditTool(
       required: ['path', 'kind', 'beforeSha256', 'replacement'],
       additionalProperties: false,
     },
-    parseInput: (value) => parseInput(value, maxReplacementChars),
+    parseInput: (value) => {
+      const parsed = parseInput(value, maxReplacementChars);
+      if (!allowedKinds.includes(parsed.kind)) {
+        throw new PiAgentToolError(
+          'INVALID_TOOL_INPUT',
+          `This semantic_edit surface only allows: ${allowedKinds.join(', ')}.`,
+        );
+      }
+      return parsed;
+    },
     execute: (input, context) => executePiAgentTool(
       context.signal,
       options.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS,
@@ -721,7 +860,7 @@ export function createSemanticEditTool(
             { expectedSha256: input.beforeSha256, actualSha256: beforeSha256 },
           );
         }
-        const edited = applySemanticEdit(input, buffer.toString('utf8'));
+        const edited = applySemanticEdit(input, buffer.toString('utf8'), { cssAppendOverflow });
         const updated = Buffer.from(edited.content, 'utf8');
         const write = await writePiAgentWorkspaceBatch({
           policy: workspacePolicy,
@@ -747,11 +886,18 @@ export function createSemanticEditTool(
           beforeSha256,
           afterSha256: file.afterSha256,
           bytes: file.bytes,
+          ...(input.kind === 'css_append' && edited.truncated
+            ? {
+                truncated: true,
+                requestedChars: edited.requestedChars,
+                requestedLines: edited.requestedLines,
+              }
+            : {}),
         };
         return {
           ok: true,
           data,
-          content: `Semantically edited ${file.path} (${input.kind} ${edited.target}, lines ${edited.startLine}-${edited.endLine}).`,
+          content: `Semantically edited ${file.path} (${input.kind} ${edited.target}, lines ${edited.startLine}-${edited.endLine})${edited.truncated ? ' with CSS append bounded to the safety limit.' : '.'}`,
         };
       },
     ),

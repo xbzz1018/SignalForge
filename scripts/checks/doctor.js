@@ -16,7 +16,12 @@ const FALSE_VALUES = new Set(['0', 'false', 'no', 'off', 'disabled']);
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enabled']);
 
 function addCheck(name, status, summary, details = []) {
-  checks.push({ name, status, summary, details: details.filter(Boolean) });
+  const normalizedStatus = status === 'warn'
+    ? 'warning'
+    : status === 'fail'
+      ? 'failed'
+      : status;
+  checks.push({ name, status: normalizedStatus, summary, details: details.filter(Boolean) });
 }
 
 function run(command, args = [], options = {}) {
@@ -68,7 +73,7 @@ function degradationConfig() {
   return {
     mode,
     database: {
-      enabled: envFlag('QUANTPILOT_DATABASE_ENABLED', true),
+      enabled: offline ? false : envFlag('QUANTPILOT_DATABASE_ENABLED', true),
       required: offline ? false : envFlag('QUANTPILOT_DATABASE_REQUIRED', true),
     },
     marketApi: {
@@ -83,12 +88,16 @@ function degradationConfig() {
       enabled: offline ? false : envFlag('QUANTPILOT_OBSERVABILITY_ENABLED', true),
       required: !offline && envFlag('QUANTPILOT_OBSERVABILITY_REQUIRED', strict),
     },
+    modelPort: {
+      enabled: offline ? false : envFlag('QUANTPILOT_MODELPORT_ENABLED', true),
+      required: !offline && envFlag('QUANTPILOT_MODELPORT_REQUIRED', strict),
+    },
   };
 }
 
 function unavailableStatus(component) {
-  if (!component.enabled) return 'warn';
-  return component.required ? 'fail' : 'warn';
+  if (!component.enabled) return 'disabled';
+  return component.required ? 'failed' : 'warning';
 }
 
 function componentMode(component) {
@@ -106,10 +115,124 @@ function hasPiAgentRuntime() {
   ].every((file) => fs.existsSync(path.join(ROOT, file)));
 }
 
+function optionValue(name) {
+  const prefix = `--${name}=`;
+  const inline = process.argv.find((argument) => argument.startsWith(prefix));
+  if (inline) return inline.slice(prefix.length).trim() || null;
+  const index = process.argv.indexOf(`--${name}`);
+  return index >= 0 && process.argv[index + 1] ? process.argv[index + 1].trim() || null : null;
+}
+
+function selectedModelProfile() {
+  const config = readJson(path.join(ROOT, 'config', 'llm.json'));
+  const requestedModel = optionValue('model') || readEnvValue('QUANTPILOT_EVAL_MODEL').trim() || null;
+  const defaultProfileId = typeof config?.defaultProfileId === 'string'
+    ? config.defaultProfileId
+    : null;
+  const profileEntries = config?.profiles && typeof config.profiles === 'object'
+    ? Object.entries(config.profiles)
+    : [];
+  const requested = requestedModel || defaultProfileId;
+  const matched = profileEntries.find(([profileId, profile]) => (
+    profileId === requested || (profile && typeof profile === 'object' && profile.model === requested)
+  ));
+  if (!matched) {
+    return {
+      requestedModel: requestedModel || defaultProfileId || '',
+      explicit: Boolean(requestedModel),
+      profileId: null,
+      profile: null,
+    };
+  }
+  return {
+    requestedModel: requestedModel || matched[0],
+    explicit: Boolean(requestedModel),
+    profileId: matched[0],
+    profile: matched[1],
+  };
+}
+
+async function checkModelProviders(degradation) {
+  const selection = selectedModelProfile();
+  if (!selection.profile || typeof selection.profile !== 'object') {
+    addCheck(
+      '模型选择',
+      'failed',
+      `未找到已注册模型：${selection.requestedModel || '(empty)'}`,
+      ['使用 --model=<registered-model>，或检查 config/llm.json。'],
+    );
+    return;
+  }
+
+  const profile = selection.profile;
+  const credentialEnv = typeof profile.credentialEnv === 'string' ? profile.credentialEnv : '';
+  const isDirectDeepSeek = profile.provider === 'deepseek' && credentialEnv === 'DEEPSEEK_API_KEY';
+  const modelPortBaseUrl = (readEnvValue('QUANTPILOT_MODELPORT_URL') || 'http://127.0.0.1:38082')
+    .replace(/\/$/, '');
+
+  const deepSeekApiKey = readEnvValue('DEEPSEEK_API_KEY');
+  addCheck(
+    'DeepSeek 官方 API',
+    isDirectDeepSeek
+      ? (deepSeekApiKey ? 'ok' : (selection.explicit ? 'failed' : 'warning'))
+      : (deepSeekApiKey ? 'ok' : 'disabled'),
+    isDirectDeepSeek
+      ? (deepSeekApiKey
+        ? `${selection.requestedModel} · 官方直连 · API Key 已配置`
+        : `${selection.requestedModel} 已选择，但 DEEPSEEK_API_KEY 未配置。`)
+      : (deepSeekApiKey ? '官方直连凭据已配置，但当前未选择直连模型。' : '未选择官方直连，按配置停用。'),
+    isDirectDeepSeek
+      ? (deepSeekApiKey ? ['Base URL 固定为 https://api.deepseek.com。'] : ['在本机 .env.local 配置 DEEPSEEK_API_KEY。'])
+      : ['选择 --model=deepseek-v4-flash 才会使用官方直连。'],
+  );
+
+  const modelPortSelected = credentialEnv === 'MODELPORT_API_KEY';
+  const modelPortApiKey = readEnvValue('MODELPORT_API_KEY');
+  if (!modelPortSelected) {
+    addCheck(
+      'ModelPort Provider',
+      'disabled',
+      degradation.modelPort.enabled
+        ? `当前选择 ${selection.requestedModel}，未使用 ModelPort。`
+        : '已按 QUANTPILOT_MODELPORT_ENABLED=0 停用。',
+      ['本地 Qwen/ModelPort profile 保留；选择对应模型并配置客户端 Key 后才会启用。'],
+    );
+    return;
+  }
+
+  if (!degradation.modelPort.enabled) {
+    addCheck(
+      'ModelPort Provider',
+      'disabled',
+      `当前选择 ${selection.requestedModel}，ModelPort 已按配置停用。`,
+      ['本地 Qwen/ModelPort profile 保留；设置 QUANTPILOT_MODELPORT_ENABLED=1 后才会检查服务。'],
+    );
+    return;
+  }
+  if (!modelPortApiKey) {
+    addCheck(
+      'ModelPort Provider',
+      degradation.modelPort.required ? 'failed' : 'warning',
+      '当前选择的默认模型不可用：MODELPORT_API_KEY 未配置。',
+      ['在本机 .env.local 中填写 ModelPort 客户端 API Key。'],
+    );
+    return;
+  }
+  const livez = await requestHead(`${modelPortBaseUrl}/livez`);
+  addCheck(
+    'ModelPort Provider',
+    livez.ok ? 'ok' : unavailableStatus(degradation.modelPort),
+    livez.ok
+      ? `ModelPort livez HTTP ${livez.statusCode} · ${selection.requestedModel}`
+      : `ModelPort 未就绪 · ${selection.requestedModel}`,
+    livez.ok ? [] : [`目标：${modelPortBaseUrl}/livez`],
+  );
+}
+
 async function checkDatabase() {
   const degradation = degradationConfig();
   if (!degradation.database.enabled) {
-    addCheck('数据库', 'warn', '已按降级配置停用。', ['数据库关闭时，依赖历史行情和项目索引的页面会展示有限兜底数据。']);
+    addCheck('数据库', 'disabled', '已按降级配置停用。', ['数据库关闭时，依赖历史行情和项目索引的页面会展示有限兜底数据。']);
     return;
   }
 
@@ -214,7 +337,7 @@ async function main() {
   addCheck(
     '降级配置',
     'ok',
-    `${degradation.mode} · DB ${componentMode(degradation.database)} · Market API ${componentMode(degradation.marketApi)} · Memory ${componentMode(degradation.memory)} · Observability ${componentMode(degradation.observability)}`,
+    `${degradation.mode} · DB ${componentMode(degradation.database)} · Market API ${componentMode(degradation.marketApi)} · Memory ${componentMode(degradation.memory)} · ModelPort ${componentMode(degradation.modelPort)} · Observability ${componentMode(degradation.observability)}`,
     ['auto 适合本地开发；strict 适合 CI/生产；offline 会跳过可选外部组件。']
   );
 
@@ -232,29 +355,7 @@ async function main() {
     ]
   );
 
-  const deepSeekApiKey = readEnvValue('DEEPSEEK_API_KEY');
-  addCheck(
-    'DeepSeek 官方 API',
-    deepSeekApiKey ? 'ok' : 'warn',
-    deepSeekApiKey ? 'deepseek-v4-flash · 官方直连 · API Key 已配置' : 'DEEPSEEK_API_KEY 未配置。',
-    [
-      deepSeekApiKey ? null : '可选官方直连未配置；日常 DeepSeek 应通过 ModelPort 使用。',
-      '可选模型固定为 deepseek-v4-flash，Base URL 固定为 https://api.deepseek.com。',
-    ]
-  );
-
-  const modelPortApiKey = readEnvValue('MODELPORT_API_KEY');
-  addCheck(
-    'ModelPort Provider',
-    modelPortApiKey ? 'ok' : 'warn',
-    modelPortApiKey
-      ? '本地 Qwen + 托管 DeepSeek · ModelPort 客户端凭据已配置'
-      : '默认模型不可用：MODELPORT_API_KEY 未配置。',
-    [
-      modelPortApiKey ? null : '在 .env.local 中填写 ModelPort 客户端 API Key。',
-      '模型与 Base URL 固定为受控 ModelPort profiles · http://127.0.0.1:38082/v1。',
-    ]
-  );
+  await checkModelProviders(degradation);
 
   const upstreamAgentRuntime = hasPiAgentRuntime();
   addCheck(
@@ -283,7 +384,7 @@ async function main() {
       backend.ok ? [] : ['进入 services/market-data 后运行 uv run quantpilot-market-api。']
     );
   } else {
-    addCheck('量化数据后端 :8000', 'warn', '已按降级配置停用。', ['策略平台和业务知识中心会优先展示本地/内置兜底数据。']);
+    addCheck('量化数据后端 :8000', 'disabled', '已按降级配置停用。', ['策略平台和业务知识中心会优先展示本地/内置兜底数据。']);
   }
 
   if (degradation.memory.enabled) {
@@ -310,7 +411,7 @@ async function main() {
           ]
     );
   } else {
-    addCheck('外部 Memory', 'warn', '已按降级配置停用。');
+    addCheck('外部 Memory', 'disabled', '已按降级配置停用。');
   }
 
   if (degradation.observability.enabled) {
@@ -323,7 +424,7 @@ async function main() {
       loki.ok ? [] : ['运行 npm run obs:up。']
     );
   } else {
-    addCheck('Loki 可观测性', 'warn', '已按降级配置停用。', ['运行治理中心仍会读取本地日志文件。']);
+    addCheck('Loki 可观测性', 'disabled', '已按降级配置停用。', ['运行治理中心仍会读取本地日志文件。']);
   }
 
   const projectsDir = readEnvValue('PROJECTS_DIR') || './data/projects';
@@ -340,7 +441,7 @@ async function main() {
       warnOnly: true,
     });
   } else {
-    addCheck('行情新鲜度', 'warn', '数据库已停用，跳过本地行情新鲜度检查。');
+    addCheck('行情新鲜度', 'disabled', '数据库已停用，跳过本地行情新鲜度检查。');
   }
 
   checkCommand('Skills 注册表', 'node', ['scripts/checks/check-skills-registry.js', '--check-lock'], {
@@ -399,7 +500,7 @@ async function main() {
     addCheck('Full checks', 'warn', '已跳过 lint/type-check/后端测试。', ['使用 npm run doctor:full 运行完整诊断。']);
   }
 
-  const statusIcon = { ok: '✓', warn: '!', fail: '✕' };
+  const statusIcon = { ok: '✓', warning: '!', failed: '✕', disabled: '·' };
   for (const check of checks) {
     console.log(`${statusIcon[check.status]} ${check.name}: ${check.summary}`);
     for (const detail of check.details) {
@@ -412,10 +513,10 @@ async function main() {
       acc[check.status] += 1;
       return acc;
     },
-    { ok: 0, warn: 0, fail: 0 }
+    { ok: 0, warning: 0, failed: 0, disabled: 0 }
   );
-  console.log(`\nSummary: ${counts.ok} ok, ${counts.warn} warn, ${counts.fail} fail\n`);
-  if (counts.fail > 0) {
+  console.log(`\nSummary: ${counts.ok} ok, ${counts.warning} warning, ${counts.failed} fail, ${counts.disabled} disabled\n`);
+  if (counts.failed > 0) {
     process.exitCode = 1;
   }
 }

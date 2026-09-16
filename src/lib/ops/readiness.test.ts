@@ -23,12 +23,12 @@ describe('runReadinessProbes', () => {
     expect(result.checkedAt).toBe('2026-07-17T00:00:00.000Z');
     expect(result.components).toMatchObject([
       { name: 'database', required: true, ok: false, status: 'failed' },
-      { name: 'observability', required: false, ok: false, status: 'failed' },
+      { name: 'observability', required: false, ok: false, status: 'warning' },
     ]);
     expect(JSON.stringify(result)).not.toContain('secret database hostname');
   });
 
-  it('allows disabled and failed optional dependencies', async () => {
+  it('allows disabled and warning-state optional dependencies', async () => {
     const disabledProbe = vi.fn();
     const result = await runReadinessProbes([
       {
@@ -54,5 +54,6 @@ describe('runReadinessProbes', () => {
     expect(result.ok).toBe(true);
     expect(disabledProbe).not.toHaveBeenCalled();
     expect(result.components[0]).toMatchObject({ status: 'disabled', ok: true });
+    expect(result.components[1]).toMatchObject({ status: 'warning', ok: false, required: false });
   });
 });

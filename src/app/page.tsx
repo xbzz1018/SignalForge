@@ -20,13 +20,16 @@ import {
   Sparkles,
   ChevronRight,
   ArrowRight,
+  BarChart3,
   Blocks,
+  LineChart,
   RefreshCcw,
+  TrendingUp,
   UserRound,
   Users,
 } from "lucide-react";
 import { useGlobalSettings } from "@/contexts/GlobalSettingsContext";
-import { getDefaultModelForCli, getModelDisplayName } from "@/lib/constants/models";
+import { DEEPSEEK_MODEL_ID, getDefaultModelForCli, getModelDisplayName } from "@/lib/constants/models";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,7 +66,7 @@ import {
   type QuantCapabilityId,
 } from "@/lib/domains/finance/capabilities";
 import { cn } from "@/lib/utils";
-import homeAnimeResearcher from "@/assets/home-anime-quant-researcher-v3.webp";
+import homeStockChartWorkspace from "@/assets/home-stock-chart-multiscreen-v2.jpg";
 import {
   buildQuestionInstruction,
   questionOutputLabel,
@@ -88,22 +91,29 @@ const RESEARCH_STARTERS: Array<{
 }> = [
   {
     capabilityId: "stock_diagnosis",
-    label: "贵州茅台近 60 日趋势",
-    prompt: "分析贵州茅台近 60 个交易日的趋势、量能、估值与主要风险。",
+    label: "510300 均线回测",
+    prompt: "用最近一年的 20/60 日均线规则回测 510300，并生成带风险指标的策略看板。",
+  },
+  {
+    capabilityId: "technical_analysis",
+    label: "沪深 300 趋势",
+    prompt: "分析沪深 300 近一年的趋势、波动、最大回撤和关键均线位置，生成技术分析看板。",
   },
   {
     capabilityId: "fundamental_analysis",
-    label: "宁德时代基本面",
-    prompt: "评估宁德时代当前的估值、盈利质量、现金流和成长持续性。",
-  },
-  {
-    capabilityId: "asset_comparison",
-    label: "沪深 300 对比中证 500",
-    prompt: "对比沪深 300 与中证 500 近一年的收益、波动率、最大回撤和估值水平。",
+    label: "贵州茅台基本面",
+    prompt: "评估贵州茅台最近四个报告期的盈利质量、现金流、估值位置和主要风险。",
   },
 ];
 
 const ACTIVE_PROJECT_STATUSES = new Set(["running", "building", "initializing"]);
+
+function projectListErrorMessage(status?: number) {
+  if (status === 401 || status === 403) return "请登录后查看已保存项目";
+  if (status === 400) return "已保存项目暂时无法加载";
+  if (typeof status === "number" && status >= 500) return "项目服务暂时不可用";
+  return "已保存项目暂时无法加载";
+}
 
 function getProjectStatus(project: ProjectSummary) {
   if (project.previewUrl || project.status === "preview_running" || project.status === "active") {
@@ -119,10 +129,10 @@ function getProjectStatus(project: ProjectSummary) {
 }
 
 function getProjectActionLabel(project: ProjectSummary) {
-  if (project.previewUrl || project.status === "preview_running" || project.status === "active") return "查看结果";
-  if (project.status === "failed" || project.status === "error") return "查看原因";
-  if (ACTIVE_PROJECT_STATUSES.has(project.status ?? "")) return "查看进度";
-  return "继续编辑";
+  if (project.previewUrl || project.status === "preview_running" || project.status === "active") return "打开看板";
+  if (project.status === "failed" || project.status === "error") return "查看诊断";
+  if (ACTIVE_PROJECT_STATUSES.has(project.status ?? "")) return "跟踪运行";
+  return "继续配置";
 }
 
 export default function HomePage() {
@@ -144,6 +154,7 @@ export default function HomePage() {
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const [creationStep, setCreationStep] = useState<string | null>(null);
+  const [modelNotice, setModelNotice] = useState<string | null>(null);
 
   const DEFAULT_ASSISTANT: ActiveCliId = DEFAULT_ACTIVE_CLI;
   const DEFAULT_MODEL = getDefaultModelForCli(DEFAULT_ASSISTANT);
@@ -208,10 +219,24 @@ export default function HomePage() {
 
   const router = useRouter();
   const { settings: globalSettings } = useGlobalSettings();
-  const { user } = useAuth();
+  const { enabled: authEnabled, user } = useAuth();
 
-  const availableModels =
-    ACTIVE_CLI_MODEL_OPTIONS[selectedAssistant] || [];
+  const modelStatus = cliStatus[selectedAssistant];
+  const configuredModelIds = useMemo(
+    () => new Set((modelStatus?.models ?? []).map((modelId) => normalizeModelForAssistant(selectedAssistant, modelId))),
+    [modelStatus?.models, normalizeModelForAssistant, selectedAssistant],
+  );
+  const modelStatusResolved = Boolean(modelStatus && !modelStatus.checking);
+  const noConfiguredModel = modelStatusResolved && modelStatus.available === false && configuredModelIds.size === 0;
+  const availableModels = (ACTIVE_CLI_MODEL_OPTIONS[selectedAssistant] || []).map((model) => {
+    const normalizedId = normalizeModelForAssistant(selectedAssistant, model.id);
+    const unavailable = modelStatusResolved && (noConfiguredModel || (configuredModelIds.size > 0 && !configuredModelIds.has(normalizedId)));
+    return {
+      ...model,
+      name: unavailable ? `${model.name} · 当前不可用` : model.name,
+      disabled: unavailable,
+    };
+  });
   const selectedRoleModule =
     QUANT_CAPABILITIES.find((c) => c.id === selectedCapability) ??
     QUANT_CAPABILITIES[0];
@@ -230,9 +255,16 @@ export default function HomePage() {
     return needsAttention ?? currentlyRunning ?? null;
   }, [projects]);
   const readyCapabilities = QUANT_CAPABILITIES.filter((capability) => capability.status === "ready");
-  const accountName = user?.name || user?.email || "研究员";
+  const accountName = user?.name || user?.email || "策略分析师";
   const accountInitial = accountName.slice(0, 1).toUpperCase();
   const normalizedPrompt = prompt.trim();
+  const openAccount = useCallback(() => {
+    if (authEnabled) {
+      router.push("/account/usage");
+      return;
+    }
+    setShowGlobalSettings(true);
+  }, [authEnabled, router]);
 
   // --- Session persistence ---
   useEffect(() => {
@@ -321,12 +353,38 @@ export default function HomePage() {
     );
     setCLIStatus(checkingStatus);
     fetchCliStatusSnapshot()
-      .then(setCLIStatus)
+      .then((nextStatus) => {
+        setCLIStatus(nextStatus);
+      })
       .catch((err) => {
         console.error("Failed to check CLI status:", err);
         setCLIStatus(createCliStatusFallback());
       });
   }, []);
+
+  useEffect(() => {
+    if (!usingGlobalDefaults || !isInitialLoad || !modelStatusResolved || configuredModelIds.size === 0) return;
+    const currentModel = normalizeModelForAssistant(selectedAssistant, selectedModel);
+    if (configuredModelIds.has(currentModel)) return;
+
+    const fallbackModel = configuredModelIds.has(DEEPSEEK_MODEL_ID)
+      ? DEEPSEEK_MODEL_ID
+      : Array.from(configuredModelIds)[0];
+    if (!fallbackModel) return;
+
+    setSelectedModel(normalizeModelForAssistant(selectedAssistant, fallbackModel));
+    setUsingGlobalDefaults(false);
+    setIsInitialLoad(false);
+    setModelNotice("默认本机模型暂未启动，已切换到当前可用的模型路由。");
+  }, [
+    configuredModelIds,
+    isInitialLoad,
+    modelStatusResolved,
+    normalizeModelForAssistant,
+    selectedAssistant,
+    selectedModel,
+    usingGlobalDefaults,
+  ]);
 
   // --- Data loading ---
   const load = useCallback(async () => {
@@ -334,11 +392,11 @@ export default function HomePage() {
     try {
       const r = await fetchAPI(`${API_BASE}/api/projects`);
       if (!r.ok) {
-        throw new Error(`项目列表请求失败（${r.status}）`);
+        throw new Error(projectListErrorMessage(r.status));
       }
       const payload = await r.json();
       if (payload?.success === false) {
-        throw new Error(payload?.message || payload?.error || "项目列表加载失败");
+        throw new Error(projectListErrorMessage(r.status));
       }
       const items: unknown[] = Array.isArray(payload?.data)
         ? payload.data
@@ -358,7 +416,7 @@ export default function HomePage() {
       setProjects(sorted);
       setProjectsError(null);
     } catch (error) {
-      setProjectsError(error instanceof Error ? error.message : "项目列表加载失败");
+      setProjectsError(error instanceof Error ? error.message : projectListErrorMessage());
     } finally {
       setProjectsLoading(false);
     }
@@ -596,6 +654,7 @@ export default function HomePage() {
     const sanitized = sanitizeAssistant(assistant);
     setUsingGlobalDefaults(false);
     setIsInitialLoad(false);
+    setModelNotice(null);
     setSelectedAssistant(sanitized);
     setSelectedModel(getDefaultModelForCli(sanitized));
   };
@@ -603,6 +662,7 @@ export default function HomePage() {
   const handleModelChange = (modelId: string) => {
     setUsingGlobalDefaults(false);
     setIsInitialLoad(false);
+    setModelNotice(null);
     setSelectedModel(normalizeModelForAssistant(selectedAssistant, modelId));
   };
 
@@ -687,33 +747,27 @@ export default function HomePage() {
     <div className="home-shell relative flex min-h-screen flex-col overflow-x-clip bg-background text-foreground">
       <header className="platform-header sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between px-3 md:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
-          <Image
-            src="/quantpilot-mark.svg"
-            alt=""
-            width={40}
-            height={40}
-            priority
-            className="h-10 w-10 shrink-0 rounded-xl shadow-[0_10px_22px_-12px_rgba(201,67,49,0.82)]"
-          />
-          <span className="text-base font-bold tracking-tight sm:text-lg">QuantPilot</span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_22px_-12px_hsl(var(--primary)/0.82)]" aria-hidden="true">
+            <LineChart className="h-5 w-5" />
+          </span>
+          <span className="text-base font-bold tracking-tight sm:text-lg">SignalForge</span>
 
           <nav className="ml-4 hidden items-center gap-1 lg:flex" aria-label="首页导航">
-            <Button type="button" variant="ghost" size="sm" className="h-11 gap-2 rounded-none border-b-2 border-primary px-3 text-xs font-semibold text-foreground">
-              <Home className="h-3.5 w-3.5" />首页
+            <Button type="button" variant="ghost" size="sm" aria-label="首页" className="h-11 gap-2 rounded-none border-b-2 border-primary px-3 text-xs font-semibold text-foreground">
+              <Home className="h-3.5 w-3.5" />研究台
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setTaskDrawerOpen(true)} className="h-11 gap-2 rounded-none px-3 text-xs font-semibold text-muted-foreground">
-              <FolderKanban className="h-3.5 w-3.5" />项目
+            <Button type="button" variant="ghost" size="sm" aria-label="项目" onClick={() => setTaskDrawerOpen(true)} className="h-11 gap-2 rounded-none px-3 text-xs font-semibold text-muted-foreground">
+              <FolderKanban className="h-3.5 w-3.5" />任务队列
               {projects.length > 0 ? <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{projects.length}</span> : null}
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => router.push("/research-reports")} className="h-11 gap-2 rounded-none px-3 text-xs font-semibold text-muted-foreground">
-              <FileChartColumn className="h-3.5 w-3.5" />成果
+            <Button type="button" variant="ghost" size="sm" aria-label="成果" onClick={() => router.push("/research-reports")} className="h-11 gap-2 rounded-none px-3 text-xs font-semibold text-muted-foreground">
+              <FileChartColumn className="h-3.5 w-3.5" />洞察归档
             </Button>
-            <PlatformSwitcher />
           </nav>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <div className="lg:hidden"><PlatformSwitcher /></div>
+          <PlatformSwitcher />
           <Button type="button" onClick={() => setTaskDrawerOpen(true)} variant="ghost" size="icon" className="hidden h-11 w-11 rounded-lg md:inline-flex lg:hidden" aria-label="打开项目">
             <FolderKanban className="h-4 w-4" />
             <span className="sr-only">项目</span>
@@ -727,9 +781,9 @@ export default function HomePage() {
               <Users className="h-4 w-4" />
             </Button>
           ) : null}
-          <Button type="button" onClick={() => router.push("/account/usage")} variant="ghost" className="hidden h-11 gap-2 rounded-lg px-2 sm:inline-flex lg:h-9" aria-label="打开我的账号">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-[10px] font-bold text-primary-foreground">{accountInitial || <UserRound className="h-3.5 w-3.5" />}</span>
-            <span className="hidden max-w-24 truncate text-xs font-semibold xl:inline">{accountName}</span>
+          <Button type="button" onClick={openAccount} variant="ghost" className="hidden h-11 gap-2 rounded-lg px-2 sm:inline-flex lg:h-9" aria-label={authEnabled ? "打开我的账号" : "打开平台设置"}>
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-[10px] font-bold text-primary-foreground">{authEnabled ? (accountInitial || <UserRound className="h-3.5 w-3.5" />) : <Settings className="h-3.5 w-3.5" />}</span>
+            <span className="hidden max-w-24 truncate text-xs font-semibold xl:inline">{authEnabled ? accountName : "设置"}</span>
           </Button>
         </div>
       </header>
@@ -744,10 +798,10 @@ export default function HomePage() {
           >
             <div className="min-w-0">
               <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.08em] text-primary">
-                <Sparkles className="h-3.5 w-3.5" />量化研究工作台
+                <Sparkles className="h-3.5 w-3.5" />SIGNAL DESK · 个人量化台
               </div>
-              <p className="mt-1 text-lg font-bold tracking-[-0.025em] sm:text-xl">{greeting}，{accountName}</p>
-              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">从一个清晰的问题开始，在同一工作区完成取数、分析、验证与可视化。</p>
+              <p className="mt-1 text-lg font-bold tracking-normal sm:text-xl">{greeting}，{accountName}</p>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">把市场假设拆成数据、指标和回测，留下一份可复核的研究记录。</p>
             </div>
             {projects.length > 0 ? (
               <div className="hidden items-center gap-4 pb-0.5 text-[11px] text-muted-foreground sm:flex">
@@ -791,113 +845,139 @@ export default function HomePage() {
                 className="pointer-events-none absolute -right-8 -top-8 -z-10 h-48 w-40 opacity-[0.13] mix-blend-multiply [mask-image:radial-gradient(ellipse_at_62%_42%,black_32%,transparent_76%)] sm:-right-4 sm:-top-24 sm:h-[32rem] sm:w-[26rem] sm:opacity-[0.16] dark:opacity-[0.075] dark:mix-blend-screen"
               >
                 <Image
-                  src={homeAnimeResearcher}
+                  src={homeStockChartWorkspace}
                   alt=""
                   fill
+                  priority
+                  loading="eager"
                   sizes="(max-width: 640px) 160px, 416px"
                   className="object-cover object-top saturate-[1.02]"
                 />
               </div>
 
-              <div className="relative z-10">
-                <div className="text-center">
-                  <h1 className="text-[1.9rem] font-bold tracking-[-0.045em] sm:text-[2.45rem]">今天想研究什么？</h1>
-                  <p className="mx-auto mt-1.5 max-w-2xl text-xs leading-5 text-muted-foreground sm:text-sm">
-                    <span className="sm:hidden">说清标的、时间和目标。</span>
-                    <span className="hidden sm:inline">描述标的、时间范围和希望得到的结论，系统会自动补全取数、证据与验证步骤。</span>
-                  </p>
-                  <Link
-                    href="/skills"
-                    className="group mx-auto mt-3 inline-flex min-h-9 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-primary/20 bg-background/75 px-3.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:border-primary/45 hover:bg-primary/[0.055] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:text-xs"
-                    aria-label="进入 Skills Market，发现更多研究能力"
-                  >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Blocks className="h-3 w-3" />
-                    </span>
-                    <span className="truncate">
-                      <span className="font-semibold text-foreground">探索 Skills Market</span>
-                      <span className="hidden sm:inline">，发现更多分析模板与数据工具</span>
-                    </span>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
-                  </Link>
-                </div>
-
-                <div role="tablist" aria-label="研究类型" className="mx-auto mt-3 flex max-w-full snap-x snap-mandatory justify-start gap-3 overflow-x-auto overscroll-x-contain px-1 [scrollbar-width:none] sm:justify-center [&::-webkit-scrollbar]:hidden">
-                  {readyCapabilities.slice(0, 4).map((capability, index) => (
-                    <button
-                      key={capability.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selectedCapability === capability.id}
-                      data-home-capability-index={index}
-                      onClick={() => handleCapabilityCardClick(capability.id)}
-                      onKeyDown={(event) => handleCapabilityKeyDown(event, index)}
-                      className={cn(
-                        "min-h-11 shrink-0 snap-start border-b-2 px-2 py-2.5 text-xs font-semibold transition-colors",
-                        selectedCapability === capability.id
-                          ? "border-primary text-primary"
-                          : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
-                      )}
+              <div className="relative z-10 grid gap-8 lg:grid-cols-[minmax(16rem,0.72fr)_minmax(0,1.28fr)] lg:items-start">
+                <div className="min-w-0">
+                  <div className="text-center lg:text-left">
+                    <h1 className="text-[1.9rem] font-bold tracking-normal sm:text-[2.45rem]">今天先验证哪条假设？</h1>
+                    <p className="mx-auto mt-1.5 max-w-2xl text-xs leading-5 text-muted-foreground sm:text-sm lg:mx-0">
+                      <span className="sm:hidden">输入标的、区间和规则。</span>
+                      <span className="hidden sm:inline">输入标的、时间区间和策略规则，系统会串起行情、指标、证据与回测结果。</span>
+                    </p>
+                    <Link
+                      href="/skills"
+                      className="group mx-auto mt-3 inline-flex min-h-9 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-primary/20 bg-background/75 px-3.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:border-primary/45 hover:bg-primary/[0.055] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:text-xs lg:mx-0"
+                      aria-label="打开研究工具箱，发现更多分析模板与数据工具"
                     >
-                      {capability.name}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mx-auto mt-2.5 w-full max-w-[70rem]">
-                  <CreateTaskForm
-                    prompt={prompt}
-                    onPromptChange={setPrompt}
-                    isCreating={isCreatingProject}
-                    onSubmit={handleSubmit}
-                    uploadedImages={uploadedImages}
-                    onImagesChange={setUploadedImages}
-                    selectedAssistant={selectedAssistant}
-                    onAssistantChange={handleAssistantChange}
-                    assistantOptions={ASSISTANT_OPTIONS}
-                    isAssistantSelectable={isAssistantSelectable}
-                    selectedModel={selectedModel}
-                    onModelChange={handleModelChange}
-                    modelOptions={availableModels}
-                    selectedRole={selectedRoleModule}
-                    outputMode={outputMode}
-                    onOutputModeChange={handleOutputModeChange}
-                  />
-                </div>
-
-                {creationStep ? (
-                  <p role="status" aria-live="polite" className="mx-auto mt-2 flex min-h-6 max-w-[70rem] items-center justify-center gap-2 text-xs font-medium text-primary">
-                    <RefreshCcw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />{creationStep}
-                  </p>
-                ) : normalizedPrompt ? (
-                  <div aria-live="polite" className="mx-auto mt-2.5 flex max-w-[70rem] flex-wrap items-center justify-center gap-1.5 text-[11px]">
-                    <span className="mr-1 inline-flex items-center gap-1 font-semibold text-muted-foreground"><Sparkles className="h-3 w-3 text-primary" />提交后由所选大模型解析</span>
-                    <span className="inline-flex min-h-7 items-center rounded-full border border-border/70 bg-background/75 px-2.5 text-foreground">标的原文保真</span>
-                    <span className="inline-flex min-h-7 items-center rounded-full border border-border/70 bg-background/75 px-2.5 text-foreground">Resolver 校验证券代码</span>
-                    <span className="inline-flex min-h-7 items-center gap-1 rounded-full border border-border/70 bg-background/75 px-2.5 text-foreground">{outputMode === "act" ? <LayoutDashboard className="h-3 w-3 text-primary" /> : <MessageSquare className="h-3 w-3 text-primary" />}{questionOutputLabel(outputMode)}</span>
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Blocks className="h-3 w-3" />
+                      </span>
+                      <span className="truncate">
+                        <span className="font-semibold text-foreground">打开研究工具箱</span>
+                        <span className="hidden sm:inline">，组合分析模板与数据工具</span>
+                      </span>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
+                    </Link>
                   </div>
-                ) : null}
 
-                <div className="mx-auto mt-3 flex max-w-full snap-x snap-mandatory items-center justify-start gap-3 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] sm:justify-center [&::-webkit-scrollbar]:hidden">
-                  <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">试试</span>
-                  {RESEARCH_STARTERS.map((starter) => (
-                    <button
-                      key={starter.label}
-                      type="button"
-                      onClick={() => handleStarterClick(starter)}
-                      className="min-h-11 shrink-0 snap-start border-b border-border px-1 py-2 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                    >
-                      {starter.label}
-                    </button>
-                  ))}
+                  <div className="mt-7 border-t border-border/60 pt-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground"><Sparkles className="h-3.5 w-3.5 text-primary" />快捷研究</span>
+                      <span className="text-[10px] text-muted-foreground">一键带入完整问题</span>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                      {RESEARCH_STARTERS.map((starter, index) => {
+                        const StarterIcon = index === 0 ? BarChart3 : index === 1 ? TrendingUp : LineChart;
+                        return (
+                          <button
+                            key={starter.label}
+                            type="button"
+                            aria-label={`使用示例：${starter.label}`}
+                            onClick={() => handleStarterClick(starter)}
+                            className="group flex min-h-14 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/[0.045] hover:shadow-sm"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><StarterIcon className="h-4 w-4" /></span>
+                            <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-foreground">{starter.label}</span><span className="mt-0.5 block text-[10px] text-muted-foreground">填充到任务编辑器</span></span>
+                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="mb-3">
+                    <div className="mb-2 flex items-center justify-between gap-3"><span className="text-xs font-semibold text-foreground">研究类型</span><span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">WORKBENCH</span></div>
+                    <div role="tablist" aria-label="研究类型" className="flex max-w-full snap-x snap-mandatory justify-start gap-3 overflow-x-auto overscroll-x-contain px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {readyCapabilities.slice(0, 4).map((capability, index) => (
+                        <button
+                          key={capability.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={selectedCapability === capability.id}
+                          data-home-capability-index={index}
+                          onClick={() => handleCapabilityCardClick(capability.id)}
+                          onKeyDown={(event) => handleCapabilityKeyDown(event, index)}
+                          className={cn(
+                            "min-h-11 shrink-0 snap-start border-b-2 px-2 py-2.5 text-xs font-semibold transition-colors",
+                            selectedCapability === capability.id
+                              ? "border-primary text-primary"
+                              : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+                          )}
+                        >
+                          {capability.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="w-full">
+                    <CreateTaskForm
+                      prompt={prompt}
+                      onPromptChange={setPrompt}
+                      isCreating={isCreatingProject}
+                      onSubmit={handleSubmit}
+                      uploadedImages={uploadedImages}
+                      onImagesChange={setUploadedImages}
+                      selectedAssistant={selectedAssistant}
+                      onAssistantChange={handleAssistantChange}
+                      assistantOptions={ASSISTANT_OPTIONS}
+                      isAssistantSelectable={isAssistantSelectable}
+                      selectedModel={selectedModel}
+                      onModelChange={handleModelChange}
+                      modelOptions={availableModels}
+                      selectedRole={selectedRoleModule}
+                      outputMode={outputMode}
+                      onOutputModeChange={handleOutputModeChange}
+                    />
+                  </div>
+
+                  {creationStep ? (
+                    <p role="status" aria-live="polite" className="mt-2 flex min-h-6 items-center gap-2 text-xs font-medium text-primary">
+                      <RefreshCcw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />{creationStep}
+                    </p>
+                  ) : normalizedPrompt ? (
+                    <div aria-live="polite" className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="mr-1 inline-flex items-center gap-1 font-semibold text-muted-foreground"><Sparkles className="h-3 w-3 text-primary" />提交后由所选大模型解析</span>
+                      <span className="inline-flex min-h-7 items-center rounded-full border border-border/70 bg-background/75 px-2.5 text-foreground">标的原文保真</span>
+                      <span className="inline-flex min-h-7 items-center rounded-full border border-border/70 bg-background/75 px-2.5 text-foreground">Resolver 校验证券代码</span>
+                      <span className="inline-flex min-h-7 items-center gap-1 rounded-full border border-border/70 bg-background/75 px-2.5 text-foreground">{outputMode === "act" ? <LayoutDashboard className="h-3 w-3 text-primary" /> : <MessageSquare className="h-3 w-3 text-primary" />}{questionOutputLabel(outputMode)}</span>
+                    </div>
+                  ) : null}
+
+                  {modelNotice ? (
+                    <p role="status" className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                      <CircleAlert className="h-3.5 w-3.5 shrink-0" />{modelNotice}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </motion.article>
           </section>
 
           {projectsError ? (
-            <div role="alert" className="mt-5 flex flex-col gap-3 border-y border-red-500/25 bg-red-500/[0.045] px-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-              <div><strong className="text-red-700 dark:text-red-400">最近研究加载失败</strong><p className="mt-0.5 text-xs text-muted-foreground">{projectsError}。当前输入仍可正常使用。</p></div>
+            <div role="status" className="mt-5 flex flex-col gap-3 border-y border-amber-500/25 bg-amber-500/[0.045] px-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" /><div><strong className="text-amber-800 dark:text-amber-300">历史研究暂不可用</strong><p className="mt-0.5 text-xs text-muted-foreground">{projectsError}。当前输入仍可正常使用。</p></div></div>
               <Button type="button" variant="outline" size="sm" onClick={() => void load()} className="min-h-11 gap-1.5 self-start sm:self-auto"><RefreshCcw className="h-3.5 w-3.5" />重试</Button>
             </div>
           ) : null}
@@ -911,8 +991,8 @@ export default function HomePage() {
               className="mt-5"
             >
               <div className="flex items-end justify-between gap-3">
-                <div><h2 className="text-lg font-bold tracking-tight">最近成果</h2><p className="mt-0.5 text-xs text-muted-foreground">直接查看已经完成的数据、证据与可视化结论。</p></div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => router.push("/research-reports")} className="min-h-11 gap-1 rounded-none border-b border-border px-1 text-xs">成果中心<ChevronRight className="h-3.5 w-3.5" /></Button>
+                      <div><h2 className="text-lg font-bold tracking-tight">最新输出</h2><p className="mt-0.5 text-xs text-muted-foreground">直接查看已经完成的数据、证据与可视化结论。</p></div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => router.push("/research-reports")} className="min-h-11 gap-1 rounded-none border-b border-border px-1 text-xs">查看归档<ChevronRight className="h-3.5 w-3.5" /></Button>
               </div>
               <div className="mt-2 divide-y divide-border border-y border-border/70">{recentResults.map(renderProjectRow)}</div>
             </motion.section>
@@ -927,11 +1007,11 @@ export default function HomePage() {
           >
             <div className="flex items-end justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold tracking-tight">继续研究</h2>
+                <h2 className="text-lg font-bold tracking-tight">研究记录</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">草稿、运行中与需要处理的任务会优先出现在这里。</p>
               </div>
               <Button type="button" variant="ghost" size="sm" onClick={() => setTaskDrawerOpen(true)} className="min-h-11 gap-1 rounded-none border-b border-border px-1 text-xs">
-                查看全部 {projects.length > 0 ? `(${projects.length})` : ""}<ChevronRight className="h-3.5 w-3.5" />
+                浏览队列 {projects.length > 0 ? `(${projects.length})` : ""}<ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
 
@@ -942,19 +1022,19 @@ export default function HomePage() {
             ) : recentProjects.length > 0 ? (
               <div className="mt-2 divide-y divide-border border-y border-border/70">{recentProjects.map(renderProjectRow)}</div>
             ) : recentResults.length > 0 ? (
-              <div className="mt-2 border-y border-dashed border-border py-5 text-center text-xs text-muted-foreground">当前没有待继续的研究，最近成果可直接查看。</div>
+              <div className="mt-2 border-y border-dashed border-border py-5 text-center text-xs text-muted-foreground">当前没有待继续的研究，最新输出可直接查看。</div>
             ) : (
-              <div className="mt-2 border-y border-dashed border-border py-6 text-center"><p className="text-sm font-semibold">从上面的示例开始第一项研究</p><p className="mt-1 text-xs text-muted-foreground">系统会保留问题、数据来源、分析过程和最终成果。</p></div>
+              <div className="mt-2 border-y border-dashed border-border py-6 text-center"><p className="text-sm font-semibold">从上面的模板开始第一项研究</p><p className="mt-1 text-xs text-muted-foreground">系统会保留问题、数据来源、分析过程和最终输出。</p></div>
             )}
           </motion.section>
         </div>
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(4rem+env(safe-area-inset-bottom))] grid-cols-4 border-t border-border/80 bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="移动端首页导航">
-        <button type="button" aria-current="page" className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-t-2 border-primary text-[10px] font-semibold text-primary"><Home className="h-4 w-4" />首页</button>
-        <button type="button" onClick={() => setTaskDrawerOpen(true)} className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-t-2 border-transparent text-[10px] font-semibold text-muted-foreground"><FolderKanban className="h-4 w-4" />项目</button>
-        <button type="button" onClick={() => router.push("/research-reports")} className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-t-2 border-transparent text-[10px] font-semibold text-muted-foreground"><FileChartColumn className="h-4 w-4" />成果</button>
-        <button type="button" onClick={() => router.push("/account/usage")} className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-t-2 border-transparent text-[10px] font-semibold text-muted-foreground"><UserRound className="h-4 w-4" />我的</button>
+        <button type="button" aria-label="首页" aria-current="page" className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-t-2 border-primary text-[10px] font-semibold text-primary"><Home className="h-4 w-4" />研究台</button>
+        <button type="button" aria-label="项目" onClick={() => setTaskDrawerOpen(true)} className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-t-2 border-transparent text-[10px] font-semibold text-muted-foreground"><FolderKanban className="h-4 w-4" />任务队列</button>
+        <button type="button" aria-label="成果" onClick={() => router.push("/research-reports")} className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-t-2 border-transparent text-[10px] font-semibold text-muted-foreground"><FileChartColumn className="h-4 w-4" />洞察归档</button>
+        <button type="button" onClick={openAccount} aria-label={authEnabled ? "打开我的账号" : "打开平台设置"} className="flex min-h-11 flex-col items-center justify-center gap-0.5 border-t-2 border-transparent text-[10px] font-semibold text-muted-foreground">{authEnabled ? <UserRound className="h-4 w-4" /> : <Settings className="h-4 w-4" />}<span>{authEnabled ? "我的" : "设置"}</span></button>
       </nav>
 
       {/* Task drawer */}

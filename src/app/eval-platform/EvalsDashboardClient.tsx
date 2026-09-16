@@ -314,7 +314,7 @@ export default function EvalsDashboardClient({ data }: Props) {
             <Sparkles className="h-[18px] w-[18px]" />
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-tight text-foreground">QuantPilot Evals</h1>
+            <h1 className="text-sm font-bold tracking-tight text-foreground">SignalForge Evals</h1>
             <p className="mt-0.5 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground">QUALITY OPS</p>
           </div>
         </div>
@@ -374,7 +374,7 @@ export default function EvalsDashboardClient({ data }: Props) {
           <Button variant="ghost" size="sm" asChild className="w-full justify-start gap-2.5 rounded-lg text-muted-foreground hover:text-foreground">
             <Link href="/">
               <ArrowLeft className="h-4 w-4" />
-              <span className="text-xs">返回 QuantPilot</span>
+              <span className="text-xs">返回 SignalForge</span>
             </Link>
           </Button>
         </div>

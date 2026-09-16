@@ -5,6 +5,7 @@ import { requireAction } from '@/lib/auth/action';
 import { AuthorizationError } from '@/lib/auth/authorization';
 import { authErrorResponse } from '@/lib/auth/http';
 import { getProjectAuthConfig } from '@/lib/config/auth';
+import { getRuntimeDegradationConfig } from '@/lib/config/degradation';
 import { createErrorResponse, createSuccessResponse, handleApiError } from '@/lib/utils/api-response';
 import {
   quotaErrorResponse,
@@ -187,6 +188,13 @@ async function executeResearchOperation(params: {
 export async function GET(request: NextRequest) {
   try {
     await requireAction({ headers: request.headers, action: 'research.report.read' });
+    if (!getRuntimeDegradationConfig().components.database.enabled) {
+      return createErrorResponse(
+        'DATABASE_UNAVAILABLE',
+        '研究数据暂时不可用，请启动 TimescaleDB 后重试。',
+        503,
+      );
+    }
     const dashboard = await getResearchAutomationDashboard();
     return createSuccessResponse(dashboard);
   } catch (error) {
@@ -201,6 +209,13 @@ export async function POST(request: NextRequest) {
     // deliberately disable user authentication. Authenticated mode delegates
     // access through the capability policy below.
     if (!getProjectAuthConfig().enabled) assertPrivilegedMutation(request);
+    if (!getRuntimeDegradationConfig().components.database.enabled) {
+      return createErrorResponse(
+        'DATABASE_UNAVAILABLE',
+        '研究服务暂时不可用，请启动 TimescaleDB 后重试。',
+        503,
+      );
+    }
     const body = await request.json().catch(() => ({})) as {
       action?: string;
       watchlistId?: string;

@@ -18,7 +18,7 @@ describe('personal memory browser client', () => {
       eventId: 'event-a',
       key: 'output.answer_style',
       value: '先给结论，再给证据',
-      evidenceText: '用户通过 QuantPilot“记住偏好”面板明确确认：先给结论，再给证据',
+      evidenceText: '用户通过 SignalForge“记住偏好”面板明确确认：先给结论，再给证据',
       confidence: 1,
       scope: 'project',
     });

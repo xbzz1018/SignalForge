@@ -34,6 +34,8 @@ export interface PiAgentRunEngineOptions {
   postWriteReadOnlyTurnThreshold?: number;
   /** Require at least one workspace write before a terminal tool may complete. */
   requireWorkspaceWriteBeforeTerminal?: boolean;
+  /** After the first workspace write, reject non-terminal tools until submission. */
+  requireTerminalAfterWorkspaceWrite?: boolean;
   timeoutMs?: number;
   maxToolCallsPerTurn?: number;
   maxTotalToolCalls?: number;

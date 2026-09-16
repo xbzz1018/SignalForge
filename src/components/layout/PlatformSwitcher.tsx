@@ -25,13 +25,13 @@ import {
 import { cn } from "@/lib/utils"
 
 const PRODUCTS = [
-  { href: "/", label: "研究工作台", description: "发起研究与管理工作空间", icon: Home, group: "research" },
-  { href: "/strategy-platform", label: "策略实验室", description: "筛选、回测与策略复盘", icon: BarChart3, group: "research" },
-  { href: "/research-reports", label: "投研情报", description: "观察池、日报与交付", icon: FileChartColumn, group: "research" },
-  { href: "/business-knowledge", label: "业务知识", description: "能力、规范与数据契约", icon: BookOpenCheck, group: "governance" },
-  { href: "/skills", label: "能力中心", description: "Skills 市场、版本与 Studio", icon: Blocks, group: "governance" },
-  { href: "/eval-platform", label: "评测平台", description: "契约、基准与端到端评测", icon: BrainCircuit, group: "governance" },
-  { href: "/ops-platform", label: "运行治理", description: "服务、任务与交付健康", icon: ShieldCheck, group: "governance" },
+  { href: "/", label: "信号台", description: "提出假设与管理研究任务", icon: Home, group: "research" },
+  { href: "/strategy-platform", label: "策略沙盒", description: "筛选、回测与策略复盘", icon: BarChart3, group: "research" },
+  { href: "/research-reports", label: "报告档案", description: "观察池、日报与交付", icon: FileChartColumn, group: "research" },
+  { href: "/business-knowledge", label: "研究规范", description: "能力、规范与数据契约", icon: BookOpenCheck, group: "governance" },
+  { href: "/skills", label: "工具市场", description: "Skills 市场、版本与 Studio", icon: Blocks, group: "governance" },
+  { href: "/eval-platform", label: "质量评测", description: "契约、基准与端到端评测", icon: BrainCircuit, group: "governance" },
+  { href: "/ops-platform", label: "运行中心", description: "服务、任务与交付健康", icon: ShieldCheck, group: "governance" },
 ] as const
 
 const PRODUCT_GROUPS = [
@@ -58,10 +58,10 @@ export function PlatformSwitcher({ beforeNavigate }: PlatformSwitcherProps = {})
           variant="outline"
           size="sm"
           className="h-9 w-9 gap-2 rounded-xl border-border/70 bg-background/75 px-0 shadow-sm sm:w-auto sm:px-2.5"
-          aria-label={`打开 QuantPilot 产品导航${currentProduct ? `，当前为${currentProduct.label}` : ""}`}
+          aria-label={`打开研究空间导航${currentProduct ? `，当前为${currentProduct.label}` : ""}`}
         >
           <Grid2X2 className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">产品</span>
+          <span className="hidden sm:inline">研究空间</span>
           {currentProduct ? (
             <span className="hidden max-w-24 truncate border-l border-border/70 pl-2 text-muted-foreground xl:inline">
               {currentProduct.label}
@@ -71,10 +71,10 @@ export function PlatformSwitcher({ beforeNavigate }: PlatformSwitcherProps = {})
       </SheetTrigger>
       <SheetContent side="right" className="w-[min(92vw,420px)] overflow-y-auto border-border/70 p-0 pb-[env(safe-area-inset-bottom)] sm:max-w-[420px]">
         <SheetHeader className="border-b border-border/60 px-5 py-5 pr-12">
-          <SheetTitle>QuantPilot 产品导航</SheetTitle>
+          <SheetTitle>SignalForge 研究空间</SheetTitle>
           <SheetDescription>围绕同一研究任务，在研究、策略、交付与治理之间切换。</SheetDescription>
         </SheetHeader>
-        <nav className="p-4" aria-label="QuantPilot 产品">
+        <nav className="p-4" aria-label="研究空间">
           {PRODUCT_GROUPS.map((group, groupIndex) => (
             <section key={group.id} className={cn(groupIndex > 0 && "mt-5 border-t border-border/55 pt-4")}>
               <p className="mb-2 px-1 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground">

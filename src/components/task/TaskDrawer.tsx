@@ -59,7 +59,7 @@ function TaskDrawer({
       <SheetContent side="left" className="flex w-[min(420px,calc(100vw-24px))] max-w-none flex-col gap-0 overflow-hidden border-r border-border/70 bg-background p-0 sm:max-w-none">
         <SheetHeader className="border-b border-border/70 bg-background px-4 py-4">
           <div className="flex items-baseline gap-1.5">
-            <SheetTitle className="text-base">任务记录</SheetTitle>
+            <SheetTitle className="text-base">研究队列</SheetTitle>
             <SheetDescription className="text-xs">({projects.length})</SheetDescription>
           </div>
         </SheetHeader>
@@ -71,7 +71,7 @@ function TaskDrawer({
               aria-label="搜索任务记录"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索对话标题..."
+              placeholder="搜索研究记录..."
               className="pl-9"
             />
           </div>
@@ -80,8 +80,8 @@ function TaskDrawer({
         <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <EmptyState
-              title="暂无匹配的任务记录"
-              description={search ? "尝试其他关键词" : "创建第一个任务开始使用"}
+              title="暂无匹配的研究记录"
+              description={search ? "尝试其他关键词" : "从首页模板创建第一项研究"}
               className="m-4 border-0"
             />
           ) : (

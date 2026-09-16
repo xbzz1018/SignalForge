@@ -34,6 +34,7 @@ export interface CreateFinancePiAgentToolsOptions
   includeQuantApi?: boolean;
   includeDashboardSpec?: boolean;
   includeDashboardInspector?: boolean;
+  cssAppendOverflow?: 'reject' | 'truncate';
   imageExtraction?: Omit<PiAgentImageExtractionToolOptions, 'workspaceRoot'>;
   includeImageExtraction?: boolean;
 }
@@ -92,6 +93,12 @@ export function createFinancePiAgentTools(
   ];
   return createPiAgentTools({
     ...options,
+    ...(options.preparedSurface === 'custom' && options.cssAppendOverflow === undefined
+      ? { cssAppendOverflow: 'truncate' as const }
+      : {}),
+    ...(options.preparedSurface === 'custom' && options.allowedSemanticEditKinds === undefined
+      ? { allowedSemanticEditKinds: ['css_append'] as const }
+      : {}),
     jsonArtifacts: FINANCE_JSON_ARTIFACT_CONFIGURATION,
     preparedCompilerTool,
     inspectionTools: options.preparedSurface ? [] : inspectionTools,

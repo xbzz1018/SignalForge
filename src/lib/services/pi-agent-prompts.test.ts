@@ -210,6 +210,10 @@ describe('PI Agent QuantPilot prompts', () => {
 
   it('keeps the invariant system prompt compact and terminal-workbench oriented', () => {
     const prompt = buildQuantPilotSystemPrompt();
+    const customPrompt = buildQuantPilotSystemPrompt({
+      phase: 'workspace-generation',
+      preparedIntent: 'custom',
+    });
 
     expect(prompt).toContain('# PI Agent Kernel');
     expect(prompt).toContain('typed tools');
@@ -222,6 +226,11 @@ describe('PI Agent QuantPilot prompts', () => {
     expect(prompt).toContain('kind=css_append');
     expect(prompt).toContain('SEMANTIC_TARGET_AMBIGUOUS');
     expect(prompt).toContain('reread only after WORKSPACE_WRITE_CONFLICT');
+    expect(customPrompt).toContain('first successful semantic_edit');
+    expect(customPrompt).toContain('call submit_result next without another read or edit');
+    expect(customPrompt).toContain('Final prepared-custom guardrails');
+    expect(customPrompt).toContain('at most 40 lines and 4,000 characters');
+    expect(customPrompt).toContain('never edit app/page.tsx or the Home component');
     expect(prompt).not.toContain('one short plan');
     expect(prompt).not.toContain('Available typed tools are exactly');
     expect(prompt.length).toBeLessThan(2_000);

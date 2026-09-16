@@ -44,7 +44,7 @@ export function getRuntimeDegradationConfig(): RuntimeDegradationConfig {
     mode,
     components: {
       database: {
-        enabled: envFlag('QUANTPILOT_DATABASE_ENABLED', true),
+        enabled: offline ? false : envFlag('QUANTPILOT_DATABASE_ENABLED', true),
         required: offline ? false : envFlag('QUANTPILOT_DATABASE_REQUIRED', true),
       },
       knowledge: {

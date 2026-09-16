@@ -723,6 +723,7 @@ async function executePiAgentPhase(
     const templateId = runPlan?.visualization?.templateId ?? visualization.templateId;
     const variantId = runPlan?.visualization?.variantId ?? visualization.variantId;
     const standardCompilerEligible =
+      process.env.QUANTPILOT_EVAL_FORCE_MODEL_AGENT !== '1' &&
       classifyPiAgentPreparedIntent(instruction) === 'standard' &&
       isDashboardSpecCapabilitySupported(templateId, variantId) &&
       preparedAssessment.dashboardSpecReady;
@@ -1081,6 +1082,7 @@ async function executePiAgentPhase(
       timeoutMs: Math.max(1, deadlineAt - Date.now()),
       requireTerminalTool: true,
       requireWorkspaceWriteBeforeTerminal: true,
+      requireTerminalAfterWorkspaceWrite: preparedIntent === 'custom',
       toolApprovalHandler: createPrismaPiAgentToolApprovalHandler(
         positiveIntegerEnv('PI_AGENT_APPROVAL_POLL_INTERVAL_MS', 500),
       ),

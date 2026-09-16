@@ -307,6 +307,84 @@ describe('semantic_edit tool', () => {
       .resolves.toBe(styles);
   });
 
+  it('bounds oversized CSS appends on the prepared custom surface', async () => {
+    const tool = createSemanticEditTool({
+      workspaceRoot: workspace,
+      cssAppendOverflow: 'truncate',
+    });
+    const replacement = Array.from(
+      { length: 161 },
+      (_, index) => `.override-${index} { border-radius: 0; }`,
+    ).join('\n');
+    const result = await tool.execute(tool.parseInput?.({
+      path: 'app/globals.css',
+      kind: 'css_append',
+      beforeSha256: sha256(styles),
+      replacement,
+    }) as never, context());
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        kind: 'css_append',
+        target: 'append',
+        truncated: true,
+        requestedLines: 161,
+      },
+    });
+    expect(commitCount).toBe(1);
+    const updated = await fs.readFile(path.join(workspace, 'app', 'globals.css'), 'utf8');
+    expect(updated).toContain('.override-0 { border-radius: 0; }');
+    expect(updated).not.toContain('.override-160 { border-radius: 0; }');
+  });
+
+  it('exposes only CSS append edits on a CSS-only prepared surface', async () => {
+    const tool = createSemanticEditTool({
+      workspaceRoot: workspace,
+      allowedKinds: ['css_append'],
+    });
+
+    const kindSchema = (tool.inputSchema.properties as Record<string, unknown> | undefined)?.kind as
+      | { enum?: readonly string[] }
+      | undefined;
+    expect(kindSchema).toMatchObject({ enum: ['css_append'] });
+    expect(() => tool.parseInput?.({
+      path: 'app/page.tsx',
+      kind: 'typescript_symbol',
+      symbol: 'Home',
+      beforeSha256: sha256(page),
+      replacement: 'export default function Home() { return null; }',
+    })).toThrow(/only allows: css_append/);
+    expect(commitCount).toBe(0);
+  });
+
+  it('compacts a single oversized CSS container on the prepared custom surface', async () => {
+    const tool = createSemanticEditTool({
+      workspaceRoot: workspace,
+      cssAppendOverflow: 'truncate',
+    });
+    const replacement = [
+      '@media (min-width: 900px) {',
+      ...Array.from({ length: 220 }, (_, index) => `  .override-${index} { border-radius: 0; }`),
+      '}',
+    ].join('\n');
+    const result = await tool.execute(tool.parseInput?.({
+      path: 'app/globals.css',
+      kind: 'css_append',
+      beforeSha256: sha256(styles),
+      replacement,
+    }) as never, context());
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { kind: 'css_append', target: 'append', truncated: true },
+    });
+    expect(commitCount).toBe(1);
+    const updated = await fs.readFile(path.join(workspace, 'app', 'globals.css'), 'utf8');
+    expect(updated).toMatch(/@media \(min-width:\s*900px\)\{/);
+    expect(updated).toContain('.override-219');
+  });
+
   it('supports a versioned exact line range as a bounded fallback', async () => {
     const tool = createSemanticEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(tool.parseInput?.({

@@ -17,7 +17,7 @@ import {
   knowledgeCompatibilityIssues,
 } from '@/lib/platform/knowledge';
 
-export type ReadinessStatus = 'ok' | 'failed' | 'disabled';
+export type ReadinessStatus = 'ok' | 'warning' | 'failed' | 'disabled';
 
 export interface ReadinessComponent {
   name:
@@ -83,7 +83,7 @@ export async function runReadinessProbes(
         enabled: true,
         required: definition.required,
         ok: false,
-        status: 'failed',
+        status: definition.required ? 'failed' : 'warning',
         latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
       } satisfies ReadinessComponent;
     }

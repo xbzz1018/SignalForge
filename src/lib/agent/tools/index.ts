@@ -25,6 +25,10 @@ export interface CreatePiAgentToolsOptions extends PiAgentFileToolOptions {
   /** Domain/delivery inspectors exposed only before a prepared contract exists. */
   inspectionTools?: readonly PiAgentTool[];
   includeSemanticEdit?: boolean;
+  /** How CSS append overflow is handled; defaults to rejecting unsafe input. */
+  cssAppendOverflow?: 'reject' | 'truncate';
+  /** Restrict semantic_edit kinds for a narrowly scoped prepared surface. */
+  allowedSemanticEditKinds?: readonly ('typescript_symbol' | 'css_rule' | 'css_append' | 'line_range')[];
   allowedMutationToolNames?: readonly string[];
   /** Trusted typed tools registered by the application composition root. */
   trustedAdditionalTools?: readonly PiAgentTool[];
@@ -88,7 +92,12 @@ export function createPiAgentTools(options: CreatePiAgentToolsOptions): PiAgentT
   }
   const fileTools = createPiAgentFileTools(workspaceOptions);
   const semanticEditTool = options.includeSemanticEdit
-    ? createSemanticEditTool(workspaceOptions)
+    ? createSemanticEditTool({
+        ...workspaceOptions,
+        ...(options.allowedSemanticEditKinds
+          ? { allowedKinds: options.allowedSemanticEditKinds }
+          : {}),
+      })
     : null;
   const queryJsonTool = createQueryJsonTool(workspaceOptions);
   const queryTextFileTool = createQueryTextFileTool(workspaceOptions);

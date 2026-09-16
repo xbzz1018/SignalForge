@@ -2,10 +2,12 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { DeepSeekProvider } from '../../src/lib/agent/providers/deepseek';
 import { OpenAICompatibleProvider } from '../../src/lib/agent/providers/openai-compatible';
 import type {
   PiAgentMessage,
   PiAgentModelEvent,
+  PiAgentModelProvider,
   PiAgentTokenUsage,
 } from '../../src/lib/agent/types';
 import { getProjectLlmConfig } from '../../src/lib/config/llm';
@@ -109,7 +111,7 @@ function createModelPortProvider(apiKey: string, baseUrl: string): OpenAICompati
 }
 
 async function providerToolRoundTrip(params: {
-  provider: OpenAICompatibleProvider;
+  provider: PiAgentModelProvider;
   model: string;
   personalization?: PersonalizationCapsule | null;
 }): Promise<ProviderRoundTrip> {
@@ -161,12 +163,12 @@ async function providerToolRoundTrip(params: {
     reasoning: { enabled: false },
     metadata: { purpose: 'long_term_integration_acceptance' },
   }));
-  assert(turn.responseModel === params.model, 'ModelPort returned an unexpected model ID.');
-  assert(turn.finishReason === 'tool_calls', 'ModelPort model did not finish with a tool call.');
-  assert(turn.toolCallId, 'ModelPort tool call ID is missing.');
-  assert(turn.toolName === 'integration_acceptance', 'ModelPort model called an unexpected tool.');
-  assert(turn.usage, 'ModelPort model did not return token usage.');
-  const toolArguments = jsonRecord(JSON.parse(turn.toolArguments), 'ModelPort tool arguments');
+  assert(turn.responseModel === params.model, 'Provider returned an unexpected model ID.');
+  assert(turn.finishReason === 'tool_calls', 'Provider model did not finish with a tool call.');
+  assert(turn.toolCallId, 'Provider tool call ID is missing.');
+  assert(turn.toolName === 'integration_acceptance', 'Provider model called an unexpected tool.');
+  assert(turn.usage, 'Provider model did not return token usage.');
+  const toolArguments = jsonRecord(JSON.parse(turn.toolArguments), 'Provider tool arguments');
   assert(toolArguments.status === 'triad-ok', 'ModelPort model returned an invalid acceptance status.');
   assert(
     toolArguments.memoryApplied === personalizationExpected,
@@ -199,9 +201,9 @@ async function providerToolRoundTrip(params: {
     reasoning: { enabled: false },
     metadata: { purpose: 'long_term_integration_continuation' },
   }));
-  assert(continuation.finishReason === 'stop', 'ModelPort continuation did not finish normally.');
-  assert(continuation.text.trim(), 'ModelPort continuation returned no text.');
-  assert(continuation.usage, 'ModelPort continuation did not return token usage.');
+  assert(continuation.finishReason === 'stop', 'Provider continuation did not finish normally.');
+  assert(continuation.text.trim(), 'Provider continuation returned no text.');
+  assert(continuation.usage, 'Provider continuation did not return token usage.');
   return {
     toolCallId: turn.toolCallId,
     toolName: turn.toolName,
@@ -210,6 +212,65 @@ async function providerToolRoundTrip(params: {
     responseModel: turn.responseModel,
     continuationUsage: continuation.usage,
     continuationCharacters: continuation.text.trim().length,
+  };
+}
+
+async function checkDirectDeepSeek(requestedModel: string) {
+  const llm = getProjectLlmConfig(requestedModel);
+  assert(llm.provider === 'deepseek', 'Selected model is not the official DeepSeek profile.');
+  assert(llm.baseUrl === 'https://api.deepseek.com', 'Official DeepSeek Base URL is not locked to api.deepseek.com.');
+  const apiKey = process.env[llm.credentialEnv]?.trim();
+  assert(apiKey, `${llm.credentialEnv} is not configured.`);
+  const provider = new DeepSeekProvider({
+    apiKey,
+    baseUrl: llm.baseUrl,
+    headers: { 'X-Client-App': 'QuantPilot-Long-Term-Integration-Check/1' },
+    maxRetries: 1,
+    initialRetryDelayMs: 100,
+    maxRetryDelayMs: 500,
+  });
+  const roundTrip = await providerToolRoundTrip({ provider, model: llm.model });
+  const queryController = new AbortController();
+  const queryTimeout = setTimeout(() => {
+    queryController.abort(new DOMException('DeepSeek Query Rewrite acceptance timed out.', 'TimeoutError'));
+  }, Math.max(15_000, llm.queryRewrite.timeoutMs + 1_000));
+  queryTimeout.unref?.();
+  let queryRewrite;
+  try {
+    queryRewrite = await rewriteQuantQuerySemanticsWithConfiguredProvider({
+      originalQuery: '分析大位科技最近一个季度的财务与估值，并生成看板',
+      normalizedQuery: '分析大位科技最近一个季度的财务与估值，并生成看板',
+      trigger: 'primary',
+      requestedModel: llm.model,
+      signal: queryController.signal,
+    });
+  } finally {
+    clearTimeout(queryTimeout);
+  }
+  assert(queryRewrite.ok, `DeepSeek Query Rewrite failed: ${queryRewrite.ok ? '' : queryRewrite.code}`);
+  assert(queryRewrite.data.targetCandidates.includes('大位科技'), 'DeepSeek Query Rewrite missed 大位科技.');
+  assert(!queryRewrite.data.targetCandidates.includes('大为科技'), 'DeepSeek Query Rewrite changed 大位科技 to 大为科技.');
+  return {
+    llm,
+    apiKey,
+    provider,
+    summary: {
+      provider: llm.provider,
+      model: llm.model,
+      baseUrl: llm.baseUrl,
+      toolRoundTrip: 'passed',
+      continuation: 'passed',
+      usage: {
+        firstTurnTokens: roundTrip.usage.totalTokens,
+        continuationTokens: roundTrip.continuationUsage.totalTokens,
+      },
+      queryRewrite: {
+        status: 'llm-applied',
+        target: '大位科技',
+        analysisFocusId: queryRewrite.data.analysisFocusId,
+        outputIntent: queryRewrite.data.outputIntent,
+      },
+    },
   };
 }
 
@@ -343,7 +404,7 @@ async function checkMemoryReadOnly() {
 async function checkMemoryClosedLoop(params: {
   projectId: string;
   otherProjectId: string | null;
-  provider: OpenAICompatibleProvider;
+  provider: PiAgentModelProvider;
   model: string;
 }) {
   const actorUserId = option('subject') || 'quantpilot-long-term-integration-check-v1';
@@ -435,8 +496,12 @@ async function checkMemoryClosedLoop(params: {
 }
 
 async function main() {
-  const qwen = await checkQwen();
-  const deepseek = await checkModelPortDeepSeek(qwen.apiKey);
+  const requestedModel = option('model') || process.env.QUANTPILOT_EVAL_MODEL?.trim() || null;
+  const directDeepSeek = requestedModel && getProjectLlmConfig(requestedModel).provider === 'deepseek'
+    ? await checkDirectDeepSeek(requestedModel)
+    : null;
+  const qwen = directDeepSeek ? null : await checkQwen();
+  const deepseek = qwen ? await checkModelPortDeepSeek(qwen.apiKey) : null;
   const memory = await checkMemoryReadOnly();
   const projectId = option('project');
   const otherProjectId = option('other-project');
@@ -445,8 +510,8 @@ async function main() {
     ? await checkMemoryClosedLoop({
         projectId: projectId!,
         otherProjectId,
-        provider: qwen.provider,
-        model: qwen.llm.model,
+        provider: directDeepSeek?.provider ?? qwen!.provider,
+        model: directDeepSeek?.llm.model ?? qwen!.llm.model,
       })
     : { mode: 'read-only', syntheticWrites: 'not-requested' };
 
@@ -454,14 +519,16 @@ async function main() {
     status: 'ok',
     checkedAt: new Date().toISOString(),
     quantpilot: {
-      defaultModel: qwen.llm.model,
+      defaultModel: qwen?.llm.model ?? null,
+      selectedModel: directDeepSeek?.llm.model ?? qwen?.llm.model ?? null,
       providerBoundary: 'openai-compatible',
       memoryBoundary: 'personal-memory-port',
     },
     modelport: {
-      qwen: qwen.summary,
+      qwen: qwen?.summary ?? null,
       deepseek,
     },
+    directDeepSeek: directDeepSeek?.summary ?? null,
     memory: {
       contract: memory.info.apiContract,
       readiness: 'ready',

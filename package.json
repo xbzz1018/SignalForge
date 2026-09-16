@@ -1,7 +1,7 @@
 {
   "name": "quantpilot",
   "version": "2.0.0",
-  "description": "Quant-focused AI workflow builder powered by PI Agent and configurable model providers",
+  "description": "SignalForge personal quantitative research workspace powered by PI Agent and configurable model providers",
   "private": true,
   "scripts": {
     "dev": "node scripts/dev/run-full.js",
@@ -187,10 +187,10 @@
     "no-code",
     "low-code"
   ],
-  "author": "tiammomo",
+  "author": "xbzz1018",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/tiammomo/QuantPilot.git"
+    "url": "git+https://github.com/xbzz1018/SignalForge.git"
   }
 }

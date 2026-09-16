@@ -261,6 +261,7 @@ describe('PI Agent terminal ownership', () => {
     });
     delete process.env.PI_AGENT_TIMEOUT_MS;
     delete process.env.PI_AGENT_REASONING_EFFORT;
+    delete process.env.QUANTPILOT_EVAL_FORCE_MODEL_AGENT;
   });
 
   afterEach(async () => {
@@ -862,6 +863,55 @@ describe('PI Agent terminal ownership', () => {
     expect(mocks.buildUserPrompt).toHaveBeenCalledWith(expect.objectContaining({
       initialDashboardContract: expect.stringContaining('trusted_dashboard_spec'),
     }));
+  });
+
+  it('can force a prepared standard generation through the live model for evaluation', async () => {
+    mocks.run.mockResolvedValue(result('completed'));
+    mocks.assessPreparedArtifacts.mockResolvedValue({
+      ready: true,
+      reasons: [],
+      dashboardSpecReady: true,
+      dashboardSpecErrorCode: null,
+      dashboardSpecReasons: [],
+    });
+    mocks.readRunPlan.mockResolvedValue({
+      runId: 'plan-live-evaluation',
+      status: 'planned',
+      requestedCapabilityId: 'stock_diagnosis',
+      visualization: {
+        templateId: 'single-stock-diagnosis',
+        variantId: 'single-stock-command-center',
+      },
+    });
+    process.env.QUANTPILOT_EVAL_FORCE_MODEL_AGENT = '1';
+
+    await executePiAgent(
+      'project-test',
+      workspace,
+      '生成贵州茅台个股诊断看板',
+      'deepseek-v4-flash',
+      'request-live-evaluation',
+    );
+
+    expect(mocks.createTools).toHaveBeenCalledWith(expect.objectContaining({
+      preparedSurface: 'custom',
+      includeDashboardSpec: false,
+      includeSemanticEdit: true,
+    }));
+    expect(mocks.engineOptions).toHaveBeenCalledWith(expect.objectContaining({
+      provider: expect.objectContaining({ name: 'deepseek' }),
+      model: 'deepseek-v4-flash',
+      maxTurns: 8,
+      requireTerminalAfterWorkspaceWrite: true,
+    }));
+    expect(mocks.run).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({
+        phaseGraph: expect.objectContaining({
+          lane: 'model_custom',
+          providerMode: 'model',
+        }),
+      }),
+    }), expect.any(Object));
   });
 
   it('runs the trusted standard compiler without a model API key', async () => {

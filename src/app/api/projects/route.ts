@@ -16,6 +16,7 @@ import { PRODUCT_CLI_ID } from '@/lib/constants/cli';
 import { createSuccessResponse, createErrorResponse, handleApiError } from '@/lib/utils/api-response';
 import { DEFAULT_DATA_AGENT_PROFILE_ID } from '@/lib/config/data-agent';
 import { getProjectAuthConfig } from '@/lib/config/auth';
+import { getRuntimeDegradationConfig } from '@/lib/config/degradation';
 import {
   AuthorizationError,
   requireAuthSession,
@@ -47,6 +48,14 @@ const createProjectRequestSchema = z.object({
   capabilitySelectionSource: z.enum(['manual', 'default', 'inferred']).optional(),
   agentProfileId: z.string().trim().regex(/^[a-z][a-z0-9._-]{1,127}$/).optional(),
 }).strict();
+
+function databaseUnavailableResponse() {
+  return createErrorResponse(
+    'DATABASE_UNAVAILABLE',
+    '项目服务暂时不可用，请启动 TimescaleDB 后重试。',
+    503,
+  );
+}
 
 async function requireProjectListPermission(session: ProjectAuthSession | null): Promise<void> {
   if (!session || isPlatformAdmin(session.user)) return;
@@ -80,6 +89,9 @@ export async function GET(request: NextRequest) {
       ? await requireAuthSession(request.headers)
       : null;
     await requireProjectListPermission(session);
+    if (!getRuntimeDegradationConfig().components.database.enabled) {
+      return databaseUnavailableResponse();
+    }
     const projects = await getAllProjects(session ? {
       userId: session.user.id,
       isAdmin: isPlatformAdmin(session.user),
@@ -114,6 +126,9 @@ export async function POST(request: NextRequest) {
       );
     }
     const body = parsed.data;
+    if (!getRuntimeDegradationConfig().components.database.enabled) {
+      return databaseUnavailableResponse();
+    }
     const input: CreateProjectInput = {
       project_id: body.projectId,
       name: body.name,

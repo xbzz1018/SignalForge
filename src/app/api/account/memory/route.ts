@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
         lifecycle: {
           productUsageFenceAvailable: true,
           providerErasureAvailable: false,
-          notice: '关闭后 QuantPilot 不再把外部记忆用于新任务，但不会删除 Memory 服务中已经保存的数据。',
+          notice: '关闭后 SignalForge 不再把外部记忆用于新任务，但不会删除 Memory 服务中已经保存的数据。',
         },
       },
     });

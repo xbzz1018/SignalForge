@@ -1,14 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="quantpilot-bg" x1="88" y1="64" x2="430" y2="448" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F47D63" />
-      <stop offset="1" stop-color="#C83F34" />
-    </linearGradient>
-  </defs>
-  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#quantpilot-bg)" />
-  <rect x="36" y="36" width="440" height="440" rx="100" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="8" />
-  <circle cx="244" cy="238" r="126" fill="none" stroke="#FFFFFF" stroke-width="48" />
-  <path d="M326 324L401 399" fill="none" stroke="#FFFFFF" stroke-width="48" stroke-linecap="round" />
-  <path d="M166 279L219 226L267 259L342 184" fill="none" stroke="#FFD8CB" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
-  <path d="M306 184H342V220" fill="none" stroke="#FFD8CB" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">SignalForge</title>
+  <desc id="desc">SignalForge 量化研究工作台图标</desc>
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="#167A6A" />
+  <rect x="36" y="36" width="440" height="440" rx="100" fill="none" stroke="#D7F5EC" stroke-opacity="0.28" stroke-width="8" />
+  <path d="M112 350V160M112 350H400" fill="none" stroke="#B9EBDD" stroke-width="18" stroke-linecap="round" />
+  <path d="M140 312L208 246L264 282L376 170" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M338 170H376V208" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="140" cy="312" r="12" fill="#8DE0C4" />
+  <circle cx="208" cy="246" r="12" fill="#8DE0C4" />
+  <circle cx="264" cy="282" r="12" fill="#8DE0C4" />
 </svg>

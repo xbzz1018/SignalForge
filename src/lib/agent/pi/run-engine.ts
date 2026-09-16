@@ -1239,6 +1239,16 @@ export class PiAgentRunEngine {
       }
       const policy = toolPolicy(tool);
       if (stopStatus) return { block: true, reason: stopError?.message };
+      if (
+        this.options.requireTerminalAfterWorkspaceWrite === true &&
+        successfulWorkspaceWrites > 0 &&
+        tool.terminal !== true
+      ) {
+        return {
+          block: true,
+          reason: 'A governed workspace write already succeeded; submit_result must be the next tool call.',
+        };
+      }
       if (readToolsDisabled && policy.effect === 'read') {
         return {
           block: true,

@@ -39,6 +39,7 @@ def test_health_is_a_cache_safe_liveness_contract() -> None:
 
 def test_ready_blocks_on_required_database_without_leaking_details(monkeypatch) -> None:
     monkeypatch.setenv("QUANTPILOT_DEGRADATION_MODE", "strict")
+    monkeypatch.setenv("QUANTPILOT_DATABASE_ENABLED", "1")
     monkeypatch.setenv("QUANTPILOT_DATABASE_REQUIRED", "1")
     response = client(failing_database=True).get("/ready")
 

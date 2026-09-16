@@ -348,6 +348,16 @@ export function buildQuantPilotSystemPrompt(
   options: QuantPilotSystemPromptOptions = {},
 ): string {
   const phase = options.phase ?? 'workspace-generation';
+  const preparedCustomGuardrails = phase === 'workspace-generation' && options.preparedIntent === 'custom'
+    ? `
+
+## Final prepared-custom guardrails
+These constraints are absolute for this run and take precedence over visual skill suggestions:
+- Make visual changes only with one compact semantic_edit call using kind=css_append and path=app/globals.css.
+- Keep that replacement to at most 40 lines and 4,000 characters, with no comments or repeated rule blocks. A smaller change is preferred.
+- Never call semantic_edit with typescript_symbol, css_rule, or line_range; never edit app/page.tsx or the Home component on this prepared custom route.
+- After the single successful CSS edit, call submit_result immediately. If the visual change cannot fit the bound, submit the smallest completed change instead of expanding the edit or retrying a failed payload.`
+    : '';
   return `# PI Agent Kernel
 You are QuantPilot's first-party workspace agent.
 
@@ -360,13 +370,16 @@ You are QuantPilot's first-party workspace agent.
 - For multi-rule CSS-only restyling use kind=css_append, not broad line_range/combined selectors. On SEMANTIC_TARGET_AMBIGUOUS use line_range with the existing SHA/lines. Fix invalid replacements directly; reread only after WORKSPACE_WRITE_CONFLICT.
 - Resolve platform JSON with query_json handles. Read prepared market data as artifact=final_dashboard; never invent public/data/dashboard.json or symbol-named public JSON files.
 - If exposed, call apply_dashboard_spec with {} first and do not read source after success. Otherwise this is a custom/uncertified route: use semantic_edit with query_text_file's SHA-256.
+${phase === 'workspace-generation' && options.preparedIntent === 'custom'
+  ? '- Prepared custom: after the first successful semantic_edit, call submit_result next without another read or edit.'
+  : ''}
 - Platform owns build, preview, validation, and Mission acceptance. After the smallest coherent changes, call submit_result with a concise Chinese summary and changed paths; never claim validation success.
 
 ## Phase contract
 ${phaseContract(phase)}
 ${phase === 'workspace-generation' && options.preparedIntent ? `Prepared route: ${options.preparedIntent}.` : ''}
 
-${options.skillManifest?.trim() || '# PI Agent Skill Manifest\nNo task skill capsule was loaded.'}`;
+${options.skillManifest?.trim() || '# PI Agent Skill Manifest\nNo task skill capsule was loaded.'}${preparedCustomGuardrails}`;
 }
 
 export function buildQuantPilotUserPrompt(params: {

@@ -96,7 +96,7 @@ export const FINANCE_DOMAIN_PACK: DataAgentDomainPack = {
 export const QUANTPILOT_AGENT_PROFILE: DataAgentProfile = {
   id: QUANTPILOT_AGENT_PROFILE_ID,
   version: '1.0.0',
-  name: 'QuantPilot Finance Research',
+  name: 'SignalForge Finance Research',
   domainPackIds: [FINANCE_DOMAIN_PACK_ID],
   defaultCapabilityId: DEFAULT_QUANT_CAPABILITY_ID,
   deliveryPackId: 'workspace.next-dashboard',

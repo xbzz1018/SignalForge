@@ -1752,7 +1752,7 @@ async function runVisualCheck({ projectId, testCase }) {
             accessibilityIssueCount: controlsWithoutName + inputsWithoutName + imagesWithoutAlt,
           };
         });
-        for (const keyword of testCase.expectedVisualKeywords || ['QuantPilot']) {
+        for (const keyword of testCase.expectedVisualKeywords || ['SignalForge']) {
           assertCondition(info.text.includes(keyword), `${viewport.id} 页面缺少关键词：${keyword}`, failures);
         }
         assertCondition(info.svgCount + info.canvasCount > 0 || info.rectCount >= 12, `${viewport.id} 页面缺少可识别图表元素。`, failures);

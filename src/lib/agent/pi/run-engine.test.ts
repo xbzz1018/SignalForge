@@ -685,6 +685,86 @@ describe('PiAgentRunEngine', () => {
     expect(events.map((event) => event.type)).not.toContain('tool_started');
   });
 
+  it('requires terminal submission after the first successful workspace write', async () => {
+    const write = vi.fn(async () => ({
+      ok: true as const,
+      data: { path: 'app/page.tsx' },
+    }));
+    const read = vi.fn(async () => ({
+      ok: true as const,
+      data: { content: 'should not execute' },
+    }));
+    const submit = vi.fn(async (input: unknown) => ({
+      ok: true as const,
+      data: input,
+    }));
+    const provider = new ScriptedProvider([
+      toolTurn([{
+        id: 'call-write-after-gate',
+        name: 'write_file',
+        arguments: '{}',
+      }]),
+      toolTurn([{
+        id: 'call-read-after-gate',
+        name: 'read_file',
+        arguments: '{}',
+      }]),
+      toolTurn([{
+        id: 'call-submit-after-gate',
+        name: 'submit_result',
+        arguments: '{"artifact":"app/page.tsx"}',
+      }]),
+    ]);
+    const events: PiAgentEvent[] = [];
+    const engine = new PiAgentRunEngine({
+      provider,
+      model: 'test-model',
+      requireTerminalTool: true,
+      requireWorkspaceWriteBeforeTerminal: true,
+      requireTerminalAfterWorkspaceWrite: true,
+      tools: [
+        {
+          name: 'write_file',
+          description: 'Write a file.',
+          inputSchema: objectSchema(),
+          effect: 'workspace_write',
+          execute: write,
+        },
+        {
+          name: 'read_file',
+          description: 'Read a file.',
+          inputSchema: objectSchema(),
+          effect: 'read',
+          execute: read,
+        },
+        terminalTool(submit),
+      ],
+    });
+
+    const result = await engine.run({
+      runId: 'pi-terminal-after-write-gate',
+      messages: initialMessages,
+    }, (event) => {
+      events.push(event);
+    });
+
+    expect(result.status).toBe('completed');
+    expect(write).toHaveBeenCalledOnce();
+    expect(read).not.toHaveBeenCalled();
+    expect(submit).toHaveBeenCalledOnce();
+    expect(events).not.toContainEqual(expect.objectContaining({
+      type: 'tool_started',
+      toolCall: expect.objectContaining({ name: 'read_file' }),
+    }));
+    const blockedRead = provider.requests[2]?.messages.find(
+      (message) =>
+        message.role === 'tool' &&
+        message.toolCallId === 'call-read-after-gate',
+    );
+    expect(blockedRead?.role === 'tool' ? blockedRead.content : '')
+      .toContain('submit_result must be the next tool call');
+  });
+
   it('preflights duplicate IDs and tool budgets before any tool starts', async () => {
     const scenarios = [
       {

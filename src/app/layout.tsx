@@ -13,19 +13,19 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: {
-    default: 'QuantPilot · 量化研究工作台',
+    default: 'SignalForge · 个人量化研究台',
     template: '%s',
   },
-  description: '从真实行情与证据出发，生成、评测和治理可验证的量化研究看板。',
+  description: '把市场假设拆成数据、指标和回测，沉淀可复核的个人量化研究记录。',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
-      { url: '/quantpilot-mark.svg?v=2', type: 'image/svg+xml' },
-      { url: '/favicon-32.png?v=2', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon-16.png?v=2', sizes: '16x16', type: 'image/png' },
+      { url: '/quantpilot-mark.svg?v=3', type: 'image/svg+xml' },
+      { url: '/favicon-32.png?v=3', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-16.png?v=3', sizes: '16x16', type: 'image/png' },
     ],
-    shortcut: '/favicon-32.png?v=2',
-    apple: [{ url: '/apple-touch-icon.png?v=2', sizes: '180x180', type: 'image/png' }],
+    shortcut: '/favicon-32.png?v=3',
+    apple: [{ url: '/apple-touch-icon.png?v=3', sizes: '180x180', type: 'image/png' }],
   },
 }
 

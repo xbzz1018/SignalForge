@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { requireAction } from '@/lib/auth/action';
 import { AuthorizationError } from '@/lib/auth/authorization';
 import { authErrorResponse } from '@/lib/auth/http';
+import { getRuntimeDegradationConfig } from '@/lib/config/degradation';
 import {
   deleteServiceToken,
   getPlainServiceToken,
@@ -33,6 +34,17 @@ function internalTokenApiAuthorized(request: NextRequest): boolean {
   return expectedBuffer.length === providedBuffer.length && timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
+function databaseUnavailableResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      error: 'DATABASE_UNAVAILABLE',
+      message: '服务令牌存储暂时不可用，请启动 TimescaleDB 后重试。',
+    },
+    { status: 503 },
+  );
+}
+
 export async function GET(request: NextRequest, { params }: RouteContext) {
   const { segments = [] } = await params;
 
@@ -52,6 +64,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         { success: false, error: 'Invalid provider' },
         { status: 400 },
       );
+    }
+    if (!getRuntimeDegradationConfig().components.database.enabled) {
+      return databaseUnavailableResponse();
     }
 
     const record = await getServiceToken(provider);
@@ -78,6 +93,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         { success: false, error: 'Invalid provider' },
         { status: 400 },
       );
+    }
+    if (!getRuntimeDegradationConfig().components.database.enabled) {
+      return databaseUnavailableResponse();
     }
 
     const token = await getPlainServiceToken(provider);
@@ -109,6 +127,10 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
   } catch (error) {
     if (error instanceof AuthorizationError) return authErrorResponse(error);
     throw error;
+  }
+
+  if (!getRuntimeDegradationConfig().components.database.enabled) {
+    return databaseUnavailableResponse();
   }
 
   const tokenId = segments[0];

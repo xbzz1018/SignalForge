@@ -514,7 +514,7 @@ export async function ensureResearchAutomationSeed() {
     where: { id: DEFAULT_WATCHLIST_ID },
     create: {
       id: DEFAULT_WATCHLIST_ID,
-      name: 'QuantPilot 每日核心观察池',
+      name: 'SignalForge 每日核心观察池',
       description: '围绕默认 A 股研究池和少量核心标的生成证据型日报。',
       universeId: DEFAULT_UNIVERSE_ID,
       symbols: DEFAULT_SYMBOLS,
@@ -531,7 +531,7 @@ export async function ensureResearchAutomationSeed() {
       metadata: {
         seeded: true,
         intent: 'research_automation_p0',
-        sourceProject: 'QuantPilot',
+        sourceProject: 'SignalForge',
       },
     },
     update: {},

@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { requireAction } from '@/lib/auth/action';
 import { AuthorizationError } from '@/lib/auth/authorization';
 import { authErrorResponse } from '@/lib/auth/http';
+import { getRuntimeDegradationConfig } from '@/lib/config/degradation';
 import { createServiceToken } from '@/lib/services/tokens';
-import { createSuccessResponse, handleApiError } from '@/lib/utils/api-response';
+import { createErrorResponse, createSuccessResponse, handleApiError } from '@/lib/utils/api-response';
 
 const tokenInputSchema = z.object({
   provider: z.enum(['github', 'supabase', 'vercel']),
@@ -18,6 +19,13 @@ export async function POST(request: NextRequest) {
       headers: request.headers,
       action: 'platform.tokens.manage',
     });
+    if (!getRuntimeDegradationConfig().components.database.enabled) {
+      return createErrorResponse(
+        'DATABASE_UNAVAILABLE',
+        '服务令牌存储暂时不可用，请启动 TimescaleDB 后重试。',
+        503,
+      );
+    }
     const body = tokenInputSchema.parse(await request.json());
     const record = await createServiceToken(body.provider, body.token, body.name);
     return createSuccessResponse(record, 201);

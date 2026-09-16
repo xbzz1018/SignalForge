@@ -186,7 +186,7 @@ const FALLBACK_DATA_PROVIDERS: CapabilityCenterDataProvider[] = [
   },
   {
     id: 'quantpilot-technical-indicators',
-    name: 'QuantPilot 技术指标',
+    name: 'SignalForge 技术指标',
     category: 'indicator',
     status: 'available',
     description: '基于历史 K 线计算均线、区间收益、最大回撤和波动率。',
@@ -196,7 +196,7 @@ const FALLBACK_DATA_PROVIDERS: CapabilityCenterDataProvider[] = [
   },
   {
     id: 'quantpilot-ma-crossover-backtest',
-    name: 'QuantPilot 均线突破回测',
+    name: 'SignalForge 均线突破回测',
     category: 'backtest',
     status: 'available',
     description: '基于历史 K 线运行单标的均线突破策略。',
@@ -231,7 +231,7 @@ const FALLBACK_DATA_PROVIDERS: CapabilityCenterDataProvider[] = [
   },
   {
     id: 'quantpilot-fundamental-indicators',
-    name: 'QuantPilot 财务衍生指标',
+    name: 'SignalForge 财务衍生指标',
     category: 'fundamental',
     status: 'available',
     description: '基于财务摘要计算净利率、平均 ROE、毛利率和最近报告期核心指标。',

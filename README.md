@@ -1,52 +1,62 @@
-# QuantPilot
+# SignalForge
 
-QuantPilot 是建立在通用 Data Agent 与开源 [PI Agent](https://github.com/earendil-works/pi) 执行内核之上的金融量化应用。用户用自然语言提出研究问题，Finance Domain Pack 会组合证券解析、真实数据、Skills、工具、Mission 和可视化规则，生成可运行工作空间，并通过自动验证、视觉检查、产物契约和评测链路把结果收敛到“好看、可用、可追溯”。下一阶段聚焦“可信数据 → 可复现实验 → 持续研究 → 结果复盘”，具体交付与当前缺口见 [路线图](docs/ROADMAP.md)。
+SignalForge 是个人量化研究工作台，基于开源 [QuantPilot](https://github.com/tiammomo/QuantPilot) 的代码与金融工作流持续完善。使用自然语言提出研究问题后，系统将证券解析、真实数据、Skills、Agent 工具、Mission 和可视化规则连接起来，生成可运行的工作空间，并通过验证与评测检查结果。当前工作的重点是 DeepSeek 官方直连、后端链路复现与稳定性、可选组件诊断，以及界面品牌和入口体验。
+
+底层 Data Agent 架构、PI Agent 治理和量化基础设施沿用上游设计；本仓库保留原始 Git 历史及 MIT 版权声明，方便区分原始实现和后续改动。为了兼容既有数据和脚本，内部仍保留部分 `quantpilot` 标识。后续工作沿“可信数据 → 可复现实验 → 持续研究 → 结果复盘”推进，具体方向见 [路线图](docs/ROADMAP.md)。
 
 生成内容仅用于研究、复盘和辅助决策，不构成投资建议、收益承诺或即时交易指令。
 
-如果你是第一次打开这个项目，先配置模型并启动本地数据服务；Memory 和可观测性组件按需启用。核心链路是：真实数据进入本地库，Agent 基于 skills 生成工作空间，平台再用验证和评测把结果收紧。
+从浏览器发起研究任务即可进入主链：选择模型、解析问题、取数/回测、生成工作空间，再由验证与 Mission 验收确认结果。数据库和缓存是核心依赖；Memory、知识平台以及集中日志按需接入。完整 Web 开发栈由本地 Docker Compose 与服务启动脚本配合运行。
 
-产品统一通过浏览器访问，基础组件通过本地 Docker Compose 安装。已移除只包装 Web 页面的 Electron 桌面壳及其打包命令；Web 开发与 standalone 部署继续维护。
+## 功能与链路
 
-## 核心能力
+### 从任务到研究结果
 
-- 通用 Data Agent：使用版本化 Task、Dataset、Connector、Domain Pack、Agent Profile、Delivery Pack 和 Execution Plan 合同组合业务能力；`DataAgentApplicationCatalog` 让 Profile Adapter 负责 workspace 初始化，项目和任务同时持久化 Profile/Domain/Delivery/capability 版本锁与 SHA-256。当前金融实现是 `finance.quant`，通用 Next.js 交付实现是 `workspace.next-dashboard`。完整边界与新业务接入流程见 [Data Agent 平台与 Domain Pack 架构](docs/data-agent-architecture.md)。
-- AI 工作台：任务入口、项目聊天、工作空间预览、任务记录和自动修复链路。
-- 量化数据底座：PostgreSQL + TimescaleDB + Redis，承载应用状态、时序行情、估值因子、缓存和补数任务状态。
-- 市场数据服务：Python/FastAPI 后端，提供行情、K 线、财务、公告、指标、补数、基础组件和策略平台接口。
-- 策略平台：股票池、ETF/指数池、策略目录、板块资金、基础组件、金融知识和后续回测入口。
-- 投研情报中心：围绕观察池生成证据型日报，沉淀结构化报告、主题洞察、运行历史和推送回执。
-- LLM-first Query Rewrite：`preview` 与正式执行都由项目选中的模型生成 schema v4 语义合同，时间范围、宽域范围和 answer-only 意图必须有原文字面证据；证券 Resolver 独立确认代码。模型不可用时停止规划和预取，不以关键词结果冒充成功。
-- PI Agent 执行内核 + QuantPilot 治理层：`@earendil-works/pi-agent-core` 负责完整多轮 Agent loop，默认通过 ModelPort 使用本地 Qwen，日常 DeepSeek 经 ModelPort 的 Anthropic 上游 provider，也可为项目显式选择官方 OpenAI-compatible 直连并完全绕过 ModelPort；QuantPilot 保留上下文治理、信息增益 Observation Ledger、受信副作用工具的人工批准/编辑/拒绝、PostgreSQL generation job/事务 outbox、独立 Worker registry、数据库全局 Worker 槽位、按用户公平 claim、用户排队/运行双层结构配额、项目编排/AgentRun/Mission 分层 lease 与 fencing、共享文件系统资源锁、durable run/approval/operation ledger、预算、取消和显式结果提交。审批等待会把 AgentRun 原子切到 `waiting` 并写公开 checkpoint，决策通过后才允许 prepare/execute；Worker 丢失则关闭旧 attempt 并重新规划，不复用已批准的旧调用。Worker 启动时会持久注册进程身份与心跳，并拒绝加入全局容量配置不一致的存活集群；运行治理中心直接展示进程、槽位和队列事实。HTTP 入口只负责接收与调度，金融规划/取数由独立应用服务完成；生产 Worker 与本地 inline 模式都使用 schema v3 execution envelope，按 Profile handler 执行并核对项目、request、workspace、跨平台 scope 和组合哈希。Memory Recall 与受治理知识准备快照随任务固化，避免排队后重复检索导致 evidence 与实际输入漂移。`PiAgent*` 类型和结构化 JSON 合同由通用治理层定义，Domain Pack 只注入领域能力；内核不内置证券、量化工具、dashboard 路径或金融 Mission。版本与边界见 [PI Agent 采用与治理边界](docs/pi-agent-migration.md)。
-- Skills 能力层：仓库 `.pi/**` 是唯一权威源，通过 registry/lock、版本与 SHA-256 完整性校验；项目初始化把参考镜像配置到 workspace `.pi/skills`，Agent 执行按 source-first/package-fallback 规则只读编译有界上下文，不从 workspace 镜像发现能力，也不解析旧 Skill ID。
-- 业务与治理：业务知识中心、评测平台和运行治理中心共同覆盖能力知识、交付契约、生成质量、工作空间健康、运行 trace 和集中日志。
-- 受治理上下文接入：通过独立 HTTP 契约组合 Memory Usage Receipt 与 AKEP ContextPack，Agent 前落无正文联合清单，Mission 验收后记录 AKEP Usage，用户明确评价后再分别回传 Memory Outcome 与 AKEP Feedback；不共享数据库或源码。
-- 生成代码隔离：build/preview 默认进入 Linux user、mount、network、PID namespace，工作区只读且不注入平台密钥；preview 只经工作区 Unix Socket 对浏览器开放，并获得一条固定目标的无凭据 market-data 桥接，不能访问其他宿主服务或外网。
+- 工作台负责新建任务，项目页保留聊天、运行状态、生成记录与看板预览。失败任务可以依据验证结果检查工作空间，而不是只看一条模型回复。
+- Query Rewrite 使用项目选定的模型输出 schema v4 语义合同；时间范围、宽域分析和仅回答意图需要原始提问的证据。证券代码再由独立 Resolver 确认；模型不可用时不把关键词猜测伪装成规划成功。
+- 金融领域能力以版本化 Task、Dataset、Connector、Domain Pack、Agent Profile、Delivery Pack 和 Execution Plan 组合。项目保存 Profile/Domain/Delivery/capability 的版本和 SHA-256 锁；金融 profile 为 `finance.quant`，Next.js 交付为 `workspace.next-dashboard`。具体扩展边界见 [Data Agent 架构](docs/data-agent-architecture.md)。
+- 输出包括可构建的工作空间、数据文件、来源与质量证据，以及 Mission 验收回执；生成产物和平台状态分开保存，便于复查与复现。
 
+### 数据、策略与报告
+
+- PostgreSQL 管项目和任务状态，TimescaleDB 存历史行情、因子及策略时序数据，Redis 承接缓存。Python/FastAPI 市场数据服务负责行情、K 线、财务、公告、指标和补数接口。
+- 策略平台提供股票池、ETF/指数池、板块资金、策略目录、基础组件与回测入口；投研情报中心面向观察池组织证据型日报、主题洞察和运行历史。
+- 业务知识、评测和运行治理页面分别展示能力契约、生成质量、工作空间健康、Worker/队列与日志。数据或可选服务停机时应分清降级提示与核心依赖故障。
+
+### Agent 执行与安全边界
+
+- 多轮模型调用采用开源 `@earendil-works/pi-agent-core`。本地 Qwen 走 ModelPort；DeepSeek 既可经 ModelPort 转发，也可按项目选择官方 OpenAI-compatible 直连。金融规则留在 Domain Pack，执行内核不直接绑定证券工具和看板模板。
+- 平台治理层使用 PostgreSQL generation job 与事务 outbox 派发，Worker registry、全局槽位、用户配额、分层 lease/fencing 和资源锁控制并发与恢复。AgentRun 等待人工审批时保留 checkpoint，拒绝复用失效 attempt 的批准；工具写入工作空间后要求显式 `submit_result`。
+- `.pi/**` 是 Skills 的权威源，registry/lock 与 SHA-256 约束版本，运行时只读编译上下文。Memory Usage Receipt 与 AKEP ContextPack 通过独立 HTTP 契约接入；前者和后者的使用、反馈及项目隔离不要求共享数据库。
+- 生成代码的 build/preview 默认放进 Linux user、mount、network、PID namespace，工作空间只读、平台密钥不注入；预览通过 Unix Socket 暴露，并只允许受限的无凭据行情桥接。详见 [PI Agent 治理边界](docs/pi-agent-migration.md) 与[工作空间契约](docs/generated-workspace-contract.md)。
+ ## 快速启动
 ## 快速启动
 
-第一次启动按下面顺序来。`npm install` 的 `postinstall` 会创建缺失的 `.env` 和 `.env.local`；也可以显式执行 `ensure:env`。不要把整份 `.env.example` 复制到 `.env.local`，后者只应保存本机凭据与少量覆盖。
+本地复现使用 Ubuntu 22.04 WSL2、Node.js 24、Python 3.14、uv 和 Docker Desktop WSL integration。先按锁文件安装依赖；`npm ci` 的 postinstall 会创建缺失的 `.env` 和 `.env.local`。后者只保存本机凭据和少量覆盖，不要把整份 `.env.example` 复制进去。
 
 ```bash
-npm install
-npm run ensure:env
+npm ci
+uv sync --project services/market-data --extra baostock --extra akshare --locked
 ```
 
-推荐模式只需在 `.env.local` 添加 ModelPort 签发的受限客户端凭据：
+当前笔记本使用 DeepSeek 官方直连：在不进入 Git 的 `.env.local` 中填写自己的 Key，并在页面中显式选择 `deepseek-v4-flash`：
 
 ```dotenv
-MODELPORT_API_KEY="replace-with-scoped-modelport-client-key"
+DEEPSEEK_API_KEY="replace-with-your-official-deepseek-api-key"
+QUANTPILOT_MODELPORT_ENABLED=0
+QUANTPILOT_MEMORY_ENABLED=0
+QUANTPILOT_KNOWLEDGE_ENABLED=0
 ```
 
-本地 Qwen 是默认模型，日常 DeepSeek 也经 ModelPort 使用。DeepSeek 上游 Anthropic Key 只配置在 ModelPort；如果明确要绕过 ModelPort，则在 QuantPilot 注入 `DEEPSEEK_API_KEY`，并显式选择 `deepseek-v4-flash`。Memory 是独立可选组件，可用 `QUANTPILOT_MEMORY_ENABLED=0` 完全关闭。
+本地 Qwen 和 ModelPort profile 仍保留，具备相应服务和受限客户端凭据时可使用 `MODELPORT_API_KEY`。仅配置 DeepSeek Key 不会改变默认的 Qwen 选择；Memory 是独立可选组件，关闭后不必启动服务。
 
-跨平台作用域采用 Consumer + Workspace 两层隔离：ModelPort API Key 固定绑定 QuantPilot 项目账本，Memory 使用 QuantPilot 独占 tenant，AKEP 每轮只查询 shared Space 与当前 `Project.id` 派生的 project Space；统一作用域摘要写入数据库和 workspace evidence。详见 [联合上下文与项目隔离](docs/context-composition.md)。
+可选上下文服务按 Consumer 与 Workspace 双层隔离。ModelPort 的客户端 Key 只授权当前应用；Memory 使用独立 tenant，AKEP 限定 shared Space 和当前项目 Space；作用域摘要写入数据库及 workspace evidence。细节见 [联合上下文与项目隔离](docs/context-composition.md)。
 
 | 运行方式 | `.env.local` 最小配置 | 额外动作 |
 | --- | --- | --- |
-| 推荐：Qwen + ModelPort DeepSeek | `MODELPORT_API_KEY=...` | ModelPort 配置 Qwen 与 DeepSeek provider |
+| 本地 Qwen + ModelPort DeepSeek | `MODELPORT_API_KEY=...` | 启动 ModelPort 并配置相应 provider |
 | 只使用 Qwen | `MODELPORT_API_KEY=...` | 客户端 Key 只授权 `local_qwen` 即可 |
-| DeepSeek 官方直连 | `DEEPSEEK_API_KEY=...` | 项目/全局设置选择 `deepseek-v4-flash` |
+| 当前使用：DeepSeek 官方直连 | `DEEPSEEK_API_KEY=...` | 项目/全局设置选择 `deepseek-v4-flash` |
 | 不启用 Memory | `QUANTPILOT_MEMORY_ENABLED=0` | 无需启动或配置 Memory 服务 |
 
 完整的文件优先级、可复制组合、生产 secret 边界和验证命令见 [配置、模型接入与可选组件指南](docs/configuration.md)。
@@ -62,7 +72,7 @@ npm run db:init
 npm run obs:up
 ```
 
-在项目根目录启动完整开发栈。`npm run dev` 调用 `scripts/dev/run-full.js`，先启动或复用 market-data，再由 `run-web.js` 完成端口选择、环境文件同步、稳定 CSS 生成、数据库 schema 检查、Next dev 缓存清理和 Web 启动：
+在项目根目录启动完整开发栈。`npm run dev` 先启动或复用 market-data，再检查数据库 schema、选择前端端口并启动 Next.js；需要分开排障时可分别使用 `dev:market` 和 `dev:web`：
 
 ```bash
 npm run dev
@@ -189,3 +199,7 @@ npm run dev
 ## 降级模式
 
 `.env` 中的 `QUANTPILOT_DEGRADATION_MODE` 控制组件缺失时的行为：`auto` 适合本地开发，可选组件缺失时自动降级；`strict` 适合 CI/生产，必需组件缺失会失败；`offline` 会跳过多项可选外部组件探测，优先使用本地兜底。只关闭一个组件应使用其 `ENABLED=0`，例如不启用 Memory 使用 `QUANTPILOT_MEMORY_ENABLED=0`，不要为了关闭单一组件切到 `offline`。完整开关见 [配置指南](docs/configuration.md)。
+
+## 来源与许可
+
+项目参考并保留 [tiammomo/QuantPilot](https://github.com/tiammomo/QuantPilot) 的源代码和提交历史，沿用仓库中的 [MIT 许可证](LICENSE) 与原作者版权声明。页面品牌为 SignalForge，不表示上游架构由我从零设计。

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   requireAction: vi.fn(),
@@ -67,6 +67,27 @@ describe('/api/research/reports authorization', () => {
     mocks.reserveQuota.mockResolvedValue({ reservation: { id: 'reservation-1' } });
     mocks.settleQuotaReservation.mockResolvedValue({ eventId: 'usage-1' });
     mocks.releaseQuotaReservation.mockResolvedValue({ status: 'released' });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('short-circuits database-backed reads and writes in offline mode', async () => {
+    vi.stubEnv('QUANTPILOT_DATABASE_ENABLED', '0');
+
+    const dashboard = await GET(request());
+    const report = await POST(request({ action: 'run-daily-report', dryRun: true }));
+
+    expect(dashboard.status).toBe(503);
+    expect(report.status).toBe(503);
+    await expect(dashboard.json()).resolves.toMatchObject({
+      success: false,
+      error: 'DATABASE_UNAVAILABLE',
+    });
+    expect(mocks.getDashboard).not.toHaveBeenCalled();
+    expect(mocks.runReport).not.toHaveBeenCalled();
+    expect(mocks.claimApiOperation).not.toHaveBeenCalled();
   });
 
   it('requires report read for the dashboard', async () => {

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   requireAction: vi.fn(),
@@ -63,6 +63,24 @@ describe('POST /api/projects quota orchestration', () => {
     mocks.settleQuotaReservation.mockResolvedValue({ eventId: 'usage-1' });
     mocks.releaseQuotaReservation.mockResolvedValue({ status: 'released' });
     mocks.quotaErrorResponse.mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('returns a bounded database-unavailable response in offline mode', async () => {
+    vi.stubEnv('QUANTPILOT_DATABASE_ENABLED', '0');
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: 'DATABASE_UNAVAILABLE',
+    });
+    expect(mocks.reserveQuota).not.toHaveBeenCalled();
+    expect(mocks.createProject).not.toHaveBeenCalled();
   });
 
   it('reserves projects.owned after permission succeeds and settles against the created project', async () => {

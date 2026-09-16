@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 
-describe('QuantPilot brand icons', () => {
+describe('SignalForge brand icons', () => {
   it('keeps the browser and application icons on the same SVG brand mark', async () => {
     const [publicMark, appIcon] = await Promise.all([
       fs.readFile(path.join(root, 'public', 'quantpilot-mark.svg'), 'utf8'),
@@ -13,10 +13,10 @@ describe('QuantPilot brand icons', () => {
     ]);
 
     for (const svg of [publicMark, appIcon]) {
-      expect(svg).toContain('#F47D63');
-      expect(svg).toContain('#C83F34');
-      expect(svg).toContain('<circle cx="244" cy="238" r="126"');
-      expect(svg).toContain('M166 279L219 226L267 259L342 184');
+      expect(svg).toContain('#167A6A');
+      expect(svg).toContain('#FFFFFF');
+      expect(svg).toContain('<path d="M140 312L208 246L264 282L376 170"');
+      expect(svg).toContain('SignalForge');
     }
   });
 

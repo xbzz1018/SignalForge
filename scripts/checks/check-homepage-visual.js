@@ -79,7 +79,10 @@ async function createAuthenticatedState(browser) {
 async function inspectDrawer(page, profile) {
   let projectButton = page.getByRole('button', { name: /^项目/ }).first();
   if (!await projectButton.isVisible().catch(() => false)) {
-    projectButton = page.getByRole('button', { name: /^查看全部/ }).first();
+    projectButton = page.getByRole('button', { name: '打开项目' }).first();
+  }
+  if (!await projectButton.isVisible().catch(() => false)) {
+    projectButton = page.getByRole('button', { name: /^(查看全部|浏览队列)/ }).first();
   }
   if (!await projectButton.isVisible().catch(() => false)) {
     return { available: false, problems: [`${profile.id}: 未找到项目抽屉入口`] };
@@ -280,8 +283,13 @@ async function inspectProfile(browser, storageState, profile) {
 
     const problems = [];
     if (!metrics.form) problems.push(`${profile.id}: 未找到主任务表单`);
-    if (Math.abs(metrics.formCenterOffset ?? 999) > 2) {
-      problems.push(`${profile.id}: 主任务表单未居中，偏移 ${metrics.formCenterOffset}px`);
+    if (metrics.viewport.width >= 1024) {
+      const rightColumnStart = (metrics.content?.left ?? 0) + (metrics.content?.width ?? metrics.viewport.width) * 0.3 - 16;
+      if ((metrics.form?.left ?? -Infinity) < rightColumnStart || (metrics.form?.right ?? Infinity) > (metrics.content?.right ?? metrics.viewport.width) + 2) {
+        problems.push(`${profile.id}: 主任务表单未落在右侧编辑栏，左边界 ${metrics.form?.left}px`);
+      }
+    } else if (Math.abs(metrics.formCenterOffset ?? 999) > 2) {
+      problems.push(`${profile.id}: 窄屏主任务表单未居中，偏移 ${metrics.formCenterOffset}px`);
     }
     if (metrics.viewport.width >= 1800 && (metrics.contentSideGutter ?? Infinity) > 112) {
       problems.push(`${profile.id}: 宽屏内容两侧留白过大，单侧 ${metrics.contentSideGutter}px`);
@@ -460,7 +468,7 @@ async function main() {
     console.log('✅ 首页技术 UX 检查通过');
     console.log(`地址：${homepageUrl.href}`);
     console.log(`覆盖：${profiles.map((profile) => profile.id).join(', ')}`);
-    console.log('交互：图片-only 拦截、首问失败保留、幂等重试、问答模式传递');
+    console.log('交互：右侧任务编辑器、图片-only 拦截、首问失败保留、幂等重试、问答模式传递');
     console.log(`详细报告：${reportPath}`);
   } finally {
     if (storageState) {
