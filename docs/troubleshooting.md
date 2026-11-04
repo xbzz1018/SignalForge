@@ -96,12 +96,14 @@ npm run dev -> scripts/dev/run-full.js -> scripts/dev/run-web.js -> npx next dev
 如果启动日志看起来混乱，先确认依赖和缓存：
 
 ```bash
-npm install
+npm ci
 rm -rf .next/dev/cache/webpack .next/dev/lock
 npm run dev
 ```
 
 如果日志里仍出现 `next-rspack`、`QUANTPILOT_DISABLE_RSPACK` 或 Rspack panic，说明本机依赖或旧启动进程没有清干净。先停止旧进程，再确认 `package.json` 中没有 `next-rspack` 依赖。
+
+依赖更新后先确认 `npm ci` 成功，再执行 `npm run security:audit:production`。审计失败时查看包名、版本和修复范围，按[依赖维护记录](validation-status.md#依赖维护记录)处理，不跳过审计或自动执行 `--force`。
 
 ## 8000 后端不可用
 

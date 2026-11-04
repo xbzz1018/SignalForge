@@ -56,6 +56,8 @@ uv sync --project services/market-data --extra baostock --extra akshare --locked
 
 接着按[本地运行指南](docs/quick-start.md)配置服务端模型凭据、启动数据库和应用。Memory、知识服务与集中日志为可选组件。
 
+拉取依赖更新后重新执行 `npm ci` 和带 `--locked` 的 `uv sync`；审计范围见[依赖维护记录](docs/validation-status.md#依赖维护记录)。
+
 | 要检查什么 | 入口 |
 | --- | --- |
 | 静态检查、测试、构建与确定性合同 | [Quality CI](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml) |
