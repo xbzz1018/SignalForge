@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "kind": "curated-historical-summary",
+  "batchId": "20260915-stability-5",
+  "createdAt": "2026-09-15T08:28:07.032Z",
+  "publishedOn": "2026-11-04",
+  "note": "Historical local dirty build; not a test of current main. Raw reports are retained locally. This summary omits local paths and request identifiers.",
+  "sourceSummarySha256": "6be74e96eeca9d6461d649381188e7aae4841d2011097966241eb319afdf708f",
+  "runCount": 5,
+  "passCount": 3,
+  "failCount": 2,
+  "fixedParameters": {
+    "model": "deepseek-v4-flash",
+    "provider": "deepseek",
+    "reasoning": 0,
+    "contextCapsuleMaxBytes": 512,
+    "preWriteReadOnlyTurns": 2,
+    "postWriteReadOnlyTurns": 1,
+    "maxValidationRepairAttempts": 1,
+    "concurrency": 1,
+    "cacheMissBudget": 24000,
+    "queryRewriteMaxRetries": 0,
+    "providerMaxRetries": 2
+  },
+  "results": [
+    {
+      "run": 1,
+      "caseId": "stock-fundamental-maotai",
+      "passed": true,
+      "durationMs": 37351,
+      "failureStage": null,
+      "toolErrorCodes": {},
+      "sourceReport": "deepseek-stability-5-run-01-stock-fundamental-maotai.json",
+      "sourceReportSha256": "e1d00a7d2db1ee21a2a06e7a63253939de23e92c7f1fa9fd4488c6cfcf29c2e9",
+      "buildRevision": "b45160fa6f605907e09544b4ea43059a4ee944c2-dirty.75f55b56d953ce0e1893"
+    },
+    {
+      "run": 2,
+      "caseId": "index-technical-hs300",
+      "passed": true,
+      "durationMs": 35920,
+      "failureStage": null,
+      "toolErrorCodes": {},
+      "sourceReport": "deepseek-stability-5-run-02-index-technical-hs300.json",
+      "sourceReportSha256": "6282037f5c401908d375152054e8c6057a3eb83eb745e312f6b3ea93be72b869",
+      "buildRevision": "b45160fa6f605907e09544b4ea43059a4ee944c2-dirty.75f55b56d953ce0e1893"
+    },
+    {
+      "run": 3,
+      "caseId": "backtest-300etf-ma-crossover",
+      "passed": true,
+      "durationMs": 37792,
+      "failureStage": null,
+      "toolErrorCodes": {},
+      "sourceReport": "deepseek-stability-5-run-03-backtest-300etf-pass.json",
+      "sourceReportSha256": "4bf8083a4231514c71a1029e84186e95b853b7e5e8ed4eeea164e2df00583ff1",
+      "buildRevision": "b45160fa6f605907e09544b4ea43059a4ee944c2-dirty.75f55b56d953ce0e1893"
+    },
+    {
+      "run": 4,
+      "caseId": "backtest-300etf-ma-crossover",
+      "passed": false,
+      "durationMs": 48643,
+      "failureStage": "runtime",
+      "toolErrorCodes": {
+        "SEMANTIC_TARGET_UNSAFE": 1
+      },
+      "sourceReport": "deepseek-stability-5-run-04-backtest-300etf-tool-failure.json",
+      "sourceReportSha256": "49b26c0908e3a1f975ce30d59306a2d64882406337ef86580dd78529377ea6cd",
+      "buildRevision": "b45160fa6f605907e09544b4ea43059a4ee944c2-dirty.75f55b56d953ce0e1893"
+    },
+    {
+      "run": 5,
+      "caseId": "backtest-300etf-ma-crossover",
+      "passed": false,
+      "durationMs": 42462,
+      "failureStage": "acceptance",
+      "toolErrorCodes": {},
+      "sourceReport": "deepseek-stability-5-run-05-backtest-300etf-provider-failure.json",
+      "sourceReportSha256": "e0905aec80342afb6d24a78db48f9abfc9d4363d82fea1e4ba09de085d8477b2",
+      "buildRevision": "b45160fa6f605907e09544b4ea43059a4ee944c2-dirty.75f55b56d953ce0e1893"
+    }
+  ],
+  "screenshot": {
+    "caseId": "etf-technical-300etf",
+    "relationToBatch": "separate-historical-task",
+    "sourceFile": "benchmark-etf-technical-300etf-desktop-2026-09-15T01-33-36-681Z.png",
+    "sourceSha256": "dcfca5777491482b41a698f13c04dcba8aec9be037b710d0fd36516f7cd86e18",
+    "sourceSize": [
+      1440,
+      2304
+    ],
+    "cropBox": [
+      0,
+      0,
+      1440,
+      970
+    ],
+    "path": "docs/learning/assets/research-dashboard.png",
+    "sha256": "d7dc1c09383073e9c5c7a16d06511afb9cd33cd173be7f18a6d02bf34e1a42f3",
+    "note": "Cropped historical generated UI; no content edits. Not evidence of numerical correctness."
+  }
+}
