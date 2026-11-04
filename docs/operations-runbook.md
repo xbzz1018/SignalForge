@@ -348,6 +348,8 @@ npm run release:check:production
 
 检查全部依赖安全状态可运行 `npm run security:audit`，只看生产依赖可运行 `npm run security:audit:production`；只检查 Markdown 本地链接可运行 `npm run check:docs`。
 
+更新依赖时保留锁文件，先定向升级审计涉及的包，再执行 `npm ci`、`uv sync --project services/market-data --locked --all-groups` 和质量门。后端全可选依赖审计入口是 `npm run security:audit:backend`。不要用 `npm audit fix --force` 自动降级或跨主版本替换工具链；本次维护结果见[依赖维护记录](validation-status.md#依赖维护记录)。
+
 涉及数据库：
 
 ```bash

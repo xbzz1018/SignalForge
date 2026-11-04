@@ -122,6 +122,8 @@ Dubbo3 暂时不适合当前项目，因为它主要服务 Java 微服务体系�
 
 前端已经移除 `next-rspack`，不再支持或需要 `QUANTPILOT_BUNDLER`、`QUANTPILOT_DISABLE_RSPACK` 这类 bundler 切换配置。开发态交给 Next.js 16 默认链路，项目只维护启动前后的环境和缓存保护。
 
+Next.js 与 `eslint-config-next` 随锁文件一起更新；拉取依赖维护提交后使用 `npm ci` 安装对应版本。更新范围与审计结果见[依赖维护记录](validation-status.md#依赖维护记录)。
+
 ## 生成项目执行沙箱
 
 生成项目的 build 和 preview 不是直接在宿主环境执行。Linux 默认通过 `scripts/security/run-generated-project-sandbox.sh` 进入 user、mount、network 和 PID namespace，只挂载当前生成工作空间、可信 Node runtime 与共享依赖；工作空间整体只读，仅 `.next` 可写。沙箱重建最小环境变量，屏蔽项目 `.env*` 与 npm 凭据，移除 capabilities，并设置进程数、文件描述符、文件大小和 2GB Node old-space 上限。artifact policy 在启动任何生成代码前运行，策略失败时 build、preview 和视觉检查全部跳过。

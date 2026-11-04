@@ -31,11 +31,13 @@ QuantPilot 支持降级模式：没有启动市场数据后端或 Loki 时，页
 ## 1. 安装前端依赖
 
 ```bash
-npm install
+npm ci
 npm run ensure:env
 ```
 
 `ensure:env` 会创建或维护忽略的 `.env` 与 `.env.local`。不要把完整 `.env.example` 复制到 `.env.local`；只在后者添加当前模式所需的 `MODELPORT_API_KEY`，或者官方直连的 `DEEPSEEK_API_KEY`。不启用 Memory 时再添加 `QUANTPILOT_MEMORY_ENABLED=0`。完整组合与文件优先级见[配置、模型接入与可选组件指南](../configuration.md)。真实密钥只放本地或 Secret Manager，不提交到 Git。
+
+依赖版本以仓库锁文件为准；更新 Next.js 等依赖后重新安装，审计与验证范围见[依赖维护记录](../validation-status.md#依赖维护记录)。
 
 ## 2. 启动基础设施
 
@@ -68,7 +70,7 @@ npm run doctor
 
 ```bash
 cd services/market-data
-uv sync --extra baostock --extra akshare
+uv sync --locked --extra baostock --extra akshare
 uv run quantpilot-market-api
 ```
 

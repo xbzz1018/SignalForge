@@ -1,8 +1,11 @@
 # SignalForge 技术文档
 
-这个目录保存项目的技术资料，也是完整文档索引。根目录 [README](../README.md) 负责 SignalForge 的定位和首次启动；长期配置、架构设计、教学材料、数据口径和排障经验在这里维护。许多专题沿用上游 QuantPilot 的内部标识与架构说明，不能据此将底层设计归为个人原创；当前可运行方式以根 README 和实际配置为准。
+这个目录保存项目的技术资料，也是完整文档索引。根目录 [README](../README.md) 介绍 SignalForge 的定位、使用场景和工程实现；长期配置、架构设计、教学材料、数据口径和排障经验在这里维护。部分专题、代码和环境变量仍保留项目更名前的 QuantPilot 标识；运行方式以[本地运行](quick-start.md)和实际配置为准。
 
 ## 先读哪几篇
+
+想快速了解项目，先看[项目案例](project-case.md)；准备启动时看[本地运行](quick-start.md)。
+历史评测、截图来源和已知问题集中在[验证记录](validation-status.md)。
 
 第一次进入项目，先读 [配置、模型接入与可选组件指南](configuration.md) 选择 ModelPort、DeepSeek 官方直连与 Memory 开关，再按目标进入对应专题。
 
