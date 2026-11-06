@@ -1,26 +1,30 @@
 import { type JsonRecord, asRecord, extractBarsFromAsset, mean, numeric, round } from './values';
 
 export function calculateMetrics(kline: JsonRecord | null): JsonRecord {
-  const bars = Array.isArray(kline?.bars) ? kline.bars.map(asRecord).filter(Boolean) as JsonRecord[] : [];
-  const closes = bars.map((bar) => numeric(bar.close)).filter((value): value is number => value !== null);
-  const volumes = bars.map((bar) => numeric(bar.volume)).filter((value): value is number => value !== null);
-  const amounts = bars.map((bar) => numeric(bar.amount)).filter((value): value is number => value !== null);
+  const bars = Array.isArray(kline?.bars) ? kline.bars.map((bar) => asRecord(bar) ?? {}) : [];
+  // Keep each observation in place: removing a missing value changes the window
+  // and can turn a multi-session price change into a one-session return.
+  const closes = bars.map((bar) => {
+    const close = numeric(bar.close);
+    return close !== null && close > 0 ? close : null;
+  });
+  const volumes = bars.map((bar) => numeric(bar.volume));
+  const amounts = bars.map((bar) => numeric(bar.amount));
   const highs = bars.map((bar) => numeric(bar.high)).filter((value): value is number => value !== null);
   const lows = bars.map((bar) => numeric(bar.low)).filter((value): value is number => value !== null);
 
   const firstClose = closes[0] ?? null;
   const lastClose = closes.at(-1) ?? null;
-  const returns = closes.slice(1).map((close, index) => {
-    const previous = closes[index];
-    return previous ? (close - previous) / previous : 0;
-  });
-  const avgReturn = mean(returns) ?? 0;
-  const variance = returns.length
-    ? mean(returns.map((value) => (value - avgReturn) ** 2)) ?? 0
-    : 0;
+  const volatilityCloses = completeWindow(closes, 21);
+  const returns = volatilityCloses?.slice(1).map((close, index) => (close - volatilityCloses[index]) / volatilityCloses[index]);
+  const avgReturn = returns ? mean(returns) : null;
+  const variance = returns && avgReturn !== null
+    ? mean(returns.map((value) => (value - avgReturn) ** 2))
+    : null;
   let peak = closes[0] ?? 0;
   let maxDrawdown = 0;
   for (const close of closes) {
+    if (close === null) continue;
     peak = Math.max(peak, close);
     if (peak > 0) {
       maxDrawdown = Math.min(maxDrawdown, ((close - peak) / peak) * 100);
@@ -35,23 +39,32 @@ export function calculateMetrics(kline: JsonRecord | null): JsonRecord {
     return120d: calculateWindowReturn(closes, 120),
     periodHigh: highs.length ? round(Math.max(...highs)) : null,
     periodLow: lows.length ? round(Math.min(...lows)) : null,
-    maxDrawdown: round(maxDrawdown),
-    volatility20d: round(Math.sqrt(variance) * Math.sqrt(252) * 100),
-    avgVolume20d: round(mean(volumes.slice(-20))),
-    avgAmount20d: round(mean(amounts.slice(-20))),
-    ma5: round(mean(closes.slice(-5))),
-    ma10: round(mean(closes.slice(-10))),
-    ma20: round(mean(closes.slice(-20))),
-    ma60: round(mean(closes.slice(-60))),
+    maxDrawdown: closes.length && closes.every((close) => close !== null) ? round(maxDrawdown) : null,
+    volatility20d: variance === null ? null : round(Math.sqrt(variance) * Math.sqrt(252) * 100),
+    avgVolume20d: windowMean(volumes, 20),
+    avgAmount20d: windowMean(amounts, 20),
+    ma5: windowMean(closes, 5),
+    ma10: windowMean(closes, 10),
+    ma20: windowMean(closes, 20),
+    ma60: windowMean(closes, 60),
   };
 }
 
-function calculateWindowReturn(closes: number[], windowSize: number): number | null {
-  const latest = closes.at(-1);
-  const baseline = closes.length > windowSize ? closes.at(-1 - windowSize) : closes[0];
-  if (!latest || !baseline || baseline <= 0) {
-    return null;
-  }
+function completeWindow(values: (number | null)[], size: number): number[] | null {
+  const sample = values.slice(-size);
+  return sample.length === size && sample.every((value) => value !== null) ? sample as number[] : null;
+}
+
+function windowMean(values: (number | null)[], size: number): number | null {
+  const sample = completeWindow(values, size);
+  return sample ? round(mean(sample)) : null;
+}
+
+function calculateWindowReturn(closes: (number | null)[], windowSize: number): number | null {
+  const sample = completeWindow(closes, windowSize + 1);
+  if (!sample) return null;
+  const latest = sample[sample.length - 1];
+  const baseline = sample[0];
   return round(((latest - baseline) / baseline) * 100);
 }
 
@@ -81,13 +94,9 @@ export function ensureTechnicalSummary(asset: JsonRecord): JsonRecord {
   const ma60 = numeric(existingSummary.ma60) ?? numeric(metrics.ma60);
   const return20d = numeric(existingSummary.return_20d_pct) ?? numeric(metrics.return20d);
   const return60d = numeric(existingSummary.return_60d_pct) ?? numeric(metrics.return60d);
-  const return120d =
-    numeric(existingSummary.return_120d_pct) ??
-    numeric(existingSummary.period_return_pct) ??
-    numeric(metrics.return120d) ??
-    numeric(metrics.periodReturn);
+  const return120d = numeric(existingSummary.return_120d_pct) ?? numeric(metrics.return120d);
   const maxDrawdown = numeric(existingSummary.max_drawdown_pct) ?? numeric(metrics.maxDrawdown);
-  const volatility = numeric(existingSummary.volatility_20d_annualized_pct) ?? numeric(existingSummary.volatility_annualized_pct) ?? numeric(metrics.volatility20d);
+  const volatility = numeric(existingSummary.volatility_20d_annualized_pct) ?? numeric(metrics.volatility20d);
   const avgVolume = numeric(existingSummary.avg_volume20) ?? numeric(metrics.avgVolume20d);
   const symbol = String(asset.symbol ?? quote?.symbol ?? '');
   const name = String(asset.name ?? quote?.name ?? symbol);

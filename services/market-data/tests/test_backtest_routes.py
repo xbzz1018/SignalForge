@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+from decimal import Decimal
 
 import pytest
 from fastapi import FastAPI
@@ -12,6 +14,21 @@ from quantpilot_market_data.contracts.quotes import KlineResponse
 from quantpilot_market_data.replay_backtest import replay_backtest
 from quantpilot_market_data.routers.backtests import create_backtest_router
 from quantpilot_market_data.services import backtests
+
+
+@pytest.mark.parametrize(("fast", "slow"), [(1, 60), (121, 250), (20, 2), (20, 251), (20, 20)])
+def test_ma_service_rejects_invalid_windows_before_fetch(fast, slow, monkeypatch):
+    async def must_not_fetch(*args, **kwargs):
+        raise AssertionError("invalid parameters must be rejected before reading market data")
+
+    monkeypatch.setattr(backtests, "get_local_kline_if_ready", must_not_fetch)
+    with pytest.raises(ValueError, match="window"):
+        asyncio.run(backtests.get_ma_crossover_backtest(
+            object(), MarketDataCache(enabled=False), symbol="fixture",
+            fast_window=fast, slow_window=slow, period="daily", adjustment="none",
+            limit=250, end="20500101", initial_cash=Decimal(1), fee_bps=Decimal(5),
+            ttl_seconds=300,
+        ))
 
 
 def test_routes_preserve_replayable_responses_across_cache_and_engine_changes(
@@ -61,9 +78,9 @@ def test_routes_preserve_replayable_responses_across_cache_and_engine_changes(
 
         # Corrupt one replaceable cache entry; the service must produce a fresh receipt.
         cached_path = tmp_path / f"{second.json()['fetch']['cache_key']}.json"
-        record = json.loads(cached_path.read_text())
+        record = json.loads(cached_path.read_text(encoding="utf-8"))
         record["payload"]["summary"]["final_equity"] = "999"
-        cached_path.write_text(json.dumps(record))
+        cached_path.write_text(json.dumps(record), encoding="utf-8")
         repaired = client.get(url)
         assert repaired.json()["fetch"]["cache_status"] == "miss"
         replay_backtest(repaired.json())

@@ -3,8 +3,11 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 
+import pytest
+
 from quantpilot_market_data.cache import MarketDataCache
 from quantpilot_market_data.contracts.quotes import KlineResponse, SymbolResolveResult
+from quantpilot_market_data.providers.eastmoney import EastMoneyError
 from quantpilot_market_data.services import quotes
 
 
@@ -92,3 +95,60 @@ def test_history_refresh_bypasses_file_cache(monkeypatch) -> None:
 
     assert calls == 1
     assert result.source == "provider-refresh"
+
+
+class MemoryRedis:
+    def __init__(self):
+        self.entries = {}
+
+    async def read(self, key):
+        return self.entries.get(key)
+
+    async def write(self, key, *, ttl_seconds, payload):
+        self.entries[key] = payload
+        return True
+
+
+class IntradayProvider(DummyProvider):
+    def __init__(self):
+        self.ends = []
+        self.fail = False
+
+    async def get_kline(self, symbol, **kwargs):
+        self.ends.append(kwargs["end"])
+        if self.fail:
+            raise EastMoneyError("unavailable")
+        return KlineResponse(
+            symbol=symbol, secid="1.600519", source="fixture", period="minute5",
+            adjustment="none", name=kwargs["end"], bars=[], fetched_at=datetime.now(UTC),
+        )
+
+
+def test_intraday_cache_separates_end_dates_and_preserves_same_query_fallback(monkeypatch):
+    provider = IntradayProvider()
+    cache = MemoryRedis()
+
+    async def no_delay(_seconds):
+        pass
+
+    monkeypatch.setattr(quotes.asyncio, "sleep", no_delay)
+
+    async def fetch(end, refresh=False):
+        return await quotes.get_intraday_history_quote(
+            provider, cache, symbol="600519", period="minute5", limit=30,
+            end=end, refresh=refresh,
+        )
+
+    async def scenario():
+        first = await fetch("20260101")
+        assert (await fetch("20260101")).fetch.cache_status == "redis-hit"
+        second = await fetch("20260201")
+        assert first.name == "20260101" and second.name == "20260201"
+        assert first.fetch.cache_key != second.fetch.cache_key
+        assert provider.ends == ["20260101", "20260201"]
+        provider.fail = True
+        assert (await fetch("20260101", refresh=True)).name == "20260101"
+        with pytest.raises(EastMoneyError):
+            await fetch("20260301", refresh=True)
+
+    asyncio.run(scenario())
