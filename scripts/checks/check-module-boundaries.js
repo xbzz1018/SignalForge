@@ -76,7 +76,10 @@ function walkFiles(startDir, extensions, result = []) {
     const relativePath = normalizePath(path.relative(ROOT, absolutePath));
     if (
       entry.isDirectory() &&
-      !['node_modules', '.next', '.git', 'data', 'tmp', 'coverage', 'playwright-report'].includes(entry.name)
+      ![
+        'node_modules', '.next', '.git', '.venv', '__pycache__', '.pytest_cache', '.ruff_cache',
+        'data', 'tmp', 'coverage', 'playwright-report',
+      ].includes(entry.name)
     ) {
       walkFiles(relativePath, extensions, result);
     } else if (entry.isFile() && extensions.some((extension) => entry.name.endsWith(extension))) {
