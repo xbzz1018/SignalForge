@@ -9,7 +9,8 @@ on:
 jobs:
   frontend:
     name: Frontend
-    runs-on: ubuntu-latest
+    # Playwright 1.60 does not support the ubuntu26.04 image behind ubuntu-latest.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -157,7 +158,7 @@ jobs:
 
   authenticated-smoke:
     name: Authenticated lifecycle smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       DATABASE_URL: postgresql://quantpilot:quantpilot_dev_password@127.0.0.1:35433/quantpilot?schema=public
@@ -247,7 +248,7 @@ jobs:
 
   contract-evaluation:
     name: Quant contract evaluation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
       DATABASE_URL: postgresql://quantpilot:quantpilot_dev_password@127.0.0.1:35433/quantpilot?schema=public

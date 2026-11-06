@@ -42,7 +42,7 @@ jobs:
     name: Real DeepSeek workspace generation
     needs: configuration
     if: needs.configuration.outputs.deepseek-configured == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}

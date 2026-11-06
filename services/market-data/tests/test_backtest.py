@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from quantpilot_market_data.backtest import build_strategy_backtest
+from quantpilot_market_data.backtest import STRATEGY_NAMES, build_strategy_backtest
 from quantpilot_market_data.contracts.quotes import KlineBar, KlineResponse
 
 
@@ -83,3 +83,77 @@ def test_supported_strategy_backtests_return_summary(
 def test_unknown_strategy_is_rejected() -> None:
     with pytest.raises(ValueError, match="暂不支持"):
         build_strategy_backtest(sample_kline(), strategy_id="unknown_strategy")
+
+
+@pytest.mark.parametrize("value", ["invalid", "NaN", "Infinity", "10.5", True, 1, 121])
+def test_invalid_integer_parameters_are_rejected(value) -> None:
+    with pytest.raises(ValueError, match="fast_window"):
+        build_strategy_backtest(
+            sample_kline(), strategy_id="ma", parameters={"fast_window": value}
+        )
+
+
+@pytest.mark.parametrize("value", ["invalid", "NaN", "Infinity", True, -1, 10])
+def test_invalid_decimal_parameters_are_rejected(value) -> None:
+    with pytest.raises(ValueError, match="entry_z"):
+        build_strategy_backtest(
+            sample_kline(), strategy_id="bollinger", parameters={"entry_z": value}
+        )
+
+
+def test_experiment_records_effective_defaults_and_numeric_parameters() -> None:
+    result = build_strategy_backtest(
+        sample_kline(), strategy_id="ma", parameters={"fast_window": "10.0"}
+    )
+    assert result.parameters["fast_window"] == 10
+    assert result.parameters["slow_window"] == 60
+    assert result.experiment.parameters == result.parameters
+
+
+@pytest.mark.parametrize("strategy_id", list(STRATEGY_NAMES))
+def test_unknown_parameters_are_rejected_even_without_bars(strategy_id) -> None:
+    with pytest.raises(ValueError, match="未知策略参数.*typo_window"):
+        build_strategy_backtest(
+            sample_kline().model_copy(update={"bars": []}), strategy_id=strategy_id,
+            parameters={"typo_window": 20},
+        )
+
+
+def test_decimal_parameters_are_validated_before_iterating_bars() -> None:
+    with pytest.raises(ValueError, match="entry_z"):
+        build_strategy_backtest(
+            sample_kline().model_copy(update={"bars": []}), strategy_id="bollinger",
+            parameters={"entry_z": "NaN"},
+        )
+
+
+def fee_kline() -> KlineResponse:
+    return sample_kline().model_copy(update={"bars": [
+        KlineBar(date=f"2026-01-{index + 1:02d}", close=Decimal(close))
+        for index, close in enumerate([10, 10, 10, 11, 12, 9, 8])
+    ]})
+
+
+def test_period_returns_reconcile_with_equity_after_fees() -> None:
+    result = build_strategy_backtest(
+        fee_kline(), strategy_id="ma", parameters={"fast_window": 2, "slow_window": 3},
+        fee_bps=50,
+    )
+    previous = result.summary.initial_cash
+    assert result.trades
+    for point in result.equity_curve:
+        expected = (point.equity / previous - 1) * 100
+        assert abs(point.strategy_return_pct - expected) < Decimal("0.0002")
+        previous = point.equity
+
+
+def test_closed_trade_return_includes_entry_and_exit_fees() -> None:
+    result = build_strategy_backtest(
+        fee_kline(), strategy_id="ma", parameters={"fast_window": 2, "slow_window": 3},
+        fee_bps=50,
+    )
+    closed = [trade for trade in result.trades if trade.status == "closed"]
+    assert closed
+    for trade in closed:
+        expected = (trade.exit_price / trade.entry_price * Decimal("0.995") ** 2 - 1) * 100
+        assert abs(trade.return_pct - expected) < Decimal("0.0001")

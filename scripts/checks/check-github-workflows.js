@@ -22,6 +22,11 @@ if (!fs.existsSync(path.join(root, 'scripts', 'evals', 'run-contract-market-fixt
 for (const filename of fs.readdirSync(workflowDir).filter((name) => /\.ya?ml$/.test(name)).sort()) {
   const relativePath = path.posix.join('.github', 'workflows', filename);
   const source = fs.readFileSync(path.join(workflowDir, filename), 'utf8');
+  for (const job of source.split(/(?=^  [a-zA-Z0-9_-]+:\s*$)/m)) {
+    if (/npx playwright install/.test(job) && !/^    runs-on: ubuntu-24\.04\s*$/m.test(job)) {
+      failures.push(`${relativePath}: Playwright jobs must use the supported ubuntu-24.04 image`);
+    }
+  }
   for (const match of source.matchAll(/^\s*uses:\s*([^\s@]+)@([^\s#]+).*$/gm)) {
     const [, action, revision] = match;
     const expectedRevision = expectedActions.get(action);

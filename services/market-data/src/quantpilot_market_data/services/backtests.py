@@ -41,8 +41,14 @@ async def get_ma_crossover_backtest(
     fee_bps: Decimal,
     ttl_seconds: int,
 ) -> BacktestResponse:
-    normalized_fast = max(2, min(fast_window, 120))
-    normalized_slow = max(3, min(slow_window, 250))
+    if not 2 <= fast_window <= 120:
+        raise ValueError("fast_window 必须为 2 到 120 之间的整数。")
+    if not 3 <= slow_window <= 250:
+        raise ValueError("slow_window 必须为 3 到 250 之间的整数。")
+    if fast_window >= slow_window:
+        raise ValueError("fast_window 必须小于 slow_window。")
+    normalized_fast = fast_window
+    normalized_slow = slow_window
     normalized_limit = max(normalized_slow + 5, min(limit, 1000))
     local = await get_local_kline_if_ready(
         symbol=symbol,

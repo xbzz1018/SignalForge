@@ -171,6 +171,7 @@ async def get_intraday_history_quote(
         period=period,
         cache_date=cache_date,
         limit=limit,
+        end=end,
     )
     ttl_seconds = intraday_cache_ttl_seconds(cache_date)
     expires_at = intraday_cache_expires_at(cache_date).astimezone(UTC)
@@ -256,9 +257,13 @@ def intraday_redis_cache_key(
     period: KlinePeriod | str,
     cache_date: date,
     limit: int,
+    end: str,
 ) -> str:
     normalized_symbol = symbol.strip().upper()
-    return f"intraday:eastmoney:{normalized_symbol}:{period}:{cache_date.isoformat()}:limit:{limit}"
+    return (
+        f"intraday:v2:eastmoney:{normalized_symbol}:{period}:{cache_date.isoformat()}"
+        f":limit:{limit}:end:{end}"
+    )
 
 
 def intraday_cached_response(

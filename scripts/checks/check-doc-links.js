@@ -13,6 +13,8 @@ const INCLUDED_DIRECTORIES = ['docs', 'services/market-data', 'sqls'];
 const IGNORED_DIRECTORIES = new Set([
   '.git',
   '.next',
+  '.pytest_cache',
+  '.ruff_cache',
   '.venv',
   'build',
   'coverage',
