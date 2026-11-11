@@ -152,3 +152,66 @@ def test_intraday_cache_separates_end_dates_and_preserves_same_query_fallback(mo
             await fetch("20260301", refresh=True)
 
     asyncio.run(scenario())
+
+
+def test_intraday_cache_separates_historical_cutoffs_and_reuses_identical_queries(monkeypatch):
+    stored = {}
+    requests = []
+
+    class MemoryRedis:
+        async def read(self, key):
+            return stored.get(key)
+
+        async def write(self, key, *, ttl_seconds, payload):
+            stored[key] = payload
+            return True
+
+    async def upstream(*_args, **kwargs):
+        requests.append(kwargs["end"])
+        return KlineResponse(
+            symbol="510300",
+            secid="1.510300",
+            period="minute5",
+            adjustment="none",
+            fetched_at="2026-01-01T00:00:00Z",
+            bars=[{"date": kwargs["end"], "close": len(requests)}],
+        )
+
+    monkeypatch.setattr(quotes, "fetch_intraday_kline_with_retry", upstream)
+    cache = MemoryRedis()
+
+    async def run():
+        first = await quotes.get_intraday_history_quote(
+            DummyProvider(),
+            cache,
+            symbol="510300",
+            period="minute5",
+            limit=30,
+            end="20260101",
+            refresh=False,
+        )
+        second = await quotes.get_intraday_history_quote(
+            DummyProvider(),
+            cache,
+            symbol="510300",
+            period="minute5",
+            limit=30,
+            end="20260102",
+            refresh=False,
+        )
+        repeated = await quotes.get_intraday_history_quote(
+            DummyProvider(),
+            cache,
+            symbol="510300",
+            period="minute5",
+            limit=30,
+            end="20260101",
+            refresh=False,
+        )
+        assert first.bars[0].close != second.bars[0].close
+        assert repeated.bars == first.bars
+        assert repeated.fetch.cache_status == "redis-hit"
+        assert first.fetch.cache_key != second.fetch.cache_key
+
+    asyncio.run(run())
+    assert requests == ["20260101", "20260102"]

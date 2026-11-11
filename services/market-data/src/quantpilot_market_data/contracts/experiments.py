@@ -48,7 +48,7 @@ class BacktestInputData(ExperimentContract):
 
 
 class BacktestEngineIdentity(ExperimentContract):
-    version: Literal["single-asset-close-v1"] = "single-asset-close-v1"
+    version: Literal["single-asset-close-v1", "single-asset-close-v2"] = "single-asset-close-v2"
     code_sha256: Digest
     runtime: dict[str, str]
 
@@ -61,6 +61,8 @@ class BacktestExperiment(ExperimentContract):
     engine: BacktestEngineIdentity
     strategy_id: Label
     parameters: dict[str, JsonValue]
+    evaluation_start: str | None = None
+    evaluation_end: str | None = None
     initial_cash: Price = Field(gt=0)
     fee_bps: Price = Field(ge=0, le=10000)
     data: BacktestInputData

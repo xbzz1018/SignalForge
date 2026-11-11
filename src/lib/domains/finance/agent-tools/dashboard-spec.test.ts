@@ -440,7 +440,7 @@ describe('apply_dashboard_spec tool', () => {
     const tool = createApplyDashboardSpecTool({ workspaceRoot: workspace });
     const result = await tool.execute(tool.parseInput?.({}) ?? {}, context());
 
-    expect(result).toMatchObject({
+    expect(result, JSON.stringify(result)).toMatchObject({
       ok: true,
       data: {
         spec: {
@@ -787,7 +787,7 @@ describe('apply_dashboard_spec tool', () => {
 
   it('denies a symlinked output directory without touching the target', async () => {
     await fs.rm(path.join(workspace, 'app'), { recursive: true, force: true });
-    await fs.symlink(outside, path.join(workspace, 'app'));
+    await fs.symlink(outside, path.join(workspace, 'app'), process.platform === 'win32' ? 'junction' : 'dir');
     const tool = createApplyDashboardSpecTool({ workspaceRoot: workspace });
     const result = await tool.execute(tool.parseInput?.({}) ?? {}, context());
 

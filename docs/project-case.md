@@ -28,7 +28,7 @@
 
 初始语义解析、证券核对和计划生成在 PI Agent loop 之前完成。模型负责提取意图，证券身份交给 Resolver 核实；模型不可用、关键信息不足或缺少原文证据时，走澄清或失败路径。
 
-PI Agent 在已知数据、工具、Skills 和预算内运行。平台还负责历史消息筛选、结果截断与摘要、Token 预算、取消、超时和工具权限。当前的重复调用进展判断仍有[待修复边界](validation-status.md#待完善项)，不能把预算兜底等同于有效的重复检测。
+PI Agent 在已知数据、工具、Skills 和预算内运行。平台还负责历史消息筛选、结果截断与摘要、Token 预算、取消、超时和工具权限。重复调用以规范输入、有效观察及工作空间内容判断进展；连续无进展时停止，具体口径见[请求与执行校验](research-correctness.md)。
 
 代码：[金融计划](../src/lib/domains/finance/workspace.ts)、[查询改写](../src/lib/domains/finance/query-rewrite.ts)、[PI 执行](../src/lib/agent/pi/run-engine.ts)、[上下文管理](../src/lib/agent/context/context-manager.ts)。
 
@@ -38,7 +38,7 @@ PI Agent 在已知数据、工具、Skills 和预算内运行。平台还负责�
 
 回测响应携带原始 K 线、数据时点、周期、复权、参数、费用、引擎身份和输入/结果摘要。看板通过 `experiment_ref` 引用实验文件。离线 replay 读取快照并复算，避免用今天的新行情替换过去的输入。
 
-哈希用于检测变化，不是数据源签名。复算一致只能说明“这份输入与这版计算能够复现”，不能证明金融口径正确或历史时点的数据可得性。自定义参数贯通、净收益和年化口径是当前需要继续完善的部分。
+哈希用于检测变化，不是数据源签名。复算一致只能说明“这份输入与这版计算能够复现”，不能证明历史时点的数据可得性。当前通过请求合同校验自定义参数与评估区间，费用计入净收益，按日、周、月输入分别年化；这些计算另有离线业务回归。
 
 代码：[market-data](../services/market-data/)、[数据预取](../src/lib/quant/data-prefetch/)。操作示例见[离线复跑](strategy-platform-guide.md#保存回测并离线复跑)。
 

@@ -305,6 +305,8 @@ export interface PiAgentRunRequest {
   reasoning?: PiAgentReasoningOptions;
   temperature?: number;
   metadata?: Readonly<Record<string, unknown>>;
+  /** Host-owned content snapshot; execution IDs and write counters must not define progress. */
+  workspaceFingerprint?: () => Promise<string>;
   commitWorkspaceMutation?<T>(
     operationId: string,
     commit: () => Promise<T>

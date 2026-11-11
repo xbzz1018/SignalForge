@@ -25,10 +25,8 @@ import type {
   PiAgentContextManager,
 } from '../context';
 import { createPiAgentOperationId } from '../core/operation-id';
-import {
-  createProgressOracleState,
-  ProgressOracle,
-} from '../core/progress-oracle';
+import { ProgressOracle } from '../core/progress-oracle';
+import { initialProgressState, toolObservationFingerprint, updateWorkspaceReceipt } from './progress-observation';
 import {
   assertPiAgentToolApprovalPolicy,
   resolvePiAgentToolApproval,
@@ -670,6 +668,7 @@ export class PiAgentRunEngine {
       runAgentLoopContinue,
       validateToolArguments,
     } = await loadUpstreamPiRuntime();
+    const initialWorkspaceFingerprint = await request.workspaceFingerprint?.() ?? 'workspace-unobserved';
     const startedAt = Date.now();
     const limits: PiAgentRunLimits = {
       maxTurns: positiveInteger(
@@ -766,10 +765,13 @@ export class PiAgentRunEngine {
     const progressOracle = new ProgressOracle({
       stallAfterConsecutiveNoProgressTurns:
         this.options.progressStallTurns ?? 2,
-      initialState: createProgressOracleState(),
+      initialState: initialProgressState(initialWorkspaceFingerprint),
     });
     let turnEffects: PiAgentToolEffect[] = [];
     let turnProgressFingerprints: string[] = [];
+    let turnObservationFingerprints: string[] = [];
+    const workspaceArtifacts = new Map<string, string>();
+    let workspaceFingerprint = initialWorkspaceFingerprint;
     let successfulWorkspaceWritesThisTurn = 0;
     const abortRun = (
       status: PiAgentRunStatus,
@@ -881,19 +883,24 @@ export class PiAgentRunEngine {
               commitWorkspaceMutation: request.commitWorkspaceMutation,
             });
             turnEffects.push(policy.effect);
-            const fingerprint = createHash('sha256')
-              .update(operationId)
-              .update('\0')
-              .update(serializeToolResult(execution.result))
-              .digest('hex');
-            turnProgressFingerprints.push(fingerprint);
+            const fingerprint = toolObservationFingerprint(toolCall, execution);
+            turnObservationFingerprints.push(fingerprint);
 
             if (execution.result.ok) {
+              if (policy.effect === 'read' || policy.effect === 'pure') {
+                turnProgressFingerprints.push(fingerprint);
+              }
               if (policy.effect === 'workspace_write') {
                 successfulWorkspaceWrites += 1;
                 successfulWorkspaceWritesThisTurn += 1;
                 readToolsDisabled = false;
                 consecutiveReadOnlyTurns = 0;
+                if (request.workspaceFingerprint) {
+                  workspaceFingerprint = await request.workspaceFingerprint();
+                } else {
+                  workspaceFingerprint = updateWorkspaceReceipt(workspaceArtifacts, execution.contextReceipt)
+                    ?? workspaceFingerprint;
+                }
               }
               await emit({
                 type: 'tool_completed',
@@ -1483,6 +1490,7 @@ export class PiAgentRunEngine {
               toolCallsThisTurn = 0;
               turnEffects = [];
               turnProgressFingerprints = [];
+              turnObservationFingerprints = [];
               successfulWorkspaceWritesThisTurn = 0;
               await emit({ type: 'turn_started', turn });
               break;
@@ -1648,15 +1656,10 @@ export class PiAgentRunEngine {
                 ? preWriteReadOnlyTurnThreshold
                 : postWriteReadOnlyTurnThreshold;
               readToolsDisabled = consecutiveReadOnlyTurns >= threshold;
-              const workspaceFingerprint = createHash('sha256')
-                .update(String(successfulWorkspaceWrites))
-                .update('\0')
-                .update(turnProgressFingerprints.join(':'))
-                .digest('hex');
               const decision = progressOracle.observe({
                 trustedFactFingerprints: turnProgressFingerprints,
                 workspaceFingerprint,
-                toolObservationFingerprints: turnProgressFingerprints,
+                toolObservationFingerprints: turnObservationFingerprints,
                 successfulWorkspaceWrites:
                   successfulWorkspaceWritesThisTurn,
               });
@@ -1674,6 +1677,10 @@ export class PiAgentRunEngine {
                 progressOracle: progressOracle.snapshot(),
                 decision: safeDecision,
               });
+              if (decision.stalled && turnEffects.length > 0 && !terminalToolCall && !stopStatus) {
+                abortRun('stopped', 'NO_VERIFIABLE_PROGRESS',
+                  'PI Agent stopped after repeated tool turns without new facts or artifact changes.');
+              }
               break;
             }
             case 'agent_end':

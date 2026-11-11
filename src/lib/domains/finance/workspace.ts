@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { compileBacktestRequest, reviseBacktestRequest, type QuantBacktestRequest } from './backtest-request';
 import {
   assessQuantIntentForClarification,
   QuantIntentClarification,
@@ -55,6 +56,7 @@ export interface QuantRunPlan {
   queryRewrite?: QuantQueryRewriteResult;
   symbols: string[];
   timeRange: string | null;
+  backtest?: QuantBacktestRequest;
   dataRequirements: string[];
   analysisSteps: string[];
   visualization: {
@@ -546,13 +548,32 @@ export async function writeInitialRunPlan(params: {
     semanticFocusId: queryRewrite.analysisFocus.id,
     broadUniverse: queryRewrite.broadUniverse,
   });
-  const clarification = mergeQueryRewriteClarification({
+  let clarification = mergeQueryRewriteClarification({
     base: baseClarification,
     queryRewrite,
     capabilityId: capability.id,
     hasImageAttachments: params.hasImageAttachments,
   });
   const refused = queryRewrite.safety.decision === 'refuse';
+  let backtest: QuantBacktestRequest | undefined;
+  if (executionCapability.id === 'backtest_review' && !refused && !clarification.required) {
+    try {
+      backtest = inheritPreviousPlan && params.previousPlan?.backtest
+        ? reviseBacktestRequest(params.previousPlan.backtest, planningInstruction, queryRewrite.timeRange)
+        : compileBacktestRequest({
+            question: planningInstruction,
+            timeRange: queryRewrite.timeRange,
+            timeRangeLabel: requestedTimeRange,
+            now: new Date(now),
+          });
+    } catch (error) {
+      clarification = {
+        required: true, reason: '回测参数或日期区间需要确认。',
+        missing: ['investment_constraints'], confidence: 0.5,
+        questions: [error instanceof Error ? error.message : '请明确回测参数。'],
+      };
+    }
+  }
   const timeRange = clarification.required || refused
     ? requestedTimeRange
     : requestedTimeRange ?? inferDefaultTimeRange(capability.id);
@@ -607,6 +628,7 @@ export async function writeInitialRunPlan(params: {
     queryRewrite,
     symbols,
     timeRange,
+    ...(backtest ? { backtest } : {}),
     dataRequirements,
     analysisSteps: refused
       ? ['停止执行取数和生成任务，返回确定性安全说明。']

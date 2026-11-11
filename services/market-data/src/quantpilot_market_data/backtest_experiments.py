@@ -49,7 +49,9 @@ ASSUMPTIONS = [
     "Single asset, long or flat; signals and fills use the same bar close.",
     "Returns start on the next bar after entry; fees are charged on position changes.",
     "No slippage, capacity, suspension, price-limit or delisting execution model.",
-    "Annualization uses 252 bars per year, including for non-daily input.",
+    "Annualization uses 252 daily, 52 weekly or 12 monthly bars per year; intraday is rejected.",
+    "Strategy returns and closed-trade returns are net of fees; gross trade returns are separate.",
+    "Pre-evaluation bars warm indicators only; the requested evaluation interval starts flat.",
     "The captured market data is an observed snapshot, not a point-in-time availability guarantee.",
 ]
 
@@ -105,6 +107,8 @@ def attach_experiment(
         "engine": current_engine_identity().model_dump(mode="json"),
         "strategy_id": result.strategy_id,
         "parameters": result.model_dump(mode="json")["parameters"],
+        "evaluation_start": result.evaluation_start,
+        "evaluation_end": result.evaluation_end,
         "initial_cash": str(initial_cash),
         "fee_bps": str(fee_bps),
         "data": data.model_dump(mode="json"),

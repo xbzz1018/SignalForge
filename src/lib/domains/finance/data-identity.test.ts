@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { assessQuantDatasetIdentity } from './data-identity';
+import { compileBacktestRequest } from './backtest-request';
 
 function singleFinal(symbol = '600589') {
   return {
@@ -13,6 +14,16 @@ function singleFinal(symbol = '600589') {
 }
 
 describe('finance dataset identity', () => {
+  it('rejects a symbol-correct result with different requested backtest parameters', () => {
+    const spec = compileBacktestRequest({ question: '2024年上半年5/20日均线回测，手续费10bps' });
+    const assessment = assessQuantDatasetIdentity(
+      { runId: 'run-1', symbols: ['600589'], backtest: spec },
+      { ...singleFinal(), backtest: { symbol: '600589', fast_window: 20, slow_window: 60, fee_bps: 5 } },
+    );
+    expect(assessment.ready).toBe(false);
+    expect(assessment.reasons).toContain('backtest[0]_fast_window_mismatch');
+    expect(assessment.reasons).toContain('backtest[0]_fee_bps_mismatch');
+  });
   it('accepts a run-bound single-symbol dataset', () => {
     expect(assessQuantDatasetIdentity(
       { runId: 'run-1', symbols: ['600589'] },

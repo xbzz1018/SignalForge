@@ -1210,6 +1210,11 @@ async function executePiAgentPhase(
       },
       commitWorkspaceMutation: (operationId, commit) =>
         activeDurableSession.commitWorkspaceMutation(operationId, commit),
+      workspaceFingerprint: async () => {
+        const snapshot = await hashPiAgentWorkspace(workspace, { ignoredDirectories: ['.data-agent'] });
+        if (snapshot.metadataOnlyFiles > 0) throw new Error('工作空间过大，无法核验内容进展。');
+        return snapshot.sha256;
+      },
     }, {
       durableSink: (event) => activeDurableSession.record(event),
       observers: [async (event: PiAgentEvent) => {

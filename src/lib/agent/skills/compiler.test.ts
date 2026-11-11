@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import * as tar from 'tar';
 import { afterEach, describe, expect, it } from 'vitest';
 import { compilePiAgentSkills, installPiAgentSkillsForWorkspace } from './compiler';
@@ -73,6 +74,35 @@ async function createPackageOnlyFixture(skillId: string) {
     fixtureState,
     packagePath,
   };
+}
+
+// Edit the archive directly so link attacks and executable modes do not depend
+// on Windows symlink privileges or the host filesystem's permission model.
+async function rewritePackageEntry(
+  packagePath: string, target: string,
+  rewrite: (header: tar.Header, content: Buffer) => Buffer,
+) {
+  const archive = gunzipSync(await fs.readFile(packagePath));
+  const chunks: Buffer[] = [];
+  let found = false;
+  for (let offset = 0; offset + 512 <= archive.length;) {
+    const header = new tar.Header(archive, offset);
+    if (header.nullBlock) break;
+    const size = header.size ?? 0;
+    let content: Buffer = archive.subarray(offset + 512, offset + 512 + size);
+    offset += 512 + Math.ceil(size / 512) * 512;
+    if (header.path === target) {
+      content = rewrite(header, content);
+      header.size = content.length;
+      found = true;
+    }
+    const encoded = Buffer.alloc(512);
+    if (header.encode(encoded)) throw new Error('Fixture requires an unsupported PAX header.');
+    chunks.push(encoded, content, Buffer.alloc((512 - content.length % 512) % 512));
+  }
+  if (!found) throw new Error(`Fixture archive entry missing: ${target}`);
+  chunks.push(Buffer.alloc(1024));
+  await fs.writeFile(packagePath, gzipSync(Buffer.concat(chunks)));
 }
 
 afterEach(async () => {
@@ -349,23 +379,11 @@ describe('compilePiAgentSkills', () => {
     'rejects a package-only Skill containing an internal %s before workspace installation',
     async (linkType) => {
       const { fixtureRoot, fixtureState, packagePath } = await createPackageOnlyFixture('image-extraction');
-      const extractRoot = await temporaryDirectory('pi-agent-malicious-package-');
-      await tar.x({ file: packagePath, cwd: extractRoot, preserveOwner: false });
-      const skillRoot = path.join(extractRoot, 'image-extraction');
-      const agentFile = path.join(skillRoot, 'agents', 'openai.yaml');
-      await fs.rm(agentFile);
-      if (linkType === 'symlink') {
-        await fs.symlink('../SKILL.md', agentFile);
-      } else {
-        await fs.link(path.join(skillRoot, 'SKILL.md'), agentFile);
-      }
-      await tar.c({
-        gzip: true,
-        file: packagePath,
-        cwd: extractRoot,
-        portable: true,
-        noMtime: true,
-      }, ['image-extraction']);
+      await rewritePackageEntry(packagePath, 'image-extraction/agents/openai.yaml', header => {
+        header.type = linkType === 'symlink' ? 'SymbolicLink' : 'Link';
+        header.linkpath = linkType === 'symlink' ? '../SKILL.md' : 'image-extraction/SKILL.md';
+        return Buffer.alloc(0);
+      });
 
       const lockPath = path.join(fixtureState, 'skills.lock.json');
       const lock = JSON.parse(await fs.readFile(lockPath, 'utf8'));
@@ -389,19 +407,8 @@ describe('compilePiAgentSkills', () => {
 
   it('rejects a package-only Skill whose content tree drifts from sourceSha256', async () => {
     const { fixtureRoot, fixtureState, packagePath } = await createPackageOnlyFixture('image-extraction');
-    const extractRoot = await temporaryDirectory('pi-agent-drifted-package-');
-    await tar.x({ file: packagePath, cwd: extractRoot, preserveOwner: false });
-    await fs.appendFile(
-      path.join(extractRoot, 'image-extraction', 'SKILL.md'),
-      '\nUNREVIEWED_PACKAGE_ONLY_INSTRUCTION\n',
-    );
-    await tar.c({
-      gzip: true,
-      file: packagePath,
-      cwd: extractRoot,
-      portable: true,
-      noMtime: true,
-    }, ['image-extraction']);
+    await rewritePackageEntry(packagePath, 'image-extraction/SKILL.md', (_header, content) =>
+      Buffer.concat([content, Buffer.from('\nUNREVIEWED_PACKAGE_ONLY_INSTRUCTION\n')]));
     const lockPath = path.join(fixtureState, 'skills.lock.json');
     const lock = JSON.parse(await fs.readFile(lockPath, 'utf8'));
     lock.skills['image-extraction'].packageSha256 = createHash('sha256')

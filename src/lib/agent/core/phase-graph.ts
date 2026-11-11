@@ -38,9 +38,8 @@ export interface PiAgentPhaseGraph {
     /** Hard cumulative reservation over all estimated full provider inputs. */
     maxCumulativePreparedInputTokens: number;
     /**
-     * No-progress tool turns before soft next-turn convergence guidance.
-     * The executor's generic hard read gate still requires at least two
-     * consecutive no-progress turns (or an independent repeated-read gate).
+     * Consecutive tool turns without new verified facts or workspace contents
+     * before the executor stops with NO_VERIFIABLE_PROGRESS.
      */
     progressStallTurns: number;
   };

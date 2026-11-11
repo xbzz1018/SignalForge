@@ -1,6 +1,9 @@
 import path from 'path';
 import { QuantRunPlan } from '@/lib/domains/finance/workspace';
-import { type JsonRecord, asRecord } from './values';
+import {
+  compileBacktestRequest, backtestRequestQuery, backtestResponseMismatches,
+} from '@/lib/domains/finance/backtest-request';
+import { type JsonRecord, asRecord, numeric } from './values';
 import {
   inferHistoryLimit,
   pickScreenerCandidateCode,
@@ -188,10 +191,32 @@ export async function fetchSymbolDataset(params: {
 
   if (params.plan.dataRequirements.some((endpoint) => endpoint.includes('/backtests/ma-crossover/'))) {
     try {
+      const spec = params.plan.backtest ?? compileBacktestRequest({
+        question: params.plan.question,
+        timeRange: params.plan.queryRewrite?.timeRange,
+        timeRangeLabel: params.plan.timeRange,
+        now: params.plan.createdAt ? new Date(params.plan.createdAt) : undefined,
+      });
       backtest = await fetchJson(
-        `/api/v1/backtests/ma-crossover/${params.symbol}?fast_window=20&slow_window=60&period=daily&adjustment=qfq&limit=250&fee_bps=5`
+        `/api/v1/backtests/ma-crossover/${params.symbol}?${backtestRequestQuery(spec)}`
       );
+      const mismatches = backtestResponseMismatches(spec, backtest);
+      if (mismatches.length) throw new Error(`回测执行参数或样本与研究请求不一致：${mismatches.join('、')}`);
       const experiment = asRecord(backtest.experiment);
+      const capturedData = asRecord(experiment?.data);
+      if (capturedData && Array.isArray(capturedData.bars)) {
+        kline = {
+          ...capturedData,
+          bars: capturedData.bars.filter(bar => {
+            const date = asRecord(bar)?.date;
+            return typeof date === 'string' && date <= spec.endDate && (!spec.startDate || date >= spec.startDate);
+          }).map(bar => {
+            const row = asRecord(bar)!;
+            return { date: row.date, ...Object.fromEntries(['open', 'high', 'low', 'close', 'volume']
+              .map(key => [key, numeric(row[key])])) };
+          }),
+        };
+      }
       const experimentId = typeof experiment?.experiment_id === 'string'
         && /^sha256:[a-f0-9]{64}$/.test(experiment.experiment_id)
         ? experiment.experiment_id.slice('sha256:'.length) : null;
@@ -213,7 +238,7 @@ export async function fetchSymbolDataset(params: {
         };
       }
     } catch (error) {
-      params.warnings.push(`${params.symbol} 均线突破回测预取失败：${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`${params.symbol} 回测未按请求完成：${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 

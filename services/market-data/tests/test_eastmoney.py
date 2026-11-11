@@ -391,9 +391,7 @@ def test_parse_tencent_kline_payload_supports_bj_prefix() -> None:
             "code": 0,
             "data": {
                 "bj920992": {
-                    "qfqday": [
-                        ["2026-05-22", "11.000", "11.500", "11.800", "10.900", "1200.000"]
-                    ],
+                    "qfqday": [["2026-05-22", "11.000", "11.500", "11.800", "10.900", "1200.000"]],
                     "qt": {"bj920992": ["51", "中科美菱", "920992"]},
                 }
             },
@@ -461,14 +459,14 @@ def test_build_technical_indicators_includes_ma30_and_ma60() -> None:
     assert indicators.summary.ma60 == Decimal("134.5000")
 
 
-def build_kline_test_row(day: int) -> str:
+def build_kline_test_row(day: int, *, observation: int | None = None) -> str:
     open_price = 100 + day
     close_price = 100 + day
     high_price = 101 + day
     low_price = 99 + day
     volume = 1000 + day
     return (
-        f"2026-05-{day:02d},{open_price},{close_price},{high_price},"
+        f"2026-05-{observation or day:02d},{open_price},{close_price},{high_price},"
         f"{low_price},{volume},10000,1,1,1,1"
     )
 
@@ -485,30 +483,33 @@ def test_build_ma_crossover_backtest_from_kline() -> None:
                 "market": 1,
                 "name": "贵州茅台",
                 "klines": [
-                    build_kline_test_row(day)
-                    for day in [
-                        1,
-                        2,
-                        3,
-                        4,
-                        5,
-                        6,
-                        7,
-                        8,
-                        9,
-                        10,
-                        9,
-                        8,
-                        7,
-                        6,
-                        5,
-                        6,
-                        7,
-                        8,
-                        9,
-                        10,
-                        11,
-                    ]
+                    build_kline_test_row(day, observation=index)
+                    for index, day in enumerate(
+                        [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10,
+                            9,
+                            8,
+                            7,
+                            6,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10,
+                            11,
+                        ],
+                        start=1,
+                    )
                 ],
             },
         },
