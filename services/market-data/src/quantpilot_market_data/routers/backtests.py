@@ -25,6 +25,7 @@ def create_backtest_router(
 
     @router.get("/ma-crossover/{symbol}", response_model=BacktestResponse)
     async def get_ma_crossover_backtest_endpoint(
+        request: Request,
         symbol: str,
         fast_window: int = 20,
         slow_window: int = 60,
@@ -34,8 +35,12 @@ def create_backtest_router(
         end: str = "20500101",
         initial_cash: Decimal = Decimal("1"),
         fee_bps: Decimal = Decimal("5"),
+        start: str | None = None,
     ) -> BacktestResponse:
         try:
+            unknown = set(strategy_backtest_parameters(request)) - {"fast_window", "slow_window"}
+            if unknown:
+                raise ValueError(f"未知策略参数：{', '.join(sorted(unknown))}")
             return await get_ma_crossover_backtest(
                 client,
                 cache,
@@ -49,6 +54,7 @@ def create_backtest_router(
                 initial_cash=initial_cash,
                 fee_bps=fee_bps,
                 ttl_seconds=kline_cache_ttl_seconds,
+                start=start,
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -66,6 +72,7 @@ def create_backtest_router(
         end: str = "20500101",
         initial_cash: Decimal = Decimal("1"),
         fee_bps: Decimal = Decimal("5"),
+        start: str | None = None,
     ) -> BacktestResponse:
         try:
             return await get_strategy_backtest(
@@ -81,6 +88,7 @@ def create_backtest_router(
                 initial_cash=initial_cash,
                 fee_bps=fee_bps,
                 ttl_seconds=kline_cache_ttl_seconds,
+                start=start,
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -96,11 +104,11 @@ def strategy_backtest_parameters(request: Request) -> dict[str, str]:
         "adjustment",
         "limit",
         "end",
+        "start",
         "initial_cash",
         "fee_bps",
     }
-    return {
-        key: value
-        for key, value in request.query_params.items()
-        if key not in reserved and value not in {"", "undefined", "null"}
-    }
+    pairs = list(request.query_params.multi_items())
+    if len(pairs) != len({key for key, _ in pairs}):
+        raise ValueError("回测查询参数不能重复。")
+    return {key: value for key, value in request.query_params.items() if key not in reserved}

@@ -29,6 +29,8 @@
 
 **把实验留下来。** FastAPI 服务提供行情、指标和回测；实验保存实际输入 K 线、周期、复权、参数、费用、引擎身份与哈希。离线 replay 用于检查记录和复算结果是否一致。
 
+回测请求在规划阶段冻结窗口、日期及费用，取数与结果验收核对同一份参数；预热数据不计入评估区间，净收益包含费用。详见[研究请求与回测结果校验](docs/research-correctness.md)。
+
 **以验收回执结束任务。** Agent 提交候选产物后，平台继续检查构建、数据与产物契约、预览状态。Mission 关联 accepted receipt 后才标记交付完成。PostgreSQL Job/outbox、Worker lease 与 fencing 管理长任务和写入边界。
 
 ```mermaid

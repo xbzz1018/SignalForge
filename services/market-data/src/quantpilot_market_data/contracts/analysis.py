@@ -70,7 +70,9 @@ class BacktestEquityPoint(BaseModel):
     slow_ma: Decimal | None = Field(default=None, description="慢线均线")
     position: int = Field(default=0, description="持仓状态，1 为持有，0 为空仓")
     daily_return_pct: Decimal | None = Field(default=None, description="当日标的收益率，单位：%")
-    strategy_return_pct: Decimal | None = Field(default=None, description="当日策略收益率，单位：%")
+    strategy_return_pct: Decimal | None = Field(
+        default=None, description="扣除交易费用后的当期策略收益率，单位：%"
+    )
     equity: Decimal = Field(description="策略净值")
     drawdown_pct: Decimal | None = Field(default=None, description="策略净值回撤，单位：%")
 
@@ -80,7 +82,12 @@ class BacktestTrade(BaseModel):
     entry_price: Decimal
     exit_date: str | None = None
     exit_price: Decimal | None = None
-    return_pct: Decimal | None = Field(default=None, description="单笔交易收益率，单位：%")
+    return_pct: Decimal | None = Field(
+        default=None, description="扣除买卖费用的单笔交易收益率，单位：%"
+    )
+    gross_return_pct: Decimal | None = Field(
+        default=None, description="未扣费的价格收益率，单位：%"
+    )
     holding_days: int = 0
     status: Literal["open", "closed"] = "open"
 
@@ -105,6 +112,8 @@ class BacktestSummary(BaseModel):
 
 class BacktestResponse(BaseModel):
     experiment: BacktestExperiment | None = None
+    evaluation_start: str | None = None
+    evaluation_end: str | None = None
     symbol: str
     name: str | None = None
     secid: str

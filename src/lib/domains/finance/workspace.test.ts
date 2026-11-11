@@ -71,6 +71,21 @@ async function buildRewrite(params: {
 }
 
 describe('writeInitialRunPlan', () => {
+  it('persists executable backtest inputs or requests clarification before fetching', async () => {
+    for (const valid of [true, false]) {
+      const projectPath = await createProject();
+      const query = valid ? '回测510300，2024年上半年5/20日均线，手续费10bps'
+        : '回测510300，5/2日均线';
+      const queryRewrite = await buildRewrite({ query, targets: ['510300'],
+        symbolByTarget: { '510300': '510300' }, focus: 'backtest' });
+      const plan = await writeInitialRunPlan({ projectPath, instruction: query,
+        requestId: `backtest-${valid}`, queryRewrite });
+      if (valid) expect(plan).toMatchObject({ status: 'planned', backtest: {
+        fastWindow: 5, slowWindow: 20, feeBps: 10, startDate: '2024-01-01', endDate: '2024-06-30',
+      } });
+      else expect(plan).toMatchObject({ status: 'needs_clarification', clarification: { required: true } });
+    }
+  });
   it('persists the LLM rewrite and authoritative resolver symbol in the run plan', async () => {
     const projectPath = await createProject();
     const query = '大位科技这个股票怎么样';

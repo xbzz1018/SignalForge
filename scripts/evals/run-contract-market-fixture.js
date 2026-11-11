@@ -288,8 +288,23 @@ function announcements(security) {
   };
 }
 
-function backtest(security) {
+function backtest(security, query) {
+  // This fixture checks delivery contracts, never numerical strategy correctness.
+  // Its fixed results must not masquerade as execution of arbitrary parameters.
+  const supported = { fast_window: '20', slow_window: '60', fee_bps: '5', initial_cash: '1', period: 'daily', adjustment: 'qfq', limit: '250' };
+  for (const [key, expected] of Object.entries(supported)) {
+    const actual = query.get(key);
+    if (actual !== null && actual !== expected) throw new RangeError(`unsupported contract fixture parameter: ${key}`);
+  }
   const rows = bars(security, 250);
+  const start = query.get('start');
+  const end = query.get('end') || asOf;
+  const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+  if (!validDate(end) || start !== null && !validDate(start) ||
+      start !== null && start > rows[0].date || end < rows.at(-1).date) {
+    throw new RangeError('evaluation interval does not contain the contract snapshot');
+  }
   const points = technical(security, 250).points;
   const equityCurve = rows.map((row, index) => ({
     date: row.date,
@@ -305,6 +320,8 @@ function backtest(security) {
   return {
     ...identity(security),
     strategy_id: 'ma_crossover',
+    evaluation_start: start,
+    evaluation_end: end,
     strategy_name: '均线交叉趋势',
     fast_window: 20,
     slow_window: 60,
@@ -461,7 +478,7 @@ const server = http.createServer(async (request, response) => {
         'fundamentals/financials': () => financials(security),
         'indicators/fundamental': () => fundamentalIndicators(security),
         'events/announcements': () => announcements(security),
-        'backtests/ma-crossover': () => backtest(security),
+        'backtests/ma-crossover': () => backtest(security, url.searchParams),
       };
       json(response, 200, handlers[endpoint]());
       return;
@@ -469,12 +486,12 @@ const server = http.createServer(async (request, response) => {
 
     json(response, 404, { detail: `contract snapshot endpoint not found: ${url.pathname}` });
   } catch (error) {
-    json(response, 500, { detail: error instanceof Error ? error.message : String(error) });
+    json(response, error instanceof RangeError ? 400 : 500, { detail: error instanceof Error ? error.message : String(error) });
   }
 });
 
 server.listen(port, host, () => {
-  console.log(`[contract-market] listening on http://${host}:${port}`);
+  console.log(`[contract-market] listening on http://${host}:${server.address().port}`);
 });
 
 function shutdown() {

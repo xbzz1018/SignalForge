@@ -1,9 +1,21 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
-from quantpilot_market_data.backtest import build_ma_crossover_backtest, build_strategy_backtest
+from quantpilot_market_data.backtest import (
+    build_ma_crossover_backtest,
+    build_strategy_backtest,
+    canonical_strategy_id,
+)
 from quantpilot_market_data.backtest_experiments import current_engine_identity, verify_experiment
+from quantpilot_market_data.backtest_parameters import (
+    backtest_date,
+    finite_decimal,
+    normalize_strategy_parameters,
+    periods_per_year,
+)
 from quantpilot_market_data.cache import MarketDataCache
 from quantpilot_market_data.contracts.analysis import BacktestResponse
 from quantpilot_market_data.contracts.quotes import Adjustment, KlinePeriod
@@ -26,6 +38,58 @@ def _read_cached_backtest(cache: MarketDataCache, cache_key: str) -> BacktestRes
         return None
 
 
+def _history_request(
+    *,
+    limit: int,
+    start: str | None,
+    end: str,
+    period: KlinePeriod,
+    parameters: dict[str, object],
+    initial_cash: Decimal,
+) -> tuple[int, str | None, str | None]:
+    periods_per_year(period)
+    cash = finite_decimal(initial_cash, "initial_cash")
+    if cash <= 0:
+        raise ValueError("initial_cash 必须为大于 0 的有限数值。")
+    if not 1 <= limit <= 1500:
+        raise ValueError("limit 必须在 1 到 1500 之间。")
+    start_date = backtest_date(start)
+    end_date = None if end == "20500101" else backtest_date(end)
+    warmup = (
+        max(
+            (int(value) for key, value in parameters.items() if key.endswith("_window")), default=60
+        )
+        + 5
+    )
+    required = warmup + 1
+    if start_date:
+        cutoff = (
+            date.fromisoformat(end_date)
+            if end_date
+            else datetime.now(ZoneInfo("Asia/Shanghai")).date()
+        )
+        first = date.fromisoformat(start_date)
+        if first > cutoff:
+            raise ValueError("回测开始日期不能晚于结束日期。")
+        days = (cutoff - first).days
+        bars = days + 1 if period == "daily" else days // 7 + 2
+        if period == "monthly":
+            bars = (cutoff.year - first.year) * 12 + cutoff.month - first.month + 2
+        required += bars
+    if required > 1500:
+        raise ValueError("回测区间及指标预热超过 1500 根行情上限，请缩短区间。")
+    return max(limit, required), start_date, end_date
+
+
+def _check_coverage(kline, start: str | None, parameters: dict[str, object]) -> None:
+    if start:
+        warmup = max(
+            (int(value) for key, value in parameters.items() if key.endswith("_window")), default=0
+        )
+        if sum(bar.date < start for bar in kline.bars) < warmup:
+            raise ValueError("指定回测区间的指标预热行情不足，不能按默认样本替代。")
+
+
 async def get_ma_crossover_backtest(
     client: HistoricalKlineProvider,
     cache: MarketDataCache,
@@ -40,30 +104,39 @@ async def get_ma_crossover_backtest(
     initial_cash: Decimal,
     fee_bps: Decimal,
     ttl_seconds: int,
+    start: str | None = None,
 ) -> BacktestResponse:
-    if not 2 <= fast_window <= 120:
-        raise ValueError("fast_window 必须为 2 到 120 之间的整数。")
-    if not 3 <= slow_window <= 250:
-        raise ValueError("slow_window 必须为 3 到 250 之间的整数。")
-    if fast_window >= slow_window:
-        raise ValueError("fast_window 必须小于 slow_window。")
-    normalized_fast = fast_window
-    normalized_slow = slow_window
-    normalized_limit = max(normalized_slow + 5, min(limit, 1000))
+    parameters = normalize_strategy_parameters(
+        "ma_crossover",
+        {"fast_window": fast_window, "slow_window": slow_window},
+        fee_bps,
+    )
+    normalized_fast, normalized_slow = parameters["fast_window"], parameters["slow_window"]
+    normalized_limit, start_date, end_date = _history_request(
+        limit=limit,
+        start=start,
+        end=end,
+        period=period,
+        parameters=parameters,
+        initial_cash=initial_cash,
+    )
     local = await get_local_kline_if_ready(
         symbol=symbol,
         period=period,
         adjustment=adjustment,
         limit=normalized_limit,
-        end=end,
+        end=(end_date or "2050-01-01").replace("-", ""),
     )
     if local is not None:
+        _check_coverage(local, start_date, parameters)
         return build_ma_crossover_backtest(
             local,
             fast_window=normalized_fast,
             slow_window=normalized_slow,
             initial_cash=initial_cash,
             fee_bps=fee_bps,
+            start=start_date,
+            end=end_date,
         )
     cache_key = cache.build_key(
         "backtest-ma-crossover",
@@ -76,6 +149,7 @@ async def get_ma_crossover_backtest(
             "adjustment": adjustment,
             "limit": normalized_limit,
             "end": end,
+            "start": start_date,
             "initial_cash": str(initial_cash),
             "fee_bps": str(fee_bps),
         },
@@ -90,15 +164,18 @@ async def get_ma_crossover_backtest(
         period=period,
         adjustment=adjustment,
         limit=normalized_limit,
-        end=end,
+        end=(end_date or "2050-01-01").replace("-", ""),
         bypass_local=True,
     )
+    _check_coverage(kline, start_date, parameters)
     response = build_ma_crossover_backtest(
         kline,
         fast_window=normalized_fast,
         slow_window=normalized_slow,
         initial_cash=initial_cash,
         fee_bps=fee_bps,
+        start=start_date,
+        end=end_date,
     )
     return cache_response(cache, cache_key, ttl_seconds, response, BacktestResponse)
 
@@ -117,22 +194,35 @@ async def get_strategy_backtest(
     initial_cash: Decimal,
     fee_bps: Decimal,
     ttl_seconds: int,
+    start: str | None = None,
 ) -> BacktestResponse:
-    normalized_limit = max(80, min(limit, 1500))
+    strategy_id = canonical_strategy_id(strategy_id)
+    parameters = normalize_strategy_parameters(strategy_id, parameters, fee_bps)
+    normalized_limit, start_date, end_date = _history_request(
+        limit=limit,
+        start=start,
+        end=end,
+        period=period,
+        parameters=parameters,
+        initial_cash=initial_cash,
+    )
     local = await get_local_kline_if_ready(
         symbol=symbol,
         period=period,
         adjustment=adjustment,
         limit=normalized_limit,
-        end=end,
+        end=(end_date or "2050-01-01").replace("-", ""),
     )
     if local is not None:
+        _check_coverage(local, start_date, parameters)
         return build_strategy_backtest(
             local,
             strategy_id=strategy_id,
             parameters=parameters,
             initial_cash=initial_cash,
             fee_bps=fee_bps,
+            start=start_date,
+            end=end_date,
         )
     cache_key = cache.build_key(
         "backtest-strategy",
@@ -145,6 +235,7 @@ async def get_strategy_backtest(
             "adjustment": adjustment,
             "limit": normalized_limit,
             "end": end,
+            "start": start_date,
             "initial_cash": str(initial_cash),
             "fee_bps": str(fee_bps),
         },
@@ -159,14 +250,17 @@ async def get_strategy_backtest(
         period=period,
         adjustment=adjustment,
         limit=normalized_limit,
-        end=end,
+        end=(end_date or "2050-01-01").replace("-", ""),
         bypass_local=True,
     )
+    _check_coverage(kline, start_date, parameters)
     response = build_strategy_backtest(
         kline,
         strategy_id=strategy_id,
         parameters=parameters,
         initial_cash=initial_cash,
         fee_bps=fee_bps,
+        start=start_date,
+        end=end_date,
     )
     return cache_response(cache, cache_key, ttl_seconds, response, BacktestResponse)

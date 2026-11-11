@@ -1,0 +1,2 @@
+# Skill locks bind exact package bytes; keep source checkouts stable on Windows.
+.pi/skills/** text=auto eol=lf

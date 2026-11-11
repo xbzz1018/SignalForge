@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -92,3 +93,77 @@ def test_routes_preserve_replayable_responses_across_cache_and_engine_changes(
         assert len(calls) == 4
         with pytest.raises(ValueError, match="engine or runtime changed"):
             replay_backtest(second.json())
+
+
+def test_requested_interval_parameters_and_fees_reach_the_engine(monkeypatch):
+    calls = []
+    data = KlineResponse(
+        symbol="510300",
+        secid="1.510300",
+        source="fixture",
+        period="daily",
+        adjustment="qfq",
+        fetched_at="2026-01-01T00:00:00Z",
+        bars=[
+            {
+                "date": (date(2023, 10, 1) + timedelta(days=i)).isoformat(),
+                "close": str(100 + i % 40),
+            }
+            for i in range(260)
+        ],
+    )
+
+    async def no_local(**_kwargs):
+        return None
+
+    async def fetch(*_args, **kwargs):
+        calls.append(kwargs)
+        return data
+
+    monkeypatch.setattr(backtests, "get_local_kline_if_ready", no_local)
+    monkeypatch.setattr(backtests, "get_kline_local_first", fetch)
+    app = FastAPI()
+    app.include_router(
+        create_backtest_router(
+            client=object(),
+            cache=MarketDataCache(enabled=False),
+            kline_cache_ttl_seconds=300,
+        )
+    )
+    with TestClient(app) as client:
+        for endpoint in ["ma-crossover/510300", "strategies/ma_crossover/510300"]:
+            response = client.get(
+                f"/api/v1/backtests/{endpoint}",
+                params={
+                    "start": "2024-01-01",
+                    "end": "2024-04-01",
+                    "fast_window": 5,
+                    "slow_window": 20,
+                    "fee_bps": 10,
+                    "initial_cash": 25000,
+                },
+            )
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert body["fast_window"] == 5 and body["slow_window"] == 20
+            assert Decimal(body["fee_bps"]) == 10
+            assert body["evaluation_start"] == "2024-01-01"
+            assert body["evaluation_end"] == "2024-04-01"
+            assert body["summary"]["start_date"] == "2024-01-01"
+            assert body["summary"]["end_date"] == "2024-04-01"
+            replay_backtest(body)
+            assert calls[-1]["end"] == "20240401"
+
+        fetch_count = len(calls)
+        for query in [
+            "fast_window=garbage",
+            "fast_window=2.5",
+            "fast_widnow=5",
+            "fast_window=60&slow_window=20",
+            "period=minute5",
+            "fast_window=5&fast_window=10",
+            "start=2025-02-30",
+        ]:
+            response = client.get(f"/api/v1/backtests/strategies/ma_crossover/510300?{query}")
+            assert response.status_code == 400, (query, response.text)
+        assert len(calls) == fetch_count

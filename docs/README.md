@@ -59,6 +59,8 @@
 
 ## 知识地图
 
+项目能力与实现的核对入口见[能力对应表](resume-implementation-map.md)，回测参数和执行口径见[研究请求与回测结果校验](research-correctness.md)。
+
 | 模块 | 文档 | 关注点 |
 | --- | --- | --- |
 | 配置与运行方式 | [配置、模型接入与可选组件指南](configuration.md) | 文件优先级、ModelPort/直连、Memory 开关、secret 边界与模式验收 |

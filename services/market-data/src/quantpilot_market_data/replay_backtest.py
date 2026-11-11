@@ -22,6 +22,8 @@ def replay_backtest(payload: object) -> BacktestResponse:
         parameters=experiment.parameters,
         initial_cash=experiment.initial_cash,
         fee_bps=experiment.fee_bps,
+        start=experiment.evaluation_start,
+        end=experiment.evaluation_end,
     )
     if result_digest(replay) != experiment.result_sha256:
         raise ValueError("Replayed result differs from the captured backtest.")

@@ -1,3 +1,5 @@
+import { backtestResponseMismatches, type QuantBacktestRequest } from './backtest-request';
+
 type JsonRecord = Record<string, unknown>;
 
 const SYMBOL_PATTERN = /^(?:6|0|3|5)\d{5}$/;
@@ -119,6 +121,18 @@ export function assessQuantDatasetIdentity(
     const datasetSymbol = symbol(dataset.symbol);
     if (!datasetSymbol) reasons.push(`${key}_symbol_missing`);
     else if (rootSymbol && datasetSymbol !== rootSymbol) reasons.push(`${key}_symbol_mismatch`);
+  }
+
+  const backtestSpec = record(runPlan?.backtest);
+  if (backtestSpec) {
+    const datasets = plannedSymbols.length > 1 && Array.isArray(finalData.assets)
+      ? finalData.assets.map(record) : [finalData];
+    for (const [index, asset] of datasets.entries()) {
+      const result = record(asset?.backtest);
+      if (!result) reasons.push(`backtest[${index}]_missing`);
+      else reasons.push(...backtestResponseMismatches(backtestSpec as unknown as QuantBacktestRequest, result)
+        .map(key => `backtest[${index}]_${key}_mismatch`));
+    }
   }
 
   const assets = Array.isArray(finalData.assets)

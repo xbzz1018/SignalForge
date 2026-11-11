@@ -88,6 +88,7 @@ export async function hashPiAgentWorkspace(
     maxFiles?: number;
     maxHashedBytes?: number;
     maxFileHashBytes?: number;
+    ignoredDirectories?: readonly string[];
   } = {}
 ): Promise<PiAgentWorkspaceSnapshot> {
   const root = await fs.realpath(path.resolve(workspaceRoot));
@@ -112,7 +113,7 @@ export async function hashPiAgentWorkspace(
       left.name < right.name ? -1 : left.name > right.name ? 1 : 0
     );
     for (const entry of entries) {
-      if (entry.isDirectory() && IGNORED_DIRECTORIES.has(entry.name)) continue;
+      if (entry.isDirectory() && (IGNORED_DIRECTORIES.has(entry.name) || options.ignoredDirectories?.includes(entry.name))) continue;
       const relativePath = relativeDirectory
         ? `${relativeDirectory}/${entry.name}`
         : entry.name;

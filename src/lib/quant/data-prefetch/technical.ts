@@ -1,7 +1,17 @@
 import { type JsonRecord, asRecord, extractBarsFromAsset, mean, numeric, round } from './values';
 
 export function calculateMetrics(kline: JsonRecord | null): JsonRecord {
-  const bars = Array.isArray(kline?.bars) ? kline.bars.map((bar) => asRecord(bar) ?? {}) : [];
+  const inputBars = Array.isArray(kline?.bars) ? kline.bars.map((bar) => asRecord(bar) ?? {}) : [];
+  const dateOf = (bar: JsonRecord) => bar.date ?? bar.time ?? bar.trade_date;
+  const dates = inputBars.map(dateOf);
+  const validDates = dates.length > 0 && dates.every((value) => typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) &&
+    new Date(value).toISOString().slice(0, 10) === value);
+  const uniqueDates = new Set(dates).size === dates.length;
+  const bars = validDates && uniqueDates
+    ? [...inputBars].sort((a, b) => String(dateOf(a)).localeCompare(String(dateOf(b))))
+    : inputBars;
+  const daily = kline?.period === undefined || kline.period === 'daily';
   // Keep each observation in place: removing a missing value changes the window
   // and can turn a multi-session price change into a one-session return.
   const closes = bars.map((bar) => {
@@ -15,7 +25,7 @@ export function calculateMetrics(kline: JsonRecord | null): JsonRecord {
 
   const firstClose = closes[0] ?? null;
   const lastClose = closes.at(-1) ?? null;
-  const volatilityCloses = completeWindow(closes, 21);
+  const volatilityCloses = daily && validDates && uniqueDates ? completeWindow(closes, 21) : null;
   const returns = volatilityCloses?.slice(1).map((close, index) => (close - volatilityCloses[index]) / volatilityCloses[index]);
   const avgReturn = returns ? mean(returns) : null;
   const variance = returns && avgReturn !== null
@@ -41,6 +51,7 @@ export function calculateMetrics(kline: JsonRecord | null): JsonRecord {
     periodLow: lows.length ? round(Math.min(...lows)) : null,
     maxDrawdown: closes.length && closes.every((close) => close !== null) ? round(maxDrawdown) : null,
     volatility20d: variance === null ? null : round(Math.sqrt(variance) * Math.sqrt(252) * 100),
+    metricWarnings: volatilityCloses ? [] : ['20 日波动率需要 21 根日期唯一、收盘价完整的日线行情。'],
     avgVolume20d: windowMean(volumes, 20),
     avgAmount20d: windowMean(amounts, 20),
     ma5: windowMean(closes, 5),

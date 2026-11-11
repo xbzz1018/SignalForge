@@ -53,7 +53,7 @@ describe('PI Agent provenance', () => {
     const root = path.join(parent, 'workspace');
     const alias = path.join(parent, 'workspace-alias');
     await fs.mkdir(root);
-    await fs.symlink(root, alias, 'dir');
+    await fs.symlink(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
     await fs.writeFile(path.join(root, 'page.tsx'), 'first');
 
     const direct = await hashPiAgentWorkspaceIdentity(root, 'deployment-a');

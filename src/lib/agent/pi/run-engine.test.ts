@@ -119,6 +119,58 @@ function terminalTool(
 }
 
 describe('PiAgentRunEngine', () => {
+  it.each(['read', 'failure', 'same-write'] as const)(
+    'stops repeated %s results despite changing tool-call IDs', async kind => {
+      const events: PiAgentEvent[] = [];
+      const execute = vi.fn(async () => kind === 'failure'
+        ? { ok: false as const, error: { code: 'MISSING', message: 'unchanged failure', retryable: false } }
+        : { ok: true as const, data: { path: 'app/page.tsx', value: 'unchanged' } });
+      const provider = new ScriptedProvider([1, 2, 3, 4, 5].map(index =>
+        toolTurn([{ id: `call-${index}`, name: 'inspect', arguments: '{}' }])));
+      const engine = new PiAgentRunEngine({
+        provider, model: 'test-model', requireTerminalTool: false, progressStallTurns: 2,
+        tools: [{ name: 'inspect', description: 'Fixture', inputSchema: objectSchema(),
+          effect: kind === 'same-write' ? 'workspace_write' : 'read', execute }],
+      });
+      const result = await engine.run({ messages: initialMessages,
+        workspaceFingerprint: async () => 'unchanged-workspace' }, event => { events.push(event); });
+      expect(result).toMatchObject({ status: 'stopped', error: { code: 'NO_VERIFIABLE_PROGRESS' } });
+      expect(execute).toHaveBeenCalledTimes(kind === 'read' ? 3 : 2);
+      const progress = events.filter(event => event.type === 'progress_evaluated');
+      expect(progress.at(-1)).toMatchObject({ decision: {
+        progressed: false, stalled: true, stallSignals: expect.arrayContaining(['repeated_tool_observation']),
+      } });
+      expect(progress.some(event => event.decision.progressSignals.includes('workspace_advanced'))).toBe(false);
+      if (kind === 'failure') expect(progress.every(event => !event.decision.progressed)).toBe(true);
+    },
+    // The first case includes the ESM-only PI runtime's cold import on Windows.
+    30_000,
+  );
+
+  it('continues when verified file contents advance and still allows terminal submission', async () => {
+    const events: PiAgentEvent[] = [];
+    let contentVersion = 0;
+    const provider = new ScriptedProvider([
+      ...[1, 2, 3].map(index => toolTurn([{ id: `write-${index}`, name: 'write', arguments: '{}' }])),
+      toolTurn([{ id: 'submit', name: 'submit_result', arguments: '{"artifact":"app/page.tsx"}' }]),
+    ]);
+    const engine = new PiAgentRunEngine({
+      provider, model: 'test-model', progressStallTurns: 2,
+      tools: [{ name: 'write', description: 'Write fixture', inputSchema: objectSchema(),
+        effect: 'workspace_write', execute: async () => {
+          contentVersion += 1;
+          return { ok: true, data: { path: 'app/page.tsx' } };
+        } }, terminalTool()],
+    });
+    const result = await engine.run({ messages: initialMessages,
+      workspaceFingerprint: async () => `content-${contentVersion}` }, event => { events.push(event); });
+    expect(result.status).toBe('completed');
+    expect(events.filter(event => event.type === 'progress_evaluated').slice(0, 3))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ decision: expect.objectContaining({
+        progressed: true, progressSignals: expect.arrayContaining(['workspace_advanced']),
+      }) })]));
+  });
+
   it('rejects unsafe run identifiers before starting PI', async () => {
     const provider = new ScriptedProvider([]);
     const engine = new PiAgentRunEngine({
