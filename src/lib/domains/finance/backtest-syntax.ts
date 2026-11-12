@@ -14,15 +14,19 @@ export function assertConsistentSettings(question: string): void {
     [/MA(\d+(?:\.\d+)?)(?:\/|、|和|与|及|-)MA(\d+(?:\.\d+)?)/gi,
       m => [Number(m[1]), Number(m[2])]],
   ];
+  const pairs: number[][] = [];
   for (const [pattern, values] of groups) {
     const matches = [...question.matchAll(pattern)].map(values);
+    pairs.push(...matches.filter(value => value.length === 2));
     if (new Set(matches.map(value => JSON.stringify(value))).size > 1) {
       throw new Error('检测到冲突的回测参数，请明确唯一的窗口、手续费和资金设置。');
     }
   }
-  const pair = question.match(/(?:MA)?(\d+)(?:日|天)?(?:均线)?\/(?:MA)?(\d+)(?:日|天)?(?:均线|MA)/i)
-    ?? question.match(/MA(\d+)\/MA(\d+)/i);
-  for (const [index, label] of [[1, 'fast_window|快线|短期均线'], [2, 'slow_window|慢线|长期均线']] as const) {
+  if (new Set(pairs.map(value => JSON.stringify(value))).size > 1) {
+    throw new Error('检测到冲突的均线组合，请明确窗口。');
+  }
+  const pair = pairs[0];
+  for (const [index, label] of [[0, 'fast_window|快线|短期均线'], [1, 'slow_window|慢线|长期均线']] as const) {
     const named = question.match(new RegExp(`(?:${label})${separator}${number}`, 'i'));
     if (pair && named && Number(pair[index]) !== Number(named[1])) {
       throw new Error('均线组合与快慢线参数冲突，请确认窗口。');

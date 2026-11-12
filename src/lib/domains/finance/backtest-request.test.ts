@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { compileBacktestRequest, backtestRequestQuery, backtestResponseMismatches, reviseBacktestRequest } from './backtest-request';
 
 describe('frozen backtest execution request', () => {
+  it.each(['5、20日均线快线10回测', '5和20均线慢线30回测', 'MA5/MA20与10/30均线回测'])(
+    'cross-checks alternative paired-window syntax: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow('冲突');
+    },
+  );
+  it('preserves a weekly sample count during a fee-only revision', () => {
+    const previous = compileBacktestRequest({ question: '周线最近100根行情回测5/20均线' });
+    expect(reviseBacktestRequest(previous, '手续费改为10bps')).toMatchObject({
+      period: 'weekly', limit: 100, startDate: null, feeBps: 10, endDate: previous.endDate,
+    });
+  });
   it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid relative range values: %s', value => {
     expect(() => compileBacktestRequest({ question: '最近一段时间回测',
       timeRange: { label: '最近一段时间', unit: 'month', value, source: 'explicit' } })).toThrow('正整数');

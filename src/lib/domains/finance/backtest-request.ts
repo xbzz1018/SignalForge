@@ -104,30 +104,34 @@ export function compileBacktestRequest(input: {
   let startDate: string | null = null;
   let endDate = shanghaiDate(input.now ?? new Date());
   const dayCounts = [...source.matchAll(/(?:最近|近|过去)(\d+)(?:个)?交易日/g)].map(match => Number(match[1]));
-  const explicitDays = source.match(/(?:最近|近|过去)(\d+)(?:个)?交易日/);
+  const samples = [...source.matchAll(/(?:最近|近|过去)(\d+)(?:(?:个)?交易日|(?:根|条)(?:行情|K线))/gi)];
+  const sampleCounts = samples.map(match => Number(match[1]));
   const durationValue = input.timeRange?.value;
   if (durationValue !== undefined && (!Number.isSafeInteger(durationValue) || durationValue <= 0)) {
     throw new Error('相对回测区间必须为正整数。');
   }
-  if (input.timeRange?.unit === 'trading_day' && durationValue !== undefined) dayCounts.push(durationValue);
-  if (new Set(dayCounts).size > 1) throw new Error('原始请求与改写后的交易日数量冲突。');
+  if (input.timeRange?.unit === 'trading_day' && durationValue !== undefined) {
+    dayCounts.push(durationValue);
+    sampleCounts.push(durationValue);
+  }
+  if (new Set(sampleCounts).size > 1) throw new Error('原始请求与改写后的行情样本数量冲突。');
   if (dayCounts.length && period !== 'daily') throw new Error('交易日数量仅用于日线回测，请确认周期和样本单位。');
-  let limit = explicitDays ? Number(explicitDays[1]) : 250;
+  let limit = sampleCounts[0] ?? 250;
   const originalInterval = calendarInterval(question), rewrittenInterval = calendarInterval(range);
   if (originalInterval && rewrittenInterval &&
       (originalInterval.start !== rewrittenInterval.start || originalInterval.end !== rewrittenInterval.end)) {
     throw new Error('原始请求与改写后的回测日期冲突，请确认区间。');
   }
   const interval = originalInterval ?? rewrittenInterval;
-  if (interval?.start && dayCounts.length) throw new Error('请在日期区间与最近交易日数量中选择一种回测范围。');
+  if (interval?.start && sampleCounts.length) throw new Error('请在日期区间与最近样本数量中选择一种回测范围。');
   if (interval) {
     startDate = interval.start;
     endDate = interval.end;
   }
   if (!interval || interval.start === null) {
     const duration = input.timeRange;
-    if (duration?.unit === 'trading_day' && duration.value || explicitDays) {
-      limit = duration?.unit === 'trading_day' && duration.value ? duration.value : Number(explicitDays![1]);
+    if (sampleCounts.length) {
+      limit = sampleCounts[0];
     } else if (duration?.value && ['day', 'week', 'month', 'quarter', 'year'].includes(duration.unit)) {
       const anchor = new Date(`${endDate}T00:00:00Z`);
       if (duration.unit === 'day' || duration.unit === 'week') {
@@ -175,7 +179,7 @@ export function reviseBacktestRequest(
     !periodSyntax.test(question) ? { daily: '日线', weekly: '周线', monthly: '月线' }[previous.period] : '',
     !/复权/.test(question) ? { qfq: '前复权', hfq: '后复权', none: '不复权' }[previous.adjustment] : '',
     !hasRange ? previous.startDate ? `${previous.startDate}至${previous.endDate}`
-      : `截至${previous.endDate}最近${previous.limit}个交易日` : '',
+      : `截至${previous.endDate}最近${previous.limit}根行情` : '',
   ];
   return compileBacktestRequest({ question: `${question}；${supplemental.join('；')}`, timeRange });
 }
