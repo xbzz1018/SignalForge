@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { compileBacktestRequest, backtestRequestQuery, backtestResponseMismatches, reviseBacktestRequest } from './backtest-request';
 
 describe('frozen backtest execution request', () => {
+  it.each(['初始资金1亿元回测', 'initial_cash=1e6回测', '初始资金10,000元回测',
+    '手续费0.1.5%回测', '快线5e1慢线60回测', '初始资金100美元回测', '回测费用-1bps', '回测FEE_BPS=NaN'])(
+    'rejects partial numeric parsing: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow();
+    },
+  );
+  it('accepts uppercase explicit fee keys', () => {
+    expect(compileBacktestRequest({ question: '回测FEE_BPS=10' }).feeBps).toBe(10);
+  });
   it.each(['回测手续费5bps手续费10bps', '初始资金1万初始本金2万回测',
     '快线5快线10慢线20回测', '5/20均线与10/30均线回测', '5/20均线快线10回测'])(
     'requires clarification for contradictory numeric settings: %s', question => {

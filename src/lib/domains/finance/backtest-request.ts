@@ -1,5 +1,5 @@
 import type { QuantQueryTimeRange } from './query-rewrite';
-import { assertConsistentSettings } from './backtest-syntax';
+import { assertCompleteNumericTokens, assertConsistentSettings } from './backtest-syntax';
 
 /** Frozen execution inputs. Capability selection remains the LLM rewrite's responsibility. */
 export interface QuantBacktestRequest {
@@ -57,6 +57,7 @@ export function compileBacktestRequest(input: {
   const source = `${question} ${range}`;
   const defaults: string[] = [];
   assertSupportedStrategy(question);
+  assertCompleteNumericTokens(question);
   assertConsistentSettings(question);
   if (/分钟|minute\d|日内回测/.test(question)) {
     throw new Error('回测支持日线、周线和月线，请确认数据周期。');
@@ -84,8 +85,8 @@ export function compileBacktestRequest(input: {
     throw new Error('请明确快线和慢线两个均线窗口，例如 5/20 日均线。');
   }
   if (Boolean(fast) !== Boolean(slow) && !pair) throw new Error('请同时提供快线与慢线窗口。');
-  if (/fast_window|快线|短期均线/.test(question) && !fast && !pair ||
-      /slow_window|慢线|长期均线/.test(question) && !slow && !pair) {
+  if (/fast_window|快线|短期均线/i.test(question) && !fast && !pair ||
+      /slow_window|慢线|长期均线/i.test(question) && !slow && !pair) {
     throw new Error('请以正整数明确快线与慢线窗口。');
   }
   if (!pair && !fast && !slow) defaults.push('均线窗口 20/60');
@@ -94,13 +95,13 @@ export function compileBacktestRequest(input: {
     throw new Error('快线需为 2–120、慢线为 3–250 的整数，且快线小于慢线。');
   }
   const fee = question.match(/(?:手续费|费用|费率|fee_bps)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)(bps|bp|基点|%|‰)?/i);
-  if (/手续费|费率|fee_bps/.test(question) && !fee) throw new Error('请以 bps 或百分比明确手续费。');
-  if (fee && !fee[2] && !fee[0].startsWith('fee_bps')) throw new Error('手续费需要明确 bps 或百分比单位。');
+  if (/手续费|费用|费率|fee_bps/i.test(question) && !fee) throw new Error('请以 bps 或百分比明确手续费。');
+  if (fee && !fee[2] && !/^fee_bps/i.test(fee[0])) throw new Error('手续费需要明确 bps 或百分比单位。');
   const feeBps = fee ? Number(fee[1]) * (fee[2] === '%' ? 100 : fee[2] === '‰' ? 10 : 1) : 5;
   if (!Number.isFinite(feeBps) || feeBps < 0 || feeBps > 10000) throw new Error('手续费需在 0–10000 bps 之间。');
   if (!fee) defaults.push('单边手续费 5 bps');
   const cash = question.match(/(?:初始资金|初始本金|initial_cash)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)(万)?(?:元)?/i);
-  if (/初始资金|初始本金|initial_cash/.test(question) && !cash) throw new Error('请明确初始资金数值。');
+  if (/初始资金|初始本金|initial_cash/i.test(question) && !cash) throw new Error('请明确初始资金数值。');
   const initialCash = cash ? Number(cash[1]) * (cash[2] ? 10000 : 1) : 1;
   if (!Number.isFinite(initialCash) || initialCash <= 0 || initialCash > Number.MAX_SAFE_INTEGER) {
     throw new Error('初始资金必须为正数且不超过安全数值范围。');
