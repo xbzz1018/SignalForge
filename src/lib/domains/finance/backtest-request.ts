@@ -198,16 +198,24 @@ export function backtestResponseMismatches(spec: QuantBacktestRequest, response:
     const actual = response[key];
     return typeof value === 'number' ? actual == null || Number(actual) !== value : actual !== value;
   }).map(([key]) => key);
-  const summary = response.summary as Record<string, unknown> | undefined;
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  const summary = isRecord(response.summary) ? response.summary : undefined;
   if (!summary || Number(summary.initial_cash) !== spec.initialCash) mismatches.push('initial_cash');
   const curve = response.equity_curve;
-  if (!Array.isArray(curve) || curve.length === 0 || curve.some(point =>
-    !point || typeof point.date !== 'string' || point.date > spec.endDate ||
-    (spec.startDate !== null && point.date < spec.startDate))) mismatches.push('evaluation_interval');
-  if (Array.isArray(curve) && curve.length) {
+  if (!Array.isArray(curve) || curve.length === 0 || !curve.every(isRecord)) {
+    mismatches.push('evaluation_interval');
+    return mismatches;
+  }
+  const validDates = curve.every(point => typeof point.date === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(Date.parse(point.date)) &&
+    new Date(point.date).toISOString().slice(0, 10) === point.date);
+  if (!validDates || curve.some(point => String(point.date) > spec.endDate ||
+    (spec.startDate !== null && String(point.date) < spec.startDate))) mismatches.push('evaluation_interval');
+  if (curve.length) {
     if (summary?.start_date !== curve[0]?.date || summary?.end_date !== curve.at(-1)?.date ||
         summary?.sample_count !== curve.length) mismatches.push('sample_summary');
-    if (curve.some((point, index) => index > 0 && point.date <= curve[index - 1].date)) mismatches.push('sample_order');
+    if (validDates && curve.some((point, index) => index > 0 && String(point.date) <= String(curve[index - 1].date))) mismatches.push('sample_order');
     if (!spec.startDate && curve.length < spec.limit) mismatches.push('sample_coverage');
   }
   return mismatches;
