@@ -1,4 +1,5 @@
 import type { QuantQueryTimeRange } from './query-rewrite';
+import { assertConsistentSettings } from './backtest-syntax';
 
 /** Frozen execution inputs. Capability selection remains the LLM rewrite's responsibility. */
 export interface QuantBacktestRequest {
@@ -56,6 +57,7 @@ export function compileBacktestRequest(input: {
   const source = `${question} ${range}`;
   const defaults: string[] = [];
   assertSupportedStrategy(question);
+  assertConsistentSettings(question);
   if (/分钟|minute\d|日内回测/.test(question)) {
     throw new Error('回测支持日线、周线和月线，请确认数据周期。');
   }

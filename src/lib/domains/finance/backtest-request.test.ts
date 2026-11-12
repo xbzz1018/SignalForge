@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { compileBacktestRequest, backtestRequestQuery, backtestResponseMismatches, reviseBacktestRequest } from './backtest-request';
 
 describe('frozen backtest execution request', () => {
+  it.each(['回测手续费5bps手续费10bps', '初始资金1万初始本金2万回测',
+    '快线5快线10慢线20回测', '5/20均线与10/30均线回测', '5/20均线快线10回测'])(
+    'requires clarification for contradictory numeric settings: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow('冲突');
+    },
+  );
+  it('accepts equivalent repeated fee and capital settings', () => {
+    expect(compileBacktestRequest({ question: '回测手续费10bps费率0.1%初始资金1万initial_cash=10000' }))
+      .toMatchObject({ feeBps: 10, initialCash: 10000 });
+  });
   it.each(['日线和周线回测', '周K月K回测', '前复权和后复权回测', '不复权与前复权回测'])(
     'rejects conflicting data conventions: %s', question => {
       expect(() => compileBacktestRequest({ question })).toThrow('唯一');
