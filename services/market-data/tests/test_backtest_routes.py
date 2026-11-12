@@ -66,7 +66,7 @@ def test_routes_preserve_replayable_responses_across_cache_and_engine_changes(
     )
     with TestClient(app) as client:
         for endpoint in ["ma-crossover/fixture", "strategies/ma_crossover/fixture"]:
-            url = f"/api/v1/backtests/{endpoint}?fast_window=3&slow_window=7&fee_bps=5.123456"
+            url = f"/api/v1/backtests/{endpoint}?fast_window=3&slow_window=7&fee_bps=5.123456&limit=24"
             first = client.get(url)
             assert first.status_code == 200
             assert first.json()["fetch"]["cache_status"] == "miss"
