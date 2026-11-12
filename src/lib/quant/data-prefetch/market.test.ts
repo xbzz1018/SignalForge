@@ -20,13 +20,14 @@ describe('backtest experiment artifacts', () => {
       urls.push(url);
       if (url.includes('/quotes/realtime/')) return new Response(JSON.stringify({ symbol: '510300', asset_type: 'etf' }));
       const query = new URL(url).searchParams;
-      const curve = [{ date: '2024-01-02', equity: '1' }, { date: '2024-06-28', equity: '1.1' }];
+      const curve = [{ date: '2024-01-02', equity: '1', close: 100, position: 0 }, { date: '2024-06-28', equity: '1.1', close: 110, position: 1 }];
       return new Response(JSON.stringify({
         symbol: '510300', strategy_id: 'ma_crossover', fast_window: mismatch ? 20 : Number(query.get('fast_window')),
         slow_window: Number(query.get('slow_window')), fee_bps: query.get('fee_bps'),
+        parameters: { fast_window: Number(query.get('fast_window')), slow_window: Number(query.get('slow_window')), fee_bps: query.get('fee_bps') },
         period: query.get('period'), adjustment: query.get('adjustment'),
         evaluation_start: query.get('start'), evaluation_end: query.get('end'), equity_curve: curve,
-        summary: { initial_cash: query.get('initial_cash'), start_date: curve[0].date,
+        summary: { initial_cash: query.get('initial_cash'), final_equity: curve[1].equity, start_date: curve[0].date,
           end_date: curve[1].date, sample_count: curve.length },
       }));
     }));
@@ -44,14 +45,15 @@ describe('backtest experiment artifacts', () => {
     const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'qp-backtest-artifact-'));
     projects.push(projectPath);
     const equityCurve = Array.from({ length: 250 }, (_, index) => ({
-      date: new Date(Date.UTC(2025, 0, index + 1)).toISOString().slice(0, 10), equity: '1',
+      date: new Date(Date.UTC(2025, 0, index + 1)).toISOString().slice(0, 10), equity: '1', close: 100, position: 0,
     }));
     const artifact = {
       symbol: '510300',
       strategy_id: 'ma_crossover', fast_window: 20, slow_window: 60, fee_bps: '5',
+      parameters: { fast_window: 20, slow_window: 60, fee_bps: '5' },
       period: 'daily', adjustment: 'qfq', evaluation_start: null, evaluation_end: '2026-01-02',
       equity_curve: equityCurve,
-      summary: { total_return_pct: '5.2', initial_cash: '1', start_date: equityCurve[0].date,
+      summary: { total_return_pct: '5.2', initial_cash: '1', final_equity: '1', start_date: equityCurve[0].date,
         end_date: equityCurve.at(-1)!.date, sample_count: equityCurve.length },
       experiment: {
         schema_version: 1,

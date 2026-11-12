@@ -6,6 +6,7 @@ from math import sqrt
 from typing import Any
 
 from quantpilot_market_data.backtest_experiments import attach_experiment, capture_input_data
+from quantpilot_market_data.backtest_input import validate_strategy_bars
 from quantpilot_market_data.backtest_parameters import (
     backtest_date,
     finite_decimal,
@@ -117,7 +118,7 @@ def _rsi(closes: list[Decimal | None], end_index: int, window: int) -> Decimal |
     if average_gain is None or average_loss is None:
         return None
     if average_loss == 0:
-        return Decimal("100")
+        return Decimal("50") if average_gain == 0 else Decimal("100")
     relative_strength = average_gain / average_loss
     return Decimal("100") - (Decimal("100") / (Decimal("1") + relative_strength))
 
@@ -330,9 +331,11 @@ def build_strategy_backtest(
     dates = [backtest_date(bar.date) for bar in kline.bars]
     if dates != sorted(set(dates)):
         raise ValueError("回测行情日期必须严格递增且不重复。")
-    for bar in kline.bars:
-        if bar.close is None or bar.close <= 0:
-            raise ValueError("回测行情必须具有连续、正数的收盘价。")
+    for bar, normalized_date in zip(kline.bars, dates, strict=True):
+        bar.date = normalized_date
+    # Freeze the same canonical dates used by interval filtering and trade records.
+    data = capture_input_data(kline)
+    validate_strategy_bars(kline, normalized_strategy_id)
     if (start_date or end_date) and not any(
         (not start_date or bar.date >= start_date) and (not end_date or bar.date <= end_date)
         for bar in kline.bars
@@ -443,8 +446,9 @@ def build_strategy_backtest(
             enter_signal = (
                 close is not None
                 and rsi_value is not None
+                and trend_ma is not None
                 and rsi_value <= entry_rsi
-                and (trend_ma is None or close >= trend_ma)
+                and close >= trend_ma
             )
             exit_signal = (
                 close is not None

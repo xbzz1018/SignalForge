@@ -33,6 +33,7 @@ def _source_digest() -> str:
     # Bind the installed implementation and its serialization contracts, never a Git label alone.
     files = (
         "backtest.py",
+        "backtest_input.py",
         "backtest_parameters.py",
         "backtest_experiments.py",
         "contracts/analysis.py",

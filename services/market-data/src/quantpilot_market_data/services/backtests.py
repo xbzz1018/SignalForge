@@ -18,8 +18,9 @@ from quantpilot_market_data.backtest_parameters import (
 )
 from quantpilot_market_data.cache import MarketDataCache
 from quantpilot_market_data.contracts.analysis import BacktestResponse
-from quantpilot_market_data.contracts.quotes import Adjustment, KlinePeriod
+from quantpilot_market_data.contracts.quotes import Adjustment, KlinePeriod, KlineResponse
 from quantpilot_market_data.providers.base import HistoricalKlineProvider
+from quantpilot_market_data.providers.eastmoney import normalize_secid
 from quantpilot_market_data.services.caching import cache_response, read_cached_response
 from quantpilot_market_data.services.kline_gateway import (
     get_kline_local_first,
@@ -62,6 +63,10 @@ def _history_request(
         + 5
     )
     required = warmup + 1
+    if start_date is None:
+        if limit <= warmup - 5:
+            raise ValueError('limit 必须大于策略指标窗口，不能自动扩大研究样本。')
+        return limit, start_date, end_date
     if start_date:
         cutoff = (
             date.fromisoformat(end_date)
@@ -81,13 +86,39 @@ def _history_request(
     return max(limit, required), start_date, end_date
 
 
-def _check_coverage(kline, start: str | None, parameters: dict[str, object]) -> None:
+def _check_coverage(
+    kline: KlineResponse, start: str | None, parameters: dict[str, object], limit: int,
+) -> KlineResponse:
     if start:
         warmup = max(
             (int(value) for key, value in parameters.items() if key.endswith("_window")), default=0
         )
-        if sum(bar.date < start for bar in kline.bars) < warmup:
+        if sum(backtest_date(bar.date) < start for bar in kline.bars) < warmup:
             raise ValueError("指定回测区间的指标预热行情不足，不能按默认样本替代。")
+    else:
+        if len(kline.bars) < limit:
+            raise ValueError('回测行情不足请求的样本数量。')
+        kline = kline.model_copy(update={'bars': kline.bars[-limit:]})
+    return kline
+
+
+def _check_identity(
+    kline: KlineResponse, symbol: str, period: KlinePeriod, adjustment: Adjustment,
+    end: str | None,
+) -> None:
+    try:
+        requested = normalize_secid(symbol)
+    except ValueError:
+        matches = kline.symbol == symbol  # Non-exchange providers may use their own identifiers.
+    else:
+        matches = (
+            kline.secid == requested
+            and normalize_secid(kline.symbol).split('.')[1] == requested.split('.')[1]
+        )
+    if not matches or kline.period != period or kline.adjustment != adjustment:
+        raise ValueError('回测行情的证券、周期或复权方式与请求不一致。')
+    if end and any(backtest_date(bar.date) > end for bar in kline.bars):
+        raise ValueError('回测行情包含截止日期之后的数据。')
 
 
 async def get_ma_crossover_backtest(
@@ -128,7 +159,8 @@ async def get_ma_crossover_backtest(
         end=(end_date or "2050-01-01").replace("-", ""),
     )
     if local is not None:
-        _check_coverage(local, start_date, parameters)
+        _check_identity(local, symbol, period, adjustment, end_date)
+        local = _check_coverage(local, start_date, parameters, limit)
         return build_ma_crossover_backtest(
             local,
             fast_window=normalized_fast,
@@ -141,6 +173,7 @@ async def get_ma_crossover_backtest(
     cache_key = cache.build_key(
         "backtest-ma-crossover",
         {
+            "history_contract": 2,
             "engine": current_engine_identity().model_dump(mode="json"),
             "symbol": symbol,
             "fast_window": normalized_fast,
@@ -167,7 +200,8 @@ async def get_ma_crossover_backtest(
         end=(end_date or "2050-01-01").replace("-", ""),
         bypass_local=True,
     )
-    _check_coverage(kline, start_date, parameters)
+    _check_identity(kline, symbol, period, adjustment, end_date)
+    kline = _check_coverage(kline, start_date, parameters, limit)
     response = build_ma_crossover_backtest(
         kline,
         fast_window=normalized_fast,
@@ -214,7 +248,8 @@ async def get_strategy_backtest(
         end=(end_date or "2050-01-01").replace("-", ""),
     )
     if local is not None:
-        _check_coverage(local, start_date, parameters)
+        _check_identity(local, symbol, period, adjustment, end_date)
+        local = _check_coverage(local, start_date, parameters, limit)
         return build_strategy_backtest(
             local,
             strategy_id=strategy_id,
@@ -227,6 +262,7 @@ async def get_strategy_backtest(
     cache_key = cache.build_key(
         "backtest-strategy",
         {
+            "history_contract": 2,
             "engine": current_engine_identity().model_dump(mode="json"),
             "strategy_id": strategy_id,
             "symbol": symbol,
@@ -253,7 +289,8 @@ async def get_strategy_backtest(
         end=(end_date or "2050-01-01").replace("-", ""),
         bypass_local=True,
     )
-    _check_coverage(kline, start_date, parameters)
+    _check_identity(kline, symbol, period, adjustment, end_date)
+    kline = _check_coverage(kline, start_date, parameters, limit)
     response = build_strategy_backtest(
         kline,
         strategy_id=strategy_id,

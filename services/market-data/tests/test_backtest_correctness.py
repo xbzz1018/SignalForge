@@ -153,3 +153,61 @@ def test_incomplete_or_ambiguous_market_series_is_rejected(kind):
 def test_intraday_backtesting_is_explicitly_rejected():
     with pytest.raises(ValueError, match="仅支持"):
         calculate(series("minute5"))
+
+
+def test_compact_bar_dates_are_canonicalized_before_interval_filtering_and_replay():
+    data = series()
+    for bar in data.bars:
+        bar.date = bar.date.replace('-', '')
+    result = calculate(data, start='2025-01-08', end='2025-01-10')
+    assert [point.date for point in result.equity_curve] == [
+        '2025-01-08', '2025-01-09', '2025-01-10',
+    ]
+    assert result.experiment.data.bars[0].date == '2025-01-01'
+    assert data.bars[0].date == '20250101'  # Do not mutate the provider response.
+    assert replay_backtest(json.loads(result.model_dump_json())).summary == result.summary
+
+
+@pytest.mark.parametrize('strategy,field', [
+    ('donchian_breakout', 'high'), ('turtle_trend', 'low'),
+    ('volume_price_breakout', 'volume'), ('atr_trailing_breakout', 'low'),
+    ('gap_reversal', 'open'),
+])
+def test_missing_strategy_specific_inputs_are_rejected(strategy, field):
+    data = series()
+    setattr(data.bars[5], field, None)
+    with pytest.raises(ValueError, match='字段缺失'):
+        build_strategy_backtest(data, strategy_id=strategy)
+
+
+@pytest.mark.parametrize('field,value', [('high', 1), ('low', 100), ('open', -1), ('volume', -1)])
+def test_inconsistent_ohlc_or_negative_volume_is_rejected(field, value):
+    data = series()
+    setattr(data.bars[5], field, Decimal(value) if field != 'volume' else value)
+    with pytest.raises(ValueError, match='回测行情'):
+        calculate(data)
+
+
+def test_empty_history_cannot_be_a_successful_zero_return_backtest():
+    with pytest.raises(ValueError, match='不能为空'):
+        calculate(series().model_copy(update={'bars': []}))
+
+
+def test_flat_prices_produce_neutral_rsi_and_wait_for_trend_filter():
+    result = build_strategy_backtest(
+        series(prices=[100] * 15), strategy_id='rsi_reversion', fee_bps=0,
+        parameters={'rsi_window': 3, 'trend_window': 10, 'entry_rsi': 60, 'exit_rsi': 70},
+    )
+    assert all(point.fast_ma == 50 for point in result.equity_curve[3:])
+    assert result.trades[0].entry_date == '2025-01-10'
+    assert result.summary.total_return_pct == 0
+
+
+@pytest.mark.parametrize('prices,expected', [
+    (list(range(1, 16)), 100), (list(range(16, 1, -1)), 0),
+])
+def test_one_sided_rsi_retains_its_extreme_value(prices, expected):
+    result = build_strategy_backtest(
+        series(prices=prices), strategy_id='rsi_reversion', parameters={'rsi_window': 3},
+    )
+    assert result.equity_curve[-1].fast_ma == expected

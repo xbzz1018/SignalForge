@@ -2,6 +2,66 @@ import { describe, expect, it } from 'vitest';
 import { compileBacktestRequest, backtestRequestQuery, backtestResponseMismatches, reviseBacktestRequest } from './backtest-request';
 
 describe('frozen backtest execution request', () => {
+  it.each(['5、20日均线快线10回测', '5和20均线慢线30回测', 'MA5/MA20与10/30均线回测'])(
+    'cross-checks alternative paired-window syntax: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow('冲突');
+    },
+  );
+  it('preserves a weekly sample count during a fee-only revision', () => {
+    const previous = compileBacktestRequest({ question: '周线最近100根行情回测5/20均线' });
+    expect(reviseBacktestRequest(previous, '手续费改为10bps')).toMatchObject({
+      period: 'weekly', limit: 100, startDate: null, feeBps: 10, endDate: previous.endDate,
+    });
+  });
+  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid relative range values: %s', value => {
+    expect(() => compileBacktestRequest({ question: '最近一段时间回测',
+      timeRange: { label: '最近一段时间', unit: 'month', value, source: 'explicit' } })).toThrow('正整数');
+  });
+  it('rejects a rewritten trading-day count that changes the requested sample', () => {
+    expect(() => compileBacktestRequest({ question: '最近100个交易日回测',
+      timeRange: { label: '最近250个交易日', unit: 'trading_day', value: 250, source: 'explicit' } })).toThrow('冲突');
+  });
+  it.each(['周线最近100个交易日回测', '2024年上半年最近100个交易日回测'])(
+    'rejects conflicting sample units or boundaries: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow();
+    },
+  );
+  it('keeps an explicit cutoff alongside a trading-day count', () => {
+    expect(compileBacktestRequest({ question: '截至2024-06-30最近100个交易日回测' }))
+      .toMatchObject({ startDate: null, endDate: '2024-06-30', limit: 100 });
+  });
+  it('preserves equal date endpoints and repeated rewrite labels', () => {
+    expect(compileBacktestRequest({ question: '2025-01-02至2025-01-02均线回测',
+      timeRangeLabel: '2025-01-02至2025-01-02' })).toMatchObject({ startDate: '2025-01-02', endDate: '2025-01-02' });
+  });
+  it('refuses rewritten dates that contradict the original calendar interval', () => {
+    expect(() => compileBacktestRequest({ question: '2024年上半年回测',
+      timeRangeLabel: '2024-07-01至2024-12-31' })).toThrow('冲突');
+  });
+  it.each(['初始资金1亿元回测', 'initial_cash=1e6回测', '初始资金10,000元回测',
+    '手续费0.1.5%回测', '快线5e1慢线60回测', '初始资金100美元回测', '回测费用-1bps', '回测FEE_BPS=NaN'])(
+    'rejects partial numeric parsing: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow();
+    },
+  );
+  it('accepts uppercase explicit fee keys', () => {
+    expect(compileBacktestRequest({ question: '回测FEE_BPS=10' }).feeBps).toBe(10);
+  });
+  it.each(['回测手续费5bps手续费10bps', '初始资金1万初始本金2万回测',
+    '快线5快线10慢线20回测', '5/20均线与10/30均线回测', '5/20均线快线10回测'])(
+    'requires clarification for contradictory numeric settings: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow('冲突');
+    },
+  );
+  it('accepts equivalent repeated fee and capital settings', () => {
+    expect(compileBacktestRequest({ question: '回测手续费10bps费率0.1%初始资金1万initial_cash=10000' }))
+      .toMatchObject({ feeBps: 10, initialCash: 10000 });
+  });
+  it.each(['日线和周线回测', '周K月K回测', '前复权和后复权回测', '不复权与前复权回测'])(
+    'rejects conflicting data conventions: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow('唯一');
+    },
+  );
   it('preserves the requested dates, windows, fee and capital through HTTP serialization', () => {
     const request = compileBacktestRequest({
       question: '2024年1月到6月，使用5/20日均线回测510300，手续费10bps，初始资金10万元',

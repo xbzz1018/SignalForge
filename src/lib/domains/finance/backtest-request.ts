@@ -1,4 +1,6 @@
 import type { QuantQueryTimeRange } from './query-rewrite';
+import { assertCompleteNumericTokens, assertConsistentSettings } from './backtest-syntax';
+import { calendarInterval } from './backtest-dates';
 
 /** Frozen execution inputs. Capability selection remains the LLM rewrite's responsibility. */
 export interface QuantBacktestRequest {
@@ -14,14 +16,6 @@ export interface QuantBacktestRequest {
   endDate: string;
   limit: number;
   defaults: string[];
-}
-
-function isoDate(year: number, month: number, day: number): string {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    throw new Error('请提供有效的回测日期。');
-  }
-  return date.toISOString().slice(0, 10);
 }
 
 function shanghaiDate(now: Date): string {
@@ -52,10 +46,13 @@ export function compileBacktestRequest(input: {
   now?: Date;
 }): QuantBacktestRequest {
   const question = (input.question ?? '').normalize('NFKC').replace(/\s+/g, '');
+  const windowQuestion = question.replace(/(?:19|20)\d{2}[-年/]\d{1,2}[-月/]\d{1,2}日?/g, '');
   const range = input.timeRange?.label ?? input.timeRangeLabel ?? '';
   const source = `${question} ${range}`;
   const defaults: string[] = [];
   assertSupportedStrategy(question);
+  assertCompleteNumericTokens(question);
+  assertConsistentSettings(windowQuestion);
   if (/分钟|minute\d|日内回测/.test(question)) {
     throw new Error('回测支持日线、周线和月线，请确认数据周期。');
   }
@@ -65,20 +62,25 @@ export function compileBacktestRequest(input: {
   if (/-\d+(?:\.\d+)?(?:日|天|周|月)?(?:均线)?(?:\/|、|和|与|及)\d+/.test(question)) {
     throw new Error('均线窗口必须为正整数。');
   }
-  const period = /周线|周K/i.test(question) ? 'weekly' : /月线|月K/i.test(question) ? 'monthly' : 'daily';
-  const adjustment = /不复权/.test(question) ? 'none' : /后复权/.test(question) ? 'hfq' : 'qfq';
-  const pair = question.match(/(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线)?(?:\/|、|和|与|及|-)(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线|MA)/i)
-    ?? question.match(/MA(\d+(?:\.\d+)?)(?:\/|、|和|与|及|-)MA(\d+(?:\.\d+)?)/i);
+  const periods = [ /日线|日K/i.test(question), /周线|周K/i.test(question), /月线|月K/i.test(question) ];
+  const adjustments = [ /前复权/.test(question), /后复权/.test(question), /不复权/.test(question) ];
+  if (periods.filter(Boolean).length > 1 || adjustments.filter(Boolean).length > 1) {
+    throw new Error('请明确唯一的数据周期和复权方式。');
+  }
+  const period = periods[1] ? 'weekly' : periods[2] ? 'monthly' : 'daily';
+  const adjustment = adjustments[2] ? 'none' : adjustments[1] ? 'hfq' : 'qfq';
+  const pair = windowQuestion.match(/(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线)?(?:\/|、|和|与|及|-)(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线|MA)/i)
+    ?? windowQuestion.match(/MA(\d+(?:\.\d+)?)(?:\/|、|和|与|及|-)MA(\d+(?:\.\d+)?)/i);
   const fast = question.match(/(?:fast_window|快线|短期均线)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)/i);
   const slow = question.match(/(?:slow_window|慢线|长期均线)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)/i);
   const fastWindow = Number(fast?.[1] ?? pair?.[1] ?? 20);
   const slowWindow = Number(slow?.[1] ?? pair?.[2] ?? 60);
-  if (!fast && !slow && !pair && /\d+(?:日|天|周|月)均线|MA\d+/i.test(question)) {
+  if (!fast && !slow && !pair && /\d+(?:日|天|周|月)均线|MA\d+/i.test(windowQuestion)) {
     throw new Error('请明确快线和慢线两个均线窗口，例如 5/20 日均线。');
   }
   if (Boolean(fast) !== Boolean(slow) && !pair) throw new Error('请同时提供快线与慢线窗口。');
-  if (/fast_window|快线|短期均线/.test(question) && !fast && !pair ||
-      /slow_window|慢线|长期均线/.test(question) && !slow && !pair) {
+  if (/fast_window|快线|短期均线/i.test(question) && !fast && !pair ||
+      /slow_window|慢线|长期均线/i.test(question) && !slow && !pair) {
     throw new Error('请以正整数明确快线与慢线窗口。');
   }
   if (!pair && !fast && !slow) defaults.push('均线窗口 20/60');
@@ -87,13 +89,13 @@ export function compileBacktestRequest(input: {
     throw new Error('快线需为 2–120、慢线为 3–250 的整数，且快线小于慢线。');
   }
   const fee = question.match(/(?:手续费|费用|费率|fee_bps)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)(bps|bp|基点|%|‰)?/i);
-  if (/手续费|费率|fee_bps/.test(question) && !fee) throw new Error('请以 bps 或百分比明确手续费。');
-  if (fee && !fee[2] && !fee[0].startsWith('fee_bps')) throw new Error('手续费需要明确 bps 或百分比单位。');
+  if (/手续费|费用|费率|fee_bps/i.test(question) && !fee) throw new Error('请以 bps 或百分比明确手续费。');
+  if (fee && !fee[2] && !/^fee_bps/i.test(fee[0])) throw new Error('手续费需要明确 bps 或百分比单位。');
   const feeBps = fee ? Number(fee[1]) * (fee[2] === '%' ? 100 : fee[2] === '‰' ? 10 : 1) : 5;
   if (!Number.isFinite(feeBps) || feeBps < 0 || feeBps > 10000) throw new Error('手续费需在 0–10000 bps 之间。');
   if (!fee) defaults.push('单边手续费 5 bps');
   const cash = question.match(/(?:初始资金|初始本金|initial_cash)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)(万)?(?:元)?/i);
-  if (/初始资金|初始本金|initial_cash/.test(question) && !cash) throw new Error('请明确初始资金数值。');
+  if (/初始资金|初始本金|initial_cash/i.test(question) && !cash) throw new Error('请明确初始资金数值。');
   const initialCash = cash ? Number(cash[1]) * (cash[2] ? 10000 : 1) : 1;
   if (!Number.isFinite(initialCash) || initialCash <= 0 || initialCash > Number.MAX_SAFE_INTEGER) {
     throw new Error('初始资金必须为正数且不超过安全数值范围。');
@@ -101,35 +103,35 @@ export function compileBacktestRequest(input: {
   if (!cash) defaults.push('初始净值 1');
   let startDate: string | null = null;
   let endDate = shanghaiDate(input.now ?? new Date());
-  const explicitDays = source.match(/(?:最近|近|过去)(\d+)(?:个)?交易日/);
-  let limit = explicitDays ? Number(explicitDays[1]) : 250;
-  const dates = [...source.matchAll(/((?:19|20)\d{2})[-年/](\d{1,2})[-月/](\d{1,2})(?:日)?/g)]
-    .map(match => isoDate(Number(match[1]), Number(match[2]), Number(match[3])));
-  const uniqueDates = [...new Set(dates)];
-  const monthRange = source.match(/((?:19|20)\d{2})年(\d{1,2})月?(?:至|到|—|-)(?:((?:19|20)\d{2})年)?(\d{1,2})月/);
-  const halfYear = source.match(/((?:19|20)\d{2})年?(上半年|下半年|全年)/);
-  if (uniqueDates.length === 2) {
-    [startDate, endDate] = uniqueDates;
-  } else if (uniqueDates.length > 2) {
-    throw new Error('检测到多个回测日期，请明确唯一的开始和结束日期。');
-  } else if (monthRange) {
-    const firstYear = Number(monthRange[1]);
-    const lastYear = Number(monthRange[3] ?? monthRange[1]);
-    const lastMonth = Number(monthRange[4]);
-    startDate = isoDate(firstYear, Number(monthRange[2]), 1);
-    const lastDay = new Date(Date.UTC(lastYear, lastMonth, 0)).getUTCDate();
-    endDate = isoDate(lastYear, lastMonth, lastDay);
-  } else if (halfYear) {
-    const year = Number(halfYear[1]);
-    startDate = isoDate(year, halfYear[2] === '下半年' ? 7 : 1, 1);
-    endDate = isoDate(year, halfYear[2] === '上半年' ? 6 : 12, halfYear[2] === '上半年' ? 30 : 31);
-  } else if (uniqueDates.length === 1) {
-    if (!/截至|截止/.test(source)) throw new Error('请同时提供回测开始日期和结束日期。');
-    endDate = uniqueDates[0];
-  } else {
+  const dayCounts = [...source.matchAll(/(?:最近|近|过去)(\d+)(?:个)?交易日/g)].map(match => Number(match[1]));
+  const samples = [...source.matchAll(/(?:最近|近|过去)(\d+)(?:(?:个)?交易日|(?:根|条)(?:行情|K线))/gi)];
+  const sampleCounts = samples.map(match => Number(match[1]));
+  const durationValue = input.timeRange?.value;
+  if (durationValue !== undefined && (!Number.isSafeInteger(durationValue) || durationValue <= 0)) {
+    throw new Error('相对回测区间必须为正整数。');
+  }
+  if (input.timeRange?.unit === 'trading_day' && durationValue !== undefined) {
+    dayCounts.push(durationValue);
+    sampleCounts.push(durationValue);
+  }
+  if (new Set(sampleCounts).size > 1) throw new Error('原始请求与改写后的行情样本数量冲突。');
+  if (dayCounts.length && period !== 'daily') throw new Error('交易日数量仅用于日线回测，请确认周期和样本单位。');
+  let limit = sampleCounts[0] ?? 250;
+  const originalInterval = calendarInterval(question), rewrittenInterval = calendarInterval(range);
+  if (originalInterval && rewrittenInterval &&
+      (originalInterval.start !== rewrittenInterval.start || originalInterval.end !== rewrittenInterval.end)) {
+    throw new Error('原始请求与改写后的回测日期冲突，请确认区间。');
+  }
+  const interval = originalInterval ?? rewrittenInterval;
+  if (interval?.start && sampleCounts.length) throw new Error('请在日期区间与最近样本数量中选择一种回测范围。');
+  if (interval) {
+    startDate = interval.start;
+    endDate = interval.end;
+  }
+  if (!interval || interval.start === null) {
     const duration = input.timeRange;
-    if (duration?.unit === 'trading_day' && duration.value || explicitDays) {
-      limit = duration?.unit === 'trading_day' && duration.value ? duration.value : Number(explicitDays![1]);
+    if (sampleCounts.length) {
+      limit = sampleCounts[0];
     } else if (duration?.value && ['day', 'week', 'month', 'quarter', 'year'].includes(duration.unit)) {
       const anchor = new Date(`${endDate}T00:00:00Z`);
       if (duration.unit === 'day' || duration.unit === 'week') {
@@ -140,7 +142,7 @@ export function compileBacktestRequest(input: {
       startDate = anchor.toISOString().slice(0, 10);
     } else if (range && /年初至今|今年以来/.test(range)) {
       startDate = `${endDate.slice(0, 4)}-01-01`;
-    } else if (range || /(?:19|20)\d{2}年|最近|近\d|过去|今年|去年|上半年|下半年|起始|开始日期|结束日期/.test(question)) {
+    } else if (!interval && (range || /(?:19|20)\d{2}年|最近|近\d|过去|今年|去年|上半年|下半年|起始|开始日期|结束日期/.test(question))) {
       throw new Error('请明确回测日期区间或最近多少个交易日。');
     } else {
       defaults.push('最近 250 根行情');
@@ -177,7 +179,7 @@ export function reviseBacktestRequest(
     !periodSyntax.test(question) ? { daily: '日线', weekly: '周线', monthly: '月线' }[previous.period] : '',
     !/复权/.test(question) ? { qfq: '前复权', hfq: '后复权', none: '不复权' }[previous.adjustment] : '',
     !hasRange ? previous.startDate ? `${previous.startDate}至${previous.endDate}`
-      : `截至${previous.endDate}最近${previous.limit}个交易日` : '',
+      : `截至${previous.endDate}最近${previous.limit}根行情` : '',
   ];
   return compileBacktestRequest({ question: `${question}；${supplemental.join('；')}`, timeRange });
 }
@@ -193,24 +195,50 @@ export function backtestRequestQuery(spec: QuantBacktestRequest): string {
 }
 
 export function backtestResponseMismatches(spec: QuantBacktestRequest, response: Record<string, unknown>): string[] {
+  const numberValue = (value: unknown): number | null => {
+    if (typeof value !== 'number' && (typeof value !== 'string' || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value))) return null;
+    return Number.isFinite(Number(value)) ? Number(value) : null;
+  };
   const expected = { strategy_id: spec.strategyId, fast_window: spec.fastWindow,
     slow_window: spec.slowWindow, fee_bps: spec.feeBps, period: spec.period,
     adjustment: spec.adjustment, evaluation_start: spec.startDate, evaluation_end: spec.endDate };
   const mismatches = Object.entries(expected).filter(([key, value]) => {
     const actual = response[key];
-    return typeof value === 'number' ? actual == null || Number(actual) !== value : actual !== value;
+    return typeof value === 'number' ? numberValue(actual) !== value : actual !== value;
   }).map(([key]) => key);
-  const summary = response.summary as Record<string, unknown> | undefined;
-  if (!summary || Number(summary.initial_cash) !== spec.initialCash) mismatches.push('initial_cash');
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  const summary = isRecord(response.summary) ? response.summary : undefined;
+  if (!summary || numberValue(summary.initial_cash) !== spec.initialCash) mismatches.push('initial_cash');
+  const parameters = isRecord(response.parameters) ? response.parameters : {};
+  if (numberValue(parameters.fast_window) !== spec.fastWindow || numberValue(parameters.slow_window) !== spec.slowWindow ||
+      numberValue(parameters.fee_bps) !== spec.feeBps) mismatches.push('parameter_snapshot');
   const curve = response.equity_curve;
-  if (!Array.isArray(curve) || curve.length === 0 || curve.some(point =>
-    !point || typeof point.date !== 'string' || point.date > spec.endDate ||
-    (spec.startDate !== null && point.date < spec.startDate))) mismatches.push('evaluation_interval');
-  if (Array.isArray(curve) && curve.length) {
+  if (!Array.isArray(curve) || curve.length === 0 || !curve.every(isRecord)) {
+    mismatches.push('evaluation_interval');
+    return mismatches;
+  }
+  const validDates = curve.every(point => typeof point.date === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(Date.parse(point.date)) &&
+    new Date(point.date).toISOString().slice(0, 10) === point.date);
+  if (!validDates || curve.some(point => String(point.date) > spec.endDate ||
+    (spec.startDate !== null && String(point.date) < spec.startDate))) mismatches.push('evaluation_interval');
+  if (curve.length) {
+    if (curve.some(point => numberValue(point.close) === null || Number(point.close) <= 0 ||
+      numberValue(point.equity) === null || Number(point.equity) < 0 ||
+      ![0, 1].includes(point.position as number) ||
+      ['strategy_return_pct', 'daily_return_pct', 'drawdown_pct'].some(key => point[key] != null && numberValue(point[key]) === null))) {
+      mismatches.push('sample_values');
+    }
+    if (!summary || numberValue(summary.final_equity) === null ||
+        numberValue(summary.final_equity) !== numberValue(curve.at(-1)?.equity) ||
+        Object.entries(summary).some(([key, value]) => !['start_date', 'end_date'].includes(key) && value != null && numberValue(value) === null)) {
+      mismatches.push('summary_values');
+    }
     if (summary?.start_date !== curve[0]?.date || summary?.end_date !== curve.at(-1)?.date ||
         summary?.sample_count !== curve.length) mismatches.push('sample_summary');
-    if (curve.some((point, index) => index > 0 && point.date <= curve[index - 1].date)) mismatches.push('sample_order');
-    if (!spec.startDate && curve.length < spec.limit) mismatches.push('sample_coverage');
+    if (validDates && curve.some((point, index) => index > 0 && String(point.date) <= String(curve[index - 1].date))) mismatches.push('sample_order');
+    if (!spec.startDate && curve.length !== spec.limit) mismatches.push('sample_coverage');
   }
   return mismatches;
 }

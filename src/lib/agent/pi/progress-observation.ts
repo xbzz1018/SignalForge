@@ -10,19 +10,25 @@ const TRANSIENT_KEYS = new Set([
 ]);
 
 function stableJson(value: unknown, ignoreTransient = true): string {
-  const seen = new WeakSet<object>();
-  return JSON.stringify(value, (key, candidate: unknown) => {
-    if (ignoreTransient && TRANSIENT_KEYS.has(key)) return undefined;
+  const ancestors = new WeakSet<object>();
+  const canonical = (candidate: unknown): unknown => {
     if (typeof candidate === 'bigint') return candidate.toString();
     if (candidate && typeof candidate === 'object') {
-      if (seen.has(candidate)) return '[Circular]';
-      seen.add(candidate);
-      if (!Array.isArray(candidate)) {
-        return Object.fromEntries(Object.entries(candidate).sort(([a], [b]) => a.localeCompare(b)));
+      if (ancestors.has(candidate)) return '[Circular]';
+      if (candidate instanceof Date) return candidate.toJSON();
+      ancestors.add(candidate);
+      try {
+        return Array.isArray(candidate) ? candidate.map(canonical) : Object.fromEntries(
+          Object.entries(candidate).filter(([key]) => !ignoreTransient || !TRANSIENT_KEYS.has(key))
+            .sort(([a], [b]) => a.localeCompare(b)).map(([key, entry]) => [key, canonical(entry)]),
+        );
+      } finally {
+        ancestors.delete(candidate);
       }
     }
     return candidate;
-  }) ?? 'null';
+  };
+  return JSON.stringify(canonical(value)) ?? 'null';
 }
 
 export function toolObservationFingerprint(call: PiAgentToolCall, execution: PiAgentToolExecution): string {
@@ -32,8 +38,11 @@ export function toolObservationFingerprint(call: PiAgentToolCall, execution: PiA
       ? { artifactSha256: receipt.artifactSha256, targets: receipt.targetReferences }
       : { data: execution.result.data }
     : { error: execution.result.error };
+  let argumentsValue: unknown;
+  try { argumentsValue = { parsed: JSON.parse(call.arguments) }; }
+  catch { argumentsValue = { invalidJson: call.arguments }; }
   return createHash('sha256').update(call.name).update('\0')
-    .update(stableJson(JSON.parse(call.arguments), false)).update('\0')
+    .update(stableJson(argumentsValue, false)).update('\0')
     .update(stableJson(observation)).digest('hex');
 }
 
