@@ -191,17 +191,24 @@ export function backtestRequestQuery(spec: QuantBacktestRequest): string {
 }
 
 export function backtestResponseMismatches(spec: QuantBacktestRequest, response: Record<string, unknown>): string[] {
+  const numberValue = (value: unknown): number | null => {
+    if (typeof value !== 'number' && (typeof value !== 'string' || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value))) return null;
+    return Number.isFinite(Number(value)) ? Number(value) : null;
+  };
   const expected = { strategy_id: spec.strategyId, fast_window: spec.fastWindow,
     slow_window: spec.slowWindow, fee_bps: spec.feeBps, period: spec.period,
     adjustment: spec.adjustment, evaluation_start: spec.startDate, evaluation_end: spec.endDate };
   const mismatches = Object.entries(expected).filter(([key, value]) => {
     const actual = response[key];
-    return typeof value === 'number' ? actual == null || Number(actual) !== value : actual !== value;
+    return typeof value === 'number' ? numberValue(actual) !== value : actual !== value;
   }).map(([key]) => key);
   const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
   const summary = isRecord(response.summary) ? response.summary : undefined;
-  if (!summary || Number(summary.initial_cash) !== spec.initialCash) mismatches.push('initial_cash');
+  if (!summary || numberValue(summary.initial_cash) !== spec.initialCash) mismatches.push('initial_cash');
+  const parameters = isRecord(response.parameters) ? response.parameters : {};
+  if (numberValue(parameters.fast_window) !== spec.fastWindow || numberValue(parameters.slow_window) !== spec.slowWindow ||
+      numberValue(parameters.fee_bps) !== spec.feeBps) mismatches.push('parameter_snapshot');
   const curve = response.equity_curve;
   if (!Array.isArray(curve) || curve.length === 0 || !curve.every(isRecord)) {
     mismatches.push('evaluation_interval');
@@ -213,10 +220,21 @@ export function backtestResponseMismatches(spec: QuantBacktestRequest, response:
   if (!validDates || curve.some(point => String(point.date) > spec.endDate ||
     (spec.startDate !== null && String(point.date) < spec.startDate))) mismatches.push('evaluation_interval');
   if (curve.length) {
+    if (curve.some(point => numberValue(point.close) === null || Number(point.close) <= 0 ||
+      numberValue(point.equity) === null || Number(point.equity) < 0 ||
+      ![0, 1].includes(point.position as number) ||
+      ['strategy_return_pct', 'daily_return_pct', 'drawdown_pct'].some(key => point[key] != null && numberValue(point[key]) === null))) {
+      mismatches.push('sample_values');
+    }
+    if (!summary || numberValue(summary.final_equity) === null ||
+        numberValue(summary.final_equity) !== numberValue(curve.at(-1)?.equity) ||
+        Object.entries(summary).some(([key, value]) => !['start_date', 'end_date'].includes(key) && value != null && numberValue(value) === null)) {
+      mismatches.push('summary_values');
+    }
     if (summary?.start_date !== curve[0]?.date || summary?.end_date !== curve.at(-1)?.date ||
         summary?.sample_count !== curve.length) mismatches.push('sample_summary');
     if (validDates && curve.some((point, index) => index > 0 && String(point.date) <= String(curve[index - 1].date))) mismatches.push('sample_order');
-    if (!spec.startDate && curve.length < spec.limit) mismatches.push('sample_coverage');
+    if (!spec.startDate && curve.length !== spec.limit) mismatches.push('sample_coverage');
   }
   return mismatches;
 }
