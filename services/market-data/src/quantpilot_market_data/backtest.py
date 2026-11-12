@@ -118,7 +118,7 @@ def _rsi(closes: list[Decimal | None], end_index: int, window: int) -> Decimal |
     if average_gain is None or average_loss is None:
         return None
     if average_loss == 0:
-        return Decimal("100")
+        return Decimal("50") if average_gain == 0 else Decimal("100")
     relative_strength = average_gain / average_loss
     return Decimal("100") - (Decimal("100") / (Decimal("1") + relative_strength))
 
@@ -446,8 +446,9 @@ def build_strategy_backtest(
             enter_signal = (
                 close is not None
                 and rsi_value is not None
+                and trend_ma is not None
                 and rsi_value <= entry_rsi
-                and (trend_ma is None or close >= trend_ma)
+                and close >= trend_ma
             )
             exit_signal = (
                 close is not None

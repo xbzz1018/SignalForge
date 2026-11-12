@@ -191,3 +191,23 @@ def test_inconsistent_ohlc_or_negative_volume_is_rejected(field, value):
 def test_empty_history_cannot_be_a_successful_zero_return_backtest():
     with pytest.raises(ValueError, match='不能为空'):
         calculate(series().model_copy(update={'bars': []}))
+
+
+def test_flat_prices_produce_neutral_rsi_and_wait_for_trend_filter():
+    result = build_strategy_backtest(
+        series(prices=[100] * 15), strategy_id='rsi_reversion', fee_bps=0,
+        parameters={'rsi_window': 3, 'trend_window': 10, 'entry_rsi': 60, 'exit_rsi': 70},
+    )
+    assert all(point.fast_ma == 50 for point in result.equity_curve[3:])
+    assert result.trades[0].entry_date == '2025-01-10'
+    assert result.summary.total_return_pct == 0
+
+
+@pytest.mark.parametrize('prices,expected', [
+    (list(range(1, 16)), 100), (list(range(16, 1, -1)), 0),
+])
+def test_one_sided_rsi_retains_its_extreme_value(prices, expected):
+    result = build_strategy_backtest(
+        series(prices=prices), strategy_id='rsi_reversion', parameters={'rsi_window': 3},
+    )
+    assert result.equity_curve[-1].fast_ma == expected
