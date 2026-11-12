@@ -93,7 +93,7 @@ def _check_coverage(
         warmup = max(
             (int(value) for key, value in parameters.items() if key.endswith("_window")), default=0
         )
-        if sum(bar.date < start for bar in kline.bars) < warmup:
+        if sum(backtest_date(bar.date) < start for bar in kline.bars) < warmup:
             raise ValueError("指定回测区间的指标预热行情不足，不能按默认样本替代。")
     else:
         if len(kline.bars) < limit:

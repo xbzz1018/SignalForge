@@ -81,3 +81,10 @@ def test_exchange_aliases_match_but_wrong_market_is_rejected():
     data.secid = '0.510300'
     with pytest.raises(ValueError, match='不一致'):
         backtests._check_identity(data, '510300', 'daily', 'none', None)
+
+
+def test_compact_dates_count_towards_pre_evaluation_warmup():
+    data = history()
+    for bar in data.bars:
+        bar.date = bar.date.replace('-', '')
+    assert backtests._check_coverage(data, '2025-01-25', {'slow_window': 20}, 21) is data

@@ -330,6 +330,10 @@ def build_strategy_backtest(
     dates = [backtest_date(bar.date) for bar in kline.bars]
     if dates != sorted(set(dates)):
         raise ValueError("回测行情日期必须严格递增且不重复。")
+    for bar, normalized_date in zip(kline.bars, dates, strict=True):
+        bar.date = normalized_date
+    # Freeze the same canonical dates used by interval filtering and trade records.
+    data = capture_input_data(kline)
     for bar in kline.bars:
         if bar.close is None or bar.close <= 0:
             raise ValueError("回测行情必须具有连续、正数的收盘价。")

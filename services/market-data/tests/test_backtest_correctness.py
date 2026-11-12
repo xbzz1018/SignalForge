@@ -153,3 +153,16 @@ def test_incomplete_or_ambiguous_market_series_is_rejected(kind):
 def test_intraday_backtesting_is_explicitly_rejected():
     with pytest.raises(ValueError, match="仅支持"):
         calculate(series("minute5"))
+
+
+def test_compact_bar_dates_are_canonicalized_before_interval_filtering_and_replay():
+    data = series()
+    for bar in data.bars:
+        bar.date = bar.date.replace('-', '')
+    result = calculate(data, start='2025-01-08', end='2025-01-10')
+    assert [point.date for point in result.equity_curve] == [
+        '2025-01-08', '2025-01-09', '2025-01-10',
+    ]
+    assert result.experiment.data.bars[0].date == '2025-01-01'
+    assert data.bars[0].date == '20250101'  # Do not mutate the provider response.
+    assert replay_backtest(json.loads(result.model_dump_json())).summary == result.summary
