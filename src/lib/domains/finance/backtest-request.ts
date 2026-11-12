@@ -65,8 +65,13 @@ export function compileBacktestRequest(input: {
   if (/-\d+(?:\.\d+)?(?:日|天|周|月)?(?:均线)?(?:\/|、|和|与|及)\d+/.test(question)) {
     throw new Error('均线窗口必须为正整数。');
   }
-  const period = /周线|周K/i.test(question) ? 'weekly' : /月线|月K/i.test(question) ? 'monthly' : 'daily';
-  const adjustment = /不复权/.test(question) ? 'none' : /后复权/.test(question) ? 'hfq' : 'qfq';
+  const periods = [ /日线|日K/i.test(question), /周线|周K/i.test(question), /月线|月K/i.test(question) ];
+  const adjustments = [ /前复权/.test(question), /后复权/.test(question), /不复权/.test(question) ];
+  if (periods.filter(Boolean).length > 1 || adjustments.filter(Boolean).length > 1) {
+    throw new Error('请明确唯一的数据周期和复权方式。');
+  }
+  const period = periods[1] ? 'weekly' : periods[2] ? 'monthly' : 'daily';
+  const adjustment = adjustments[2] ? 'none' : adjustments[1] ? 'hfq' : 'qfq';
   const pair = question.match(/(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线)?(?:\/|、|和|与|及|-)(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线|MA)/i)
     ?? question.match(/MA(\d+(?:\.\d+)?)(?:\/|、|和|与|及|-)MA(\d+(?:\.\d+)?)/i);
   const fast = question.match(/(?:fast_window|快线|短期均线)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)/i);

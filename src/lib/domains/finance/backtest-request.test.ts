@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { compileBacktestRequest, backtestRequestQuery, backtestResponseMismatches, reviseBacktestRequest } from './backtest-request';
 
 describe('frozen backtest execution request', () => {
+  it.each(['日线和周线回测', '周K月K回测', '前复权和后复权回测', '不复权与前复权回测'])(
+    'rejects conflicting data conventions: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow('唯一');
+    },
+  );
   it('preserves the requested dates, windows, fee and capital through HTTP serialization', () => {
     const request = compileBacktestRequest({
       question: '2024年1月到6月，使用5/20日均线回测510300，手续费10bps，初始资金10万元',
