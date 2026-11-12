@@ -51,3 +51,33 @@ def test_insufficient_samples_do_not_produce_a_successful_shorter_backtest(monke
     monkeypatch.setattr(backtests, 'get_local_kline_if_ready', read)
     with pytest.raises(ValueError, match='样本数量'):
         run_service()
+
+
+@pytest.mark.parametrize('local', [True, False])
+@pytest.mark.parametrize('mutation', ['symbol', 'period', 'adjustment', 'end'])
+def test_wrong_provider_identity_or_future_bars_are_rejected(local, mutation, monkeypatch):
+    data = history()
+    if mutation == 'end':
+        data.bars[-1].date = '2025-02-01'
+    else:
+        replacements = {'symbol': 'other', 'period': 'weekly', 'adjustment': 'qfq'}
+        setattr(data, mutation, replacements[mutation])
+
+    async def read(**kwargs):
+        return data if local else None
+
+    async def fetch(*args, **kwargs):
+        return data
+
+    monkeypatch.setattr(backtests, 'get_local_kline_if_ready', read)
+    monkeypatch.setattr(backtests, 'get_kline_local_first', fetch)
+    with pytest.raises(ValueError, match='不一致|截止日期'):
+        run_service()
+
+
+def test_exchange_aliases_match_but_wrong_market_is_rejected():
+    data = history().model_copy(update={'symbol': '510300', 'secid': '1.510300'})
+    backtests._check_identity(data, '510300.SH', 'daily', 'none', None)
+    data.secid = '0.510300'
+    with pytest.raises(ValueError, match='不一致'):
+        backtests._check_identity(data, '510300', 'daily', 'none', None)

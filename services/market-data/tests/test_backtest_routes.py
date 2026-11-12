@@ -66,7 +66,8 @@ def test_routes_preserve_replayable_responses_across_cache_and_engine_changes(
     )
     with TestClient(app) as client:
         for endpoint in ["ma-crossover/fixture", "strategies/ma_crossover/fixture"]:
-            url = f"/api/v1/backtests/{endpoint}?fast_window=3&slow_window=7&fee_bps=5.123456&limit=24"
+            url = (f"/api/v1/backtests/{endpoint}?fast_window=3&slow_window=7"
+                   "&fee_bps=5.123456&limit=24&adjustment=none")
             first = client.get(url)
             assert first.status_code == 200
             assert first.json()["fetch"]["cache_status"] == "miss"
@@ -118,7 +119,9 @@ def test_requested_interval_parameters_and_fees_reach_the_engine(monkeypatch):
 
     async def fetch(*_args, **kwargs):
         calls.append(kwargs)
-        return data
+        return data.model_copy(update={
+            'bars': [bar for bar in data.bars if bar.date <= '2024-04-01'],
+        })
 
     monkeypatch.setattr(backtests, "get_local_kline_if_ready", no_local)
     monkeypatch.setattr(backtests, "get_kline_local_first", fetch)
