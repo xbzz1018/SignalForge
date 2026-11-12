@@ -1,5 +1,6 @@
 import type { QuantQueryTimeRange } from './query-rewrite';
 import { assertCompleteNumericTokens, assertConsistentSettings } from './backtest-syntax';
+import { calendarInterval } from './backtest-dates';
 
 /** Frozen execution inputs. Capability selection remains the LLM rewrite's responsibility. */
 export interface QuantBacktestRequest {
@@ -15,14 +16,6 @@ export interface QuantBacktestRequest {
   endDate: string;
   limit: number;
   defaults: string[];
-}
-
-function isoDate(year: number, month: number, day: number): string {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    throw new Error('请提供有效的回测日期。');
-  }
-  return date.toISOString().slice(0, 10);
 }
 
 function shanghaiDate(now: Date): string {
@@ -53,12 +46,13 @@ export function compileBacktestRequest(input: {
   now?: Date;
 }): QuantBacktestRequest {
   const question = (input.question ?? '').normalize('NFKC').replace(/\s+/g, '');
+  const windowQuestion = question.replace(/(?:19|20)\d{2}[-年/]\d{1,2}[-月/]\d{1,2}日?/g, '');
   const range = input.timeRange?.label ?? input.timeRangeLabel ?? '';
   const source = `${question} ${range}`;
   const defaults: string[] = [];
   assertSupportedStrategy(question);
   assertCompleteNumericTokens(question);
-  assertConsistentSettings(question);
+  assertConsistentSettings(windowQuestion);
   if (/分钟|minute\d|日内回测/.test(question)) {
     throw new Error('回测支持日线、周线和月线，请确认数据周期。');
   }
@@ -75,13 +69,13 @@ export function compileBacktestRequest(input: {
   }
   const period = periods[1] ? 'weekly' : periods[2] ? 'monthly' : 'daily';
   const adjustment = adjustments[2] ? 'none' : adjustments[1] ? 'hfq' : 'qfq';
-  const pair = question.match(/(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线)?(?:\/|、|和|与|及|-)(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线|MA)/i)
-    ?? question.match(/MA(\d+(?:\.\d+)?)(?:\/|、|和|与|及|-)MA(\d+(?:\.\d+)?)/i);
+  const pair = windowQuestion.match(/(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线)?(?:\/|、|和|与|及|-)(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线|MA)/i)
+    ?? windowQuestion.match(/MA(\d+(?:\.\d+)?)(?:\/|、|和|与|及|-)MA(\d+(?:\.\d+)?)/i);
   const fast = question.match(/(?:fast_window|快线|短期均线)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)/i);
   const slow = question.match(/(?:slow_window|慢线|长期均线)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)/i);
   const fastWindow = Number(fast?.[1] ?? pair?.[1] ?? 20);
   const slowWindow = Number(slow?.[1] ?? pair?.[2] ?? 60);
-  if (!fast && !slow && !pair && /\d+(?:日|天|周|月)均线|MA\d+/i.test(question)) {
+  if (!fast && !slow && !pair && /\d+(?:日|天|周|月)均线|MA\d+/i.test(windowQuestion)) {
     throw new Error('请明确快线和慢线两个均线窗口，例如 5/20 日均线。');
   }
   if (Boolean(fast) !== Boolean(slow) && !pair) throw new Error('请同时提供快线与慢线窗口。');
@@ -111,30 +105,17 @@ export function compileBacktestRequest(input: {
   let endDate = shanghaiDate(input.now ?? new Date());
   const explicitDays = source.match(/(?:最近|近|过去)(\d+)(?:个)?交易日/);
   let limit = explicitDays ? Number(explicitDays[1]) : 250;
-  const dates = [...source.matchAll(/((?:19|20)\d{2})[-年/](\d{1,2})[-月/](\d{1,2})(?:日)?/g)]
-    .map(match => isoDate(Number(match[1]), Number(match[2]), Number(match[3])));
-  const uniqueDates = [...new Set(dates)];
-  const monthRange = source.match(/((?:19|20)\d{2})年(\d{1,2})月?(?:至|到|—|-)(?:((?:19|20)\d{2})年)?(\d{1,2})月/);
-  const halfYear = source.match(/((?:19|20)\d{2})年?(上半年|下半年|全年)/);
-  if (uniqueDates.length === 2) {
-    [startDate, endDate] = uniqueDates;
-  } else if (uniqueDates.length > 2) {
-    throw new Error('检测到多个回测日期，请明确唯一的开始和结束日期。');
-  } else if (monthRange) {
-    const firstYear = Number(monthRange[1]);
-    const lastYear = Number(monthRange[3] ?? monthRange[1]);
-    const lastMonth = Number(monthRange[4]);
-    startDate = isoDate(firstYear, Number(monthRange[2]), 1);
-    const lastDay = new Date(Date.UTC(lastYear, lastMonth, 0)).getUTCDate();
-    endDate = isoDate(lastYear, lastMonth, lastDay);
-  } else if (halfYear) {
-    const year = Number(halfYear[1]);
-    startDate = isoDate(year, halfYear[2] === '下半年' ? 7 : 1, 1);
-    endDate = isoDate(year, halfYear[2] === '上半年' ? 6 : 12, halfYear[2] === '上半年' ? 30 : 31);
-  } else if (uniqueDates.length === 1) {
-    if (!/截至|截止/.test(source)) throw new Error('请同时提供回测开始日期和结束日期。');
-    endDate = uniqueDates[0];
-  } else {
+  const originalInterval = calendarInterval(question), rewrittenInterval = calendarInterval(range);
+  if (originalInterval && rewrittenInterval &&
+      (originalInterval.start !== rewrittenInterval.start || originalInterval.end !== rewrittenInterval.end)) {
+    throw new Error('原始请求与改写后的回测日期冲突，请确认区间。');
+  }
+  const interval = originalInterval ?? rewrittenInterval;
+  if (interval) {
+    startDate = interval.start;
+    endDate = interval.end;
+  }
+  if (!interval || interval.start === null) {
     const duration = input.timeRange;
     if (duration?.unit === 'trading_day' && duration.value || explicitDays) {
       limit = duration?.unit === 'trading_day' && duration.value ? duration.value : Number(explicitDays![1]);
@@ -148,7 +129,7 @@ export function compileBacktestRequest(input: {
       startDate = anchor.toISOString().slice(0, 10);
     } else if (range && /年初至今|今年以来/.test(range)) {
       startDate = `${endDate.slice(0, 4)}-01-01`;
-    } else if (range || /(?:19|20)\d{2}年|最近|近\d|过去|今年|去年|上半年|下半年|起始|开始日期|结束日期/.test(question)) {
+    } else if (!interval && (range || /(?:19|20)\d{2}年|最近|近\d|过去|今年|去年|上半年|下半年|起始|开始日期|结束日期/.test(question))) {
       throw new Error('请明确回测日期区间或最近多少个交易日。');
     } else {
       defaults.push('最近 250 根行情');

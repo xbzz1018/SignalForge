@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { compileBacktestRequest, backtestRequestQuery, backtestResponseMismatches, reviseBacktestRequest } from './backtest-request';
 
 describe('frozen backtest execution request', () => {
+  it('preserves equal date endpoints and repeated rewrite labels', () => {
+    expect(compileBacktestRequest({ question: '2025-01-02至2025-01-02均线回测',
+      timeRangeLabel: '2025-01-02至2025-01-02' })).toMatchObject({ startDate: '2025-01-02', endDate: '2025-01-02' });
+  });
+  it('refuses rewritten dates that contradict the original calendar interval', () => {
+    expect(() => compileBacktestRequest({ question: '2024年上半年回测',
+      timeRangeLabel: '2024-07-01至2024-12-31' })).toThrow('冲突');
+  });
   it.each(['初始资金1亿元回测', 'initial_cash=1e6回测', '初始资金10,000元回测',
     '手续费0.1.5%回测', '快线5e1慢线60回测', '初始资金100美元回测', '回测费用-1bps', '回测FEE_BPS=NaN'])(
     'rejects partial numeric parsing: %s', question => {
