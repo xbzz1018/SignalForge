@@ -6,6 +6,7 @@ from math import sqrt
 from typing import Any
 
 from quantpilot_market_data.backtest_experiments import attach_experiment, capture_input_data
+from quantpilot_market_data.backtest_input import validate_strategy_bars
 from quantpilot_market_data.backtest_parameters import (
     backtest_date,
     finite_decimal,
@@ -334,9 +335,7 @@ def build_strategy_backtest(
         bar.date = normalized_date
     # Freeze the same canonical dates used by interval filtering and trade records.
     data = capture_input_data(kline)
-    for bar in kline.bars:
-        if bar.close is None or bar.close <= 0:
-            raise ValueError("回测行情必须具有连续、正数的收盘价。")
+    validate_strategy_bars(kline, normalized_strategy_id)
     if (start_date or end_date) and not any(
         (not start_date or bar.date >= start_date) and (not end_date or bar.date <= end_date)
         for bar in kline.bars

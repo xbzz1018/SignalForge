@@ -88,6 +88,7 @@ def test_snapshot_is_independent_of_live_data_and_preserves_observed_contract():
     assert original.experiment.data.fetched_at == data.fetched_at
     assert "private" not in original.experiment.model_dump_json()
     data.bars[0].close = Decimal("999")
+    data.bars[0].high = Decimal("1000")
     assert original.experiment.data.bars[0].close != data.bars[0].close
     newer = build_strategy_backtest(data, strategy_id="ma")
     assert newer.experiment.data_sha256 != original.experiment.data_sha256

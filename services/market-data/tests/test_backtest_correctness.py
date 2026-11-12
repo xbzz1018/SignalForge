@@ -166,3 +166,28 @@ def test_compact_bar_dates_are_canonicalized_before_interval_filtering_and_repla
     assert result.experiment.data.bars[0].date == '2025-01-01'
     assert data.bars[0].date == '20250101'  # Do not mutate the provider response.
     assert replay_backtest(json.loads(result.model_dump_json())).summary == result.summary
+
+
+@pytest.mark.parametrize('strategy,field', [
+    ('donchian_breakout', 'high'), ('turtle_trend', 'low'),
+    ('volume_price_breakout', 'volume'), ('atr_trailing_breakout', 'low'),
+    ('gap_reversal', 'open'),
+])
+def test_missing_strategy_specific_inputs_are_rejected(strategy, field):
+    data = series()
+    setattr(data.bars[5], field, None)
+    with pytest.raises(ValueError, match='字段缺失'):
+        build_strategy_backtest(data, strategy_id=strategy)
+
+
+@pytest.mark.parametrize('field,value', [('high', 1), ('low', 100), ('open', -1), ('volume', -1)])
+def test_inconsistent_ohlc_or_negative_volume_is_rejected(field, value):
+    data = series()
+    setattr(data.bars[5], field, Decimal(value) if field != 'volume' else value)
+    with pytest.raises(ValueError, match='回测行情'):
+        calculate(data)
+
+
+def test_empty_history_cannot_be_a_successful_zero_return_backtest():
+    with pytest.raises(ValueError, match='不能为空'):
+        calculate(series().model_copy(update={'bars': []}))
