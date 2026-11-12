@@ -7,6 +7,24 @@ function series(closes: (number | null)[]) {
 }
 
 describe('technical metrics observation windows', () => {
+  it.each(['duplicate', 'invalid'])('suppresses chronological metrics and stale summary values for %s dates', kind => {
+    const input = series(Array.from({ length: 130 }, (_, i) => 100 + i));
+    input.bars[5].date = kind === 'duplicate' ? input.bars[4].date : 'invalid';
+    expect(calculateMetrics(input)).toMatchObject({ ma5: null, return20d: null, periodReturn: null,
+      maxDrawdown: null, avgVolume20d: null });
+    const asset = { kline: input, computedMetrics: { ma5: 999 },
+      technicalIndicators: { summary: { ma5: 999, return_20d_pct: 88 },
+        data_quality: { status: 'ok', warnings: ['provider warning'] } } };
+    expect(ensureTechnicalSummary(asset)).toMatchObject({ ma5: null, return_20d_pct: null });
+    expect(asset.technicalIndicators.data_quality.status).toBe('warning');
+    expect(asset.technicalIndicators.data_quality.warnings).toContain('provider warning');
+    expect(asset.technicalIndicators.data_quality.warnings).toContain('行情日期无效或重复，时序指标不可用。');
+  });
+  it('shows chronological sample bounds for reversed provider bars', () => {
+    const input = series([100, 101, 102, 103, 104]);
+    input.bars.reverse();
+    expect(ensureTechnicalSummary({ kline: input }).sample_window).toContain('2025-01-01 至 2025-01-05');
+  });
   it.each(['weekly', 'monthly', 'minute5'])('does not label %s samples as daily observations', period => {
     const kline = { ...series(Array.from({ length: 130 }, (_, i) => 100 + i)), period };
     expect(calculateMetrics(kline)).toMatchObject({ return20d: null, return60d: null, return120d: null,

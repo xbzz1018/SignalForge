@@ -8,18 +8,19 @@ export function calculateMetrics(kline: JsonRecord | null): JsonRecord {
     /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) &&
     new Date(value).toISOString().slice(0, 10) === value);
   const uniqueDates = new Set(dates).size === dates.length;
+  const observationsValid = validDates && uniqueDates;
   const bars = validDates && uniqueDates
     ? [...inputBars].sort((a, b) => String(dateOf(a)).localeCompare(String(dateOf(b))))
     : inputBars;
   const daily = kline?.period === undefined || kline.period === 'daily';
   // Keep each observation in place: removing a missing value changes the window
   // and can turn a multi-session price change into a one-session return.
-  const closes = bars.map((bar) => {
+  const closes = (observationsValid ? bars : []).map((bar) => {
     const close = numeric(bar.close);
     return close !== null && close > 0 ? close : null;
   });
-  const volumes = bars.map((bar) => numeric(bar.volume));
-  const amounts = bars.map((bar) => numeric(bar.amount));
+  const volumes = observationsValid ? bars.map((bar) => numeric(bar.volume)) : [];
+  const amounts = observationsValid ? bars.map((bar) => numeric(bar.amount)) : [];
   const highs = bars.map((bar) => numeric(bar.high)).filter((value): value is number => value !== null);
   const lows = bars.map((bar) => numeric(bar.low)).filter((value): value is number => value !== null);
 
@@ -42,6 +43,7 @@ export function calculateMetrics(kline: JsonRecord | null): JsonRecord {
   }
 
   return {
+    observationsValid,
     periodReturn:
       firstClose && lastClose ? round(((lastClose - firstClose) / firstClose) * 100) : null,
     return20d: daily ? calculateWindowReturn(closes, 20) : null,
@@ -51,7 +53,10 @@ export function calculateMetrics(kline: JsonRecord | null): JsonRecord {
     periodLow: lows.length ? round(Math.min(...lows)) : null,
     maxDrawdown: closes.length && closes.every((close) => close !== null) ? round(maxDrawdown) : null,
     volatility20d: variance === null ? null : round(Math.sqrt(variance) * Math.sqrt(252) * 100),
-    metricWarnings: volatilityCloses ? [] : ['20 日波动率需要 21 根日期唯一、收盘价完整的日线行情。'],
+    metricWarnings: [
+      ...(!observationsValid && bars.length ? ['行情日期无效或重复，时序指标不可用。'] : []),
+      ...(volatilityCloses ? [] : ['20 日波动率需要 21 根日期唯一、收盘价完整的日线行情。']),
+    ],
     avgVolume20d: daily ? windowMean(volumes, 20) : null,
     avgAmount20d: daily ? windowMean(amounts, 20) : null,
     ma5: windowMean(closes, 5),
@@ -94,14 +99,18 @@ export function lastDateFromBars(bars: JsonRecord[]): string | null {
 export function ensureTechnicalSummary(asset: JsonRecord): JsonRecord {
   const quote = asRecord(asset.quote);
   const kline = asRecord(asset.kline) ?? asRecord(asset.history);
-  const bars = extractBarsFromAsset(asset);
-  const metrics = asRecord(asset.computedMetrics) ?? calculateMetrics(kline);
+  const calculated = calculateMetrics(kline);
+  const usable = !kline || calculated.observationsValid === true;
+  const rawBars = extractBarsFromAsset(asset);
+  const bars = usable ? [...rawBars].sort((a, b) =>
+    String(a.date ?? a.time ?? a.trade_date).localeCompare(String(b.date ?? b.time ?? b.trade_date))) : rawBars;
+  const metrics = usable ? asRecord(asset.computedMetrics) ?? calculated : calculated;
   const technicalIndicators = asRecord(asset.technicalIndicators) ?? {};
-  const existingSummary = asRecord(technicalIndicators.summary) ?? {};
+  const existingSummary = usable ? asRecord(technicalIndicators.summary) ?? {} : {};
   const period = String(kline?.period ?? technicalIndicators.period ?? 'daily');
   const daily = period === 'daily';
   const periodLabel = ({ daily: '日 K', weekly: '周 K', monthly: '月 K' } as Record<string, string>)[period] ?? `${period} K`;
-  const latestClose = numeric(existingSummary.latest_close) ?? numeric(quote?.price) ?? numeric(bars.at(-1)?.close);
+  const latestClose = numeric(existingSummary.latest_close) ?? numeric(quote?.price) ?? (usable ? numeric(bars.at(-1)?.close) : null);
   const ma5 = numeric(existingSummary.ma5) ?? numeric(metrics.ma5);
   const ma10 = numeric(existingSummary.ma10) ?? numeric(metrics.ma10);
   const ma20 = numeric(existingSummary.ma20) ?? numeric(metrics.ma20);
@@ -133,7 +142,7 @@ export function ensureTechnicalSummary(asset: JsonRecord): JsonRecord {
   const summary = {
     symbol,
     name,
-    sample_window: bars.length
+    sample_window: !usable && bars.length ? '行情日期无效或重复，无法确定样本区间。' : bars.length
       ? `${firstDateFromBars(bars) ?? '-'} 至 ${lastDateFromBars(bars) ?? '-'}，${bars.length} 根${periodLabel}`
       : '暂无历史 K 线样本',
     return_20d_pct: round(return20d),
@@ -153,14 +162,21 @@ export function ensureTechnicalSummary(asset: JsonRecord): JsonRecord {
       : `20 日均量约 ${round(avgVolume, 0)} 手。`,
   };
 
+  const existingQuality = asRecord(technicalIndicators.data_quality) ?? {};
+  const warnings = [...new Set([
+    ...(Array.isArray(existingQuality.warnings) ? existingQuality.warnings.map(String) : []),
+    ...(Array.isArray(calculated.metricWarnings) ? calculated.metricWarnings.map(String) : []),
+    ...(bars.length < 20 ? ['历史 K 线样本少于 20 条，技术指标稳定性较弱。'] : []),
+  ])];
   asset.technicalIndicators = {
     ...technicalIndicators,
     symbol,
     summary,
     computedMetrics: metrics,
-    data_quality: technicalIndicators.data_quality ?? {
-      status: bars.length >= 20 ? 'ok' : 'warning',
-      warnings: bars.length >= 20 ? [] : ['历史 K 线样本少于 20 条，技术指标稳定性较弱。'],
+    data_quality: {
+      ...existingQuality,
+      status: existingQuality.status && existingQuality.status !== 'ok' ? existingQuality.status : warnings.length ? 'warning' : 'ok',
+      warnings,
     },
   };
   return summary;
