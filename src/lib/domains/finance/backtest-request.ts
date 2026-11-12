@@ -103,7 +103,15 @@ export function compileBacktestRequest(input: {
   if (!cash) defaults.push('初始净值 1');
   let startDate: string | null = null;
   let endDate = shanghaiDate(input.now ?? new Date());
+  const dayCounts = [...source.matchAll(/(?:最近|近|过去)(\d+)(?:个)?交易日/g)].map(match => Number(match[1]));
   const explicitDays = source.match(/(?:最近|近|过去)(\d+)(?:个)?交易日/);
+  const durationValue = input.timeRange?.value;
+  if (durationValue !== undefined && (!Number.isSafeInteger(durationValue) || durationValue <= 0)) {
+    throw new Error('相对回测区间必须为正整数。');
+  }
+  if (input.timeRange?.unit === 'trading_day' && durationValue !== undefined) dayCounts.push(durationValue);
+  if (new Set(dayCounts).size > 1) throw new Error('原始请求与改写后的交易日数量冲突。');
+  if (dayCounts.length && period !== 'daily') throw new Error('交易日数量仅用于日线回测，请确认周期和样本单位。');
   let limit = explicitDays ? Number(explicitDays[1]) : 250;
   const originalInterval = calendarInterval(question), rewrittenInterval = calendarInterval(range);
   if (originalInterval && rewrittenInterval &&
@@ -111,6 +119,7 @@ export function compileBacktestRequest(input: {
     throw new Error('原始请求与改写后的回测日期冲突，请确认区间。');
   }
   const interval = originalInterval ?? rewrittenInterval;
+  if (interval?.start && dayCounts.length) throw new Error('请在日期区间与最近交易日数量中选择一种回测范围。');
   if (interval) {
     startDate = interval.start;
     endDate = interval.end;

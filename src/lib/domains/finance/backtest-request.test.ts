@@ -2,6 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { compileBacktestRequest, backtestRequestQuery, backtestResponseMismatches, reviseBacktestRequest } from './backtest-request';
 
 describe('frozen backtest execution request', () => {
+  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid relative range values: %s', value => {
+    expect(() => compileBacktestRequest({ question: '最近一段时间回测',
+      timeRange: { label: '最近一段时间', unit: 'month', value, source: 'explicit' } })).toThrow('正整数');
+  });
+  it('rejects a rewritten trading-day count that changes the requested sample', () => {
+    expect(() => compileBacktestRequest({ question: '最近100个交易日回测',
+      timeRange: { label: '最近250个交易日', unit: 'trading_day', value: 250, source: 'explicit' } })).toThrow('冲突');
+  });
+  it.each(['周线最近100个交易日回测', '2024年上半年最近100个交易日回测'])(
+    'rejects conflicting sample units or boundaries: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow();
+    },
+  );
+  it('keeps an explicit cutoff alongside a trading-day count', () => {
+    expect(compileBacktestRequest({ question: '截至2024-06-30最近100个交易日回测' }))
+      .toMatchObject({ startDate: null, endDate: '2024-06-30', limit: 100 });
+  });
   it('preserves equal date endpoints and repeated rewrite labels', () => {
     expect(compileBacktestRequest({ question: '2025-01-02至2025-01-02均线回测',
       timeRangeLabel: '2025-01-02至2025-01-02' })).toMatchObject({ startDate: '2025-01-02', endDate: '2025-01-02' });
