@@ -7,6 +7,16 @@ function series(closes: (number | null)[]) {
 }
 
 describe('technical metrics observation windows', () => {
+  it.each(['weekly', 'monthly', 'minute5'])('does not label %s samples as daily observations', period => {
+    const kline = { ...series(Array.from({ length: 130 }, (_, i) => 100 + i)), period };
+    expect(calculateMetrics(kline)).toMatchObject({ return20d: null, return60d: null, return120d: null,
+      avgVolume20d: null, avgAmount20d: null, volatility20d: null });
+    const summary = ensureTechnicalSummary({ kline, technicalIndicators: {
+      summary: { return_20d_pct: 20, volatility_20d_annualized_pct: 30 },
+    } });
+    expect(summary).toMatchObject({ return_20d_pct: null, volatility_20d_annualized_pct: null });
+    expect(String(summary.sample_window)).not.toContain('根日 K');
+  });
   it('uses only the latest 20 returns for 20-day volatility', () => {
     const metrics = calculateMetrics(series([10, 90, 5, 100, ...Array<number>(21).fill(100)]));
     expect(metrics.volatility20d).toBe(0);
