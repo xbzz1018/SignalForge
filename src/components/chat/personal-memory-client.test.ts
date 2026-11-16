@@ -24,7 +24,7 @@ describe('personal memory browser client', () => {
     });
   });
 
-  it('calls only the QuantPilot project API and never sends tenant or subject scope', async () => {
+  it('calls only the SignalForge project API and never sends tenant or subject scope', async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true }), {
       status: 201,
       headers: { 'content-type': 'application/json' },

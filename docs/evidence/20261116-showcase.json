@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-16T07:58:57.247Z",
+  "caseId": "index-technical-hs300",
+  "product": "SignalForge",
+  "screenshot": {
+    "sourceFile": "benchmark-index-technical-hs300-desktop-2026-11-16T07-58-57-247Z.png",
+    "sourceSha256": "84813a9d5871da2a895d9acc9366512f2affb081f59f9d22663836b5238c775b",
+    "sourceDimensions": {
+      "width": 1440,
+      "height": 2386
+    },
+    "crop": {
+      "left": 29,
+      "top": 436,
+      "width": 1382,
+      "height": 602
+    },
+    "outputFile": "docs/assets/hs300-research.png",
+    "outputSha256": "9f4a63508e35f5285ff2480b7afc5c290157b0ec1c76e8c19fbf41bc8f57b12f",
+    "processing": "Crop only; no labels, values or status changed."
+  },
+  "validation": {
+    "summary": "docs/evidence/20261116-basic-fullstack.json",
+    "liveModelPassed": true,
+    "buildPassed": true,
+    "dataContractPassed": true,
+    "desktopAndMobileVisualPassed": true,
+    "acceptedReceipt": true
+  },
+  "limits": [
+    "This is a chart-area excerpt, not a screenshot of the entire platform.",
+    "The sample predates the product-copy update; no new model run is claimed.",
+    "Business risk or drawdown values have not been hidden or replaced."
+  ]
+}

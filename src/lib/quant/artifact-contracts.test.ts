@@ -22,7 +22,7 @@ async function writeWorkspace(
     workspaceId: 'project-1',
     projectId: 'project-1',
     projectName: 'PI project',
-    platform: 'QuantPilot',
+    platform: 'SignalForge',
     composition: {
       schemaVersion: 1,
       profile: { id: 'quantpilot.finance', version: '1.0.0' },

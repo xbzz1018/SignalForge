@@ -88,7 +88,7 @@ describe('validation repair ownership', () => {
     expect(instruction).toContain('data_file/final/** 和 evidence/**');
     expect(instruction).not.toContain('唯一可写范围：app/**');
     expect(instruction).toContain('你不得修改它');
-    expect(instruction).toContain('构建、预览与自动验证由 QuantPilot 平台统一执行');
+    expect(instruction).toContain('构建、预览与自动验证由 SignalForge 平台统一执行');
     expect(instruction).toContain('submit_result');
     expect(writableGlobs).toEqual(['data_file/final/**', 'evidence/**']);
   });

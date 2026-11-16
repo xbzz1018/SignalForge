@@ -1,6 +1,6 @@
 # PI Agent 架构
 
-QuantPilot 使用开源 `@earendil-works/pi-agent-core@0.82.1` 作为唯一 Agent loop，运行身份为 `pi-agent:0.82.1`。PI Agent 以进程内 TypeScript 模块运行；需要模型的 lane 默认通过 ModelPort 使用 Qwen，也可通过 ModelPort 使用 Anthropic 协议上游 DeepSeek，另保留 DeepSeek 官方 OpenAI-compatible 直连 profile；可信标准看板 lane 则执行零模型 Token 的确定性工具计划。QuantPilot 在上游 loop 外提供权限、副作用、持久化、恢复、并发和交付治理，不启动 PI Coding Agent CLI 子进程，也不持久化供应商 session。
+SignalForge 使用开源 `@earendil-works/pi-agent-core@0.82.1` 作为唯一 Agent loop，运行身份为 `pi-agent:0.82.1`。PI Agent 以进程内 TypeScript 模块运行；需要模型的 lane 默认通过 ModelPort 使用 Qwen，也可通过 ModelPort 使用 Anthropic 协议上游 DeepSeek，另保留 DeepSeek 官方 OpenAI-compatible 直连 profile；可信标准看板 lane 则执行零模型 Token 的确定性工具计划。SignalForge 在上游 loop 外提供权限、副作用、持久化、恢复、并发和交付治理，不启动 PI Coding Agent CLI 子进程，也不持久化供应商 session。
 
 ## 设计目标
 
@@ -49,7 +49,7 @@ QuantPilot 使用开源 `@earendil-works/pi-agent-core@0.82.1` 作为唯一 Agen
 6. `deterministic_standard` 使用 Provider-compatible 的可信工具计划执行器，不发起网络或模型请求，并为每一步报告严格的零 Token usage；它仍经过同一个 Run Engine、operation ledger、workspace fencing、事件和 terminal gate，任一步失败都会停止并交给平台恢复。其余 lane 才请求项目选中的模型 Provider；两个网络 Provider 都对 response ID、choice、tool-call identity、终止顺序和 Token 算术执行严格状态校验。`total != input + output`、cache hit/miss 不闭合或 reasoning 超过 output 均作为协议错误；Provider 完全缺少 usage 时，运行时按本轮 prepared request 做保守 input/cache-miss 估算并标记 `usageSource=estimated`，不能以零绕过累计预算。模型 lane 将单请求 prepared、全 run 累计 prepared 与 Provider 回报后的 cache-miss 分成三个独立预算：单请求上限为 custom 24k、repair 20k、data-preparation 60k，累计图上限分别为 72k、60k、480k（data 默认再由 160k 累计输入上限收紧）。每轮剩余累计额度会反向收紧 Context Manager，连同 nonce envelope 一起放不下时不接触 Provider；cache-miss 上限不会误伤可复用的缓存前缀。
 7. reasoning 只保留在内存；durable projector 跳过高频 delta，assistant/tool 原文只保存长度与 SHA-256 审计信息，拒绝 hidden reasoning、raw cause、完整 messages 和凭据字段。
 8. 每个工具动作使用框架派生的 `operationId`。`tool_started` 在副作用前写 `prepared` ledger，只有新建 ledger 才授权执行；省略 `effect` 的工具（包括 terminal）保守视为 `external_write/reconcile_required`。单文件和 DashboardSpec 双文件写入共用批量 writer：先取得 `<workspace>/.pi-workspace.lock`，拒绝重复 canonical target，保存并 fsync `.pi-mutation-journal` 中的 staged 内容、pre-image、hash 与 manifest，再只消费一次数据库 `commit_authorized`；授权后复验全部 before hash，manifest 持久化为 `committing` 后才逐文件 rename 并 fsync 目标目录。进程内中途失败走同一全量预检回滚；进程崩溃留下的 prepared/commit-authorized workspace operation 会在下一次启动锁内恢复为原状态并确定性终结 ledger。若目标后来被用户改成未知 hash，恢复拒绝覆盖并继续阻断。UI/Message observer 失败不会反向中断已完成的工具动作。
-9. 工具结果以标准 envelope 回灌 Provider；terminal 工具必须独占其调用轮次。执行前只做不发明字段的有界参数修复：去掉完整 JSON code fence、转义字符串内非法控制字符、移除尾逗号，并把唯一匹配的已注册工具名、常见字段别名和 `/app/**` 等虚拟工作区路径归一化；不完整 JSON、未知工具和非工作区绝对路径仍失败关闭。同一模型轮次内，同文件 `query_json`/`query_text_file` 会合并 pointer/anchor，完全相同的只读调用会删除，合并后才计入实际工具预算。文件/结构化读取声明 `workspace_generation` observation policy：相同工具与规范化 JSON 参数在工作区没有成功写入时只执行一次；重复调用返回原始 tool-call ID、turn 和结果 SHA-256 的短引用。任何成功 workspace write 都立即使全部旧 observation 失效。实时 `quant_api_get` 不缓存。QuantPilot 产品配置下连续 3 个预写只读轮次或写后连续 2 个只读轮次会切换执行权限；首次成功写入前拒绝 `submit_result`，读取预算耗尽后在执行器内拒绝 read 工具，但这两类权限变化都不会增加、删除或重排本次物理 run 的 Provider 工具定义。ProgressOracle 只接收框架投影的成功 pure/read receipt、工具观察摘要和 workspace writer 的 `artifactSha256 + target` 内容状态；无 digest 写入、同内容重写、重复读取和 A→B→A 回访都不制造进展。Trusted ContextCapsule 与收敛指令合并为当次请求末尾的 request-local user JSON envelope，并用每个物理 run 随机生成的 192-bit nonce 与固定 system 协议绑定；调用方伪造相同 marker 或旧 nonce 不能取得控制权。该 envelope 不污染持久历史，循环持续到提交、预算耗尽、超时、取消或失败。
+9. 工具结果以标准 envelope 回灌 Provider；terminal 工具必须独占其调用轮次。执行前只做不发明字段的有界参数修复：去掉完整 JSON code fence、转义字符串内非法控制字符、移除尾逗号，并把唯一匹配的已注册工具名、常见字段别名和 `/app/**` 等虚拟工作区路径归一化；不完整 JSON、未知工具和非工作区绝对路径仍失败关闭。同一模型轮次内，同文件 `query_json`/`query_text_file` 会合并 pointer/anchor，完全相同的只读调用会删除，合并后才计入实际工具预算。文件/结构化读取声明 `workspace_generation` observation policy：相同工具与规范化 JSON 参数在工作区没有成功写入时只执行一次；重复调用返回原始 tool-call ID、turn 和结果 SHA-256 的短引用。任何成功 workspace write 都立即使全部旧 observation 失效。实时 `quant_api_get` 不缓存。SignalForge 产品配置下连续 3 个预写只读轮次或写后连续 2 个只读轮次会切换执行权限；首次成功写入前拒绝 `submit_result`，读取预算耗尽后在执行器内拒绝 read 工具，但这两类权限变化都不会增加、删除或重排本次物理 run 的 Provider 工具定义。ProgressOracle 只接收框架投影的成功 pure/read receipt、工具观察摘要和 workspace writer 的 `artifactSha256 + target` 内容状态；无 digest 写入、同内容重写、重复读取和 A→B→A 回访都不制造进展。Trusted ContextCapsule 与收敛指令合并为当次请求末尾的 request-local user JSON envelope，并用每个物理 run 随机生成的 192-bit nonce 与固定 system 协议绑定；调用方伪造相同 marker 或旧 nonce 不能取得控制权。该 envelope 不污染持久历史，循环持续到提交、预算耗尽、超时、取消或失败。
 10. 每轮实际请求 Provider 前生成 Prompt Prefix Ledger：只记录 system/messages/tools SHA-256、请求字节数、最长共同消息前缀、是否 append-only、是否发生 ContextManager 压缩、临时控制后缀轮换和工具集合变化。该事件与同 turn 的 Provider cache hit/miss usage 一起进入 durable event ledger，用于定位非预期 cache break；不保存提示词、工具结果或 hidden reasoning，也不缓存/重放 completion。
 11. `submit_result` 只提交候选产物，物理 AgentRun 以 `candidate_complete` 结束；平台为 Mission 当前 candidate version 写入 candidate receipt，并用数据库 CAS 独占认领该 candidate 的验证权，随后执行 build、HTTP、视觉、数据与 evidence 验证。第二个 Web worker 不能把同一可变工作区并发认领为自己的验证输入；失败项会把 Mission 推进到 `repair_required`，再由 repair profile 产生下一 candidate version。
 12. EvidenceVerifier 在同一 workspace 资源锁内双读平台验证报告、冻结 subject/evidence manifest 并探测持久预览。manifest 除必需产物外，还逐文件覆盖现存的 `components/**`、`lib/**`、`src/**`、`scripts/**`、`public/**`、`data_file/final/**`、`evidence/**` 和构建配置/锁文件；单文件、总字节、文件数、realpath 与 symlink 都有硬限制。只有 Mission/spec/request/candidate identity、必需检查、报告与 manifest 前后稳定、本地 HTTP 200 全部匹配时，Mission store 才以 CAS 事务写 accepted receipt、关联 `accepted_receipt_id`，并与 UserRequest 完成态原子提交。Agent 文本、`submit_result` 或单独的 validation `passed` 都没有该权限。
@@ -65,7 +65,7 @@ PhaseGraph 是模型外的受信路由器。它只读取平台准备状态、pre
 | `model_repair` | 项目模型 Provider | 3 / 8 | 20,000 | 60,000 | 20,000 |
 | `model_data_preparation` | 项目模型 Provider | 8 / 20 | 60,000 | 480,000；默认运行时收紧为 160,000 | 60,000 |
 
-`ProgressOracle` 是独立、Provider-neutral、可序列化的纯状态机与类封装。通用默认连续 2 个回合没有可验证进展即报告 stalled；为让定制和修复尽快收敛，QuantPilot 的 custom/repair 明确收紧为 1 回合，data-preparation 保持 2 回合。只有新增可信事实、首次出现且没有让确定性检查变差的 workspace fingerprint、或调用方实际提供的失败检查数量下降才算进展。工具调用本身、重复 observation、仅“写入成功”以及 workspace fingerprint 的 A→B→A 回访都不算完成或净进展。
+`ProgressOracle` 是独立、Provider-neutral、可序列化的纯状态机与类封装。通用默认连续 2 个回合没有可验证进展即报告 stalled；为让定制和修复尽快收敛，SignalForge 的 custom/repair 明确收紧为 1 回合，data-preparation 保持 2 回合。只有新增可信事实、首次出现且没有让确定性检查变差的 workspace fingerprint、或调用方实际提供的失败检查数量下降才算进展。工具调用本身、重复 observation、仅“写入成功”以及 workspace fingerprint 的 A→B→A 回访都不算完成或净进展。
 
 1.9 已把 ProgressOracle 接入实时 Run Engine 和 durable checkpoint：custom/repair 首个无进展回合只在下一轮注入 `progress_stalled` 软纠偏，仍允许针对冲突、失效 pointer 或 anchor 重新读取；连续第二个无进展回合、重复同一 observation，或独立 read-loop 阈值命中后，执行器才在保持 Provider schema 固定的同时硬拒绝 read。真实内容前进会清除 Oracle 的软、硬停滞状态。每个非终态工具轮结束后，Run Engine 发出不含原文的 `progress_evaluated`，durable sink 以 canonical JSON hash 写入 `model_turn_completed` checkpoint v2；恢复审计会在任何调和副作用前校验 hash 和 Oracle schema，异常立即失败关闭。停滞事件还会投影为前端状态，便于区分“模型仍在执行”和“运行时正在推动收敛”。Run Engine 当前没有回合内验证器，因此没有虚构 `failedCheckCount`；失败项减少信号只在未来接入确定性验证 observation 后启用。Oracle 只影响收敛，不判定完成，也不会绕过 terminal、Mission 或 EvidenceVerifier。
 
@@ -128,7 +128,7 @@ PI Agent 当前实现的是 **replan recovery 基础**，不是原会话 resume�
 
 ## 人工决策与副作用边界
 
-QuantPilot 的 PI Agent 集成把 Human-in-the-loop 作为工具运行时合同，而不是提示词约定。它默认关闭，也不会按工具名猜测：只有应用层拥有的 mutating tool 显式提供 `approval` 策略，并且 composition root 注入 `toolApprovalHandler`，调用才会进入等待。`pure` / `read` 工具声明审批会在 Run Engine 构造阶段失败；additional/plugin tool 自带的 `approval` 与 `projectContextReceipt` 一样会在组合边界被剥离。
+SignalForge 的 PI Agent 集成把 Human-in-the-loop 作为工具运行时合同，而不是提示词约定。它默认关闭，也不会按工具名猜测：只有应用层拥有的 mutating tool 显式提供 `approval` 策略，并且 composition root 注入 `toolApprovalHandler`，调用才会进入等待。`pure` / `read` 工具声明审批会在 Run Engine 构造阶段失败；additional/plugin tool 自带的 `approval` 与 `projectContextReceipt` 一样会在组合边界被剥离。
 
 ```ts
 const publishReport: PiAgentTool<PublishReportInput> = {
@@ -219,7 +219,7 @@ network namespace 内只启用 loopback，不存在宿主或外网路由。previ
 
 ## 上游与宿主边界
 
-PI Agent loop 直接采用上游开源运行时，QuantPilot 只在明确的 Provider、Tool、Event 和治理边界上扩展。当前实现与能力边界以本文、[PI Agent 采用与治理边界](pi-agent-migration.md)、[生成工作空间契约](generated-workspace-contract.md) 和受版本控制的质量门为准。
+PI Agent loop 直接采用上游开源运行时，SignalForge 只在明确的 Provider、Tool、Event 和治理边界上扩展。当前实现与能力边界以本文、[PI Agent 采用与治理边界](pi-agent-migration.md)、[生成工作空间契约](generated-workspace-contract.md) 和受版本控制的质量门为准。
 
 仓库 `.pi/skills` 是受 registry/lock/hash 校验的唯一 PI Agent Skill 编译输入；不读取其他 Agent 的 Skill 源目录或别名。历史数据库事实只用于审计，不参与当前 PI Agent 执行控制流。
 
@@ -241,7 +241,7 @@ PI_AGENT_TEST_DATABASE_URL='postgresql://...' npm run test:pi-agent:postgres
 
 ## 配置
 
-`config/llm.json` 是仓库级 LLM profile 事实源，固定 provider、model、Base URL、凭据环境变量名、Agent 开关和 Query Rewrite 默认策略。项目创建或下一次执行时，解析后的无密钥模型选择会同步到数据库 `Project.settings.llm`、`.data-agent/workspace.json.runtime` 和 `.data-agent/finance-run-plan.json.llm`。QuantPilot 本地只保存受限 `MODELPORT_API_KEY`；DeepSeek 上游 Key 只存在于 ModelPort。可选官方直连的 `DEEPSEEK_API_KEY` 仅作为部署/CI 进程 secret 注入，不写项目文件或本地默认配置。
+`config/llm.json` 是仓库级 LLM profile 事实源，固定 provider、model、Base URL、凭据环境变量名、Agent 开关和 Query Rewrite 默认策略。项目创建或下一次执行时，解析后的无密钥模型选择会同步到数据库 `Project.settings.llm`、`.data-agent/workspace.json.runtime` 和 `.data-agent/finance-run-plan.json.llm`。SignalForge 本地只保存受限 `MODELPORT_API_KEY`；DeepSeek 上游 Key 只存在于 ModelPort。可选官方直连的 `DEEPSEEK_API_KEY` 仅作为部署/CI 进程 secret 注入，不写项目文件或本地默认配置。
 
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |

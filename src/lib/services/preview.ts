@@ -414,7 +414,7 @@ async function startMarketNetworkProxy(socketPath: string): Promise<PreviewNetwo
       path: `${incomingUrl.pathname}${incomingUrl.search}`,
       headers: {
         Accept: 'application/json',
-        'User-Agent': 'QuantPilot-Generated-Preview-Market-Bridge/1',
+        'User-Agent': 'SignalForge-Generated-Preview-Market-Bridge/1',
       },
     }, (upstreamResponse) => {
       response.writeHead(upstreamResponse.statusCode ?? 502, {

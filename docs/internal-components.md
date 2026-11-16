@@ -1,6 +1,6 @@
 # 内部组件学习指南
 
-这篇文档解释 QuantPilot 内部组件如何协作。它介于“架构总览”和“代码细节”之间：不只画框图，也说明每个组件在什么场景下被调用、依赖什么、失败后如何降级。
+这篇文档解释 SignalForge 内部组件如何协作。它介于“架构总览”和“代码细节”之间：不只画框图，也说明每个组件在什么场景下被调用、依赖什么、失败后如何降级。
 
 读它时可以想象一次真实请求：用户问一个股票问题，页面要创建项目，Agent 要规划，后端要取数，数据库要保存，skill 要生成页面，验证器要检查，运行治理中心要告诉我们哪里出错。下面这些组件就是这条路上的不同岗位。
 
@@ -28,7 +28,7 @@ flowchart LR
   U[用户问题] --> H[首页工作台]
   H --> P[Project Service]
   P --> A[Agent Runtime]
-  A --> S[QuantPilot Skills]
+  A --> S[SignalForge Skills]
   S --> RP[finance-run-plan.json]
   RP --> MD[市场数据服务]
   MD --> DB[(PostgreSQL / TimescaleDB)]
@@ -60,7 +60,7 @@ Next.js 主应用包含页面和 API route。页面只负责组织 UI 和交互�
 
 ## 数据组件
 
-QuantPilot 的数据层分三类：
+SignalForge 的数据层分三类：
 
 | 数据 | 存储 | 原因 |
 | --- | --- | --- |
@@ -166,4 +166,4 @@ QUANTPILOT_REDIS_CACHE_ENABLED=1
 2. 在 `/skills` 打开 `dashboard-visualization`，对照一个生成工作空间的 `app/page.tsx`，理解 skill 如何约束页面质量。
 3. 停掉 Loki 后运行 `npm run doctor`，再打开运行治理中心，观察降级模式如何从集中日志切到本地日志。
 
-做完这三步，基本就能理解 QuantPilot 的组件协作方式。
+做完这三步，基本就能理解 SignalForge 的组件协作方式。

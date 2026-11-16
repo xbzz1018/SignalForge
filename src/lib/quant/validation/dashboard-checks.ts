@@ -113,7 +113,7 @@ export async function checkDashboardBinding(
   if (!hasStandardBinding) {
     return {
       status: 'failed',
-      summary: '页面未使用 QuantPilot 标准看板数据绑定结构。',
+      summary: '页面未使用 SignalForge 标准看板数据绑定结构。',
       details: '请使用平台标准模板读取 dashboard-data.json，并通过统一解析层渲染最新价、K 线样本、指标、财务和公告。',
     };
   }

@@ -1,6 +1,6 @@
 # 投研情报中心与日报自动化指南
 
-投研情报中心把“观察池、数据采样、报告契约、主题洞察、推送回执”串成一条可验证链路。它参考多数据源日报项目的优点，但不把 QuantPilot 变成外部 API Key 拼装脚本：真实行情仍从本地 market-data 读取，报告先保存为结构化对象，再由页面、推送和后续 LLM 摘要共同使用。
+投研情报中心把“观察池、数据采样、报告契约、主题洞察、推送回执”串成一条可验证链路。它参考多数据源日报项目的优点，但不把 SignalForge 变成外部 API Key 拼装脚本：真实行情仍从本地 market-data 读取，报告先保存为结构化对象，再由页面、推送和后续 LLM 摘要共同使用。
 
 入口：`http://localhost:3000/research-reports`
 
@@ -17,7 +17,7 @@
 
 | 能力 | 当前状态 | 说明 |
 | --- | --- | --- |
-| 自选池订阅 | 已落库 | 默认生成 `QuantPilot 每日核心观察池`，绑定 `a-share-sample-research-pool` 和少量核心标的 |
+| 自选池订阅 | 已落库 | 默认生成 `SignalForge 每日核心观察池`，绑定 `a-share-sample-research-pool` 和少量核心标的 |
 | 证据采样 | 已接入 | 读取本地股票池摘要、短线候选筛选和 ClickHouse health |
 | 日报契约 | 已落库 | 同时保存 Markdown、结构化 JSON、评分、建议、风险等级和 evidence |
 | 推送记录 | 已接 adapter | 支持企业微信、飞书、钉钉和 Discord webhook；无密钥时保留 dry-run 或失败配置记录 |

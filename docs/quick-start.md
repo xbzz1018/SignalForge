@@ -17,7 +17,7 @@ npm ci
 uv sync --project services/market-data --extra baostock --extra akshare --locked
 ```
 
-`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。数据库名称、环境变量和 Python 包仍使用内部名称 `quantpilot`。
+`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。兼容已有部署的数据库标识、环境变量与 Python 导入名不随产品名称变更。
 
 ## 配置与启动
 
@@ -46,7 +46,7 @@ Memory、知识服务、ClickHouse 和 Loki/Grafana/Alloy 按需接入，详见[
 2. 进入项目聊天查看计划、工具事件和生成进度。
 3. 打开预览，核对标的、数据时点和来源；检查构建与 Mission 验收结果。
 
-默认均线回测可用 `20/60`、日线、前复权、5 bps 作为研究例子。自定义日期、窗口与费用的贯通仍需按[已知限制](validation-status.md#待完善项)核查，不能仅凭页面生成成功确认参数已生效。
+默认均线回测可用 `20/60`、日线、前复权、5 bps 作为研究例子。请求会冻结日期、窗口与费用，取数和验收核对同一合同；具体计算范围见[当前边界](validation-status.md#当前边界)。
 
 | 页面 | 用途 |
 | --- | --- |

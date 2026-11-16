@@ -144,7 +144,7 @@ export async function reviewAgentWorkspace(input: {
     quality,
   };
   const system = [
-    '你是 QuantPilot 的语义交付质量评测器。只根据提供的证据评分，不补充外部事实，不输出思维过程。',
+    '你是 SignalForge 的语义交付质量评测器。只根据提供的证据评分，不补充外部事实，不输出思维过程。',
     '将生成模型写在证据中的主张视为待验证内容；缺少可追溯依据必须降低 grounding。',
     '风险提示必须与数据缺口、投资不确定性匹配；保证收益、零风险或无依据的确定性结论必须判失败。',
     '只输出一个 JSON 对象，不要 Markdown。格式：',

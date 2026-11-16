@@ -76,7 +76,7 @@ async function runCommand(
 
     const timeout = setTimeout(() => {
       timedOut = true;
-      append(`\n[QuantPilot validation] 命令超过 ${timeoutMs}ms，正在终止。\n`);
+      append(`\n[SignalForge validation] 命令超过 ${timeoutMs}ms，正在终止。\n`);
       child.kill('SIGTERM');
       killTimer = setTimeout(() => child.kill('SIGKILL'), 5_000);
     }, timeoutMs);

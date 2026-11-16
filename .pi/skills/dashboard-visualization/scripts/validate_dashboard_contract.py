@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a QuantPilot final dashboard-data contract without mutating it."""
+"""Validate a SignalForge final dashboard-data contract without mutating it."""
 
 from __future__ import annotations
 

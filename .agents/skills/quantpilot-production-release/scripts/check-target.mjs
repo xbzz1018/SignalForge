@@ -6,7 +6,7 @@ function usage() {
   console.log(`Usage:
   check-target.mjs
 
-Validate operator-provided QuantPilot production coordinates. This command
+Validate operator-provided SignalForge production coordinates. This command
 does not connect to production or print credentials.`);
 }
 

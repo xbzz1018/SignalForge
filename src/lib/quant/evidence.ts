@@ -547,7 +547,7 @@ export async function ensureBaselineEvidenceFiles(
   );
   const limitations = [
     '东方财富等公开接口可能存在延迟，实时性以 fetched_at 与 quote_time/as_of 为准。',
-    '本 evidence 为 QuantPilot 平台根据最终数据文件自动生成的基础证据，模型可在后续分析中继续补充更细的数据口径说明。',
+    '本 evidence 为 SignalForge 平台根据最终数据文件自动生成的基础证据，模型可在后续分析中继续补充更细的数据口径说明。',
   ];
 
   const sourcesEvidence = {

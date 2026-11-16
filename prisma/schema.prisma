@@ -1,4 +1,4 @@
-// QuantPilot - Prisma Schema (PostgreSQL)
+// SignalForge - Prisma Schema (PostgreSQL)
 // 本地开发默认使用 Docker 中的 TimescaleDB/PostgreSQL
 
 generator client {
@@ -313,7 +313,7 @@ model PersonalMemoryFeedbackReceipt {
   @@map("personal_memory_feedback_receipts")
 }
 
-/// Durable QuantPilot-side attribution for governed knowledge that was
+/// Durable SignalForge-side attribution for governed knowledge that was
 /// actually bound to an accepted Mission. AKEP identifiers remain opaque and
 /// no AKEP persistence entity or foreign key crosses this deployment boundary.
 model GovernedKnowledgeUse {
@@ -353,7 +353,7 @@ model GovernedKnowledgeUse {
   @@map("governed_knowledge_uses")
 }
 
-/// QuantPilot-owned user control for whether external memory may influence
+/// SignalForge-owned user control for whether external memory may influence
 /// future Agent runs. This is a product usage fence, not a legal processing
 /// grant and not a copy of provider-side lifecycle state.
 model PersonalMemoryControl {

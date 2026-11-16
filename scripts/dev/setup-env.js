@@ -24,7 +24,7 @@ const MAX_PORT = 65_535;
 const FALLBACK_PORT_START = 4_100;
 const FALLBACK_PORT_END = 4_999;
 const DEFAULT_RANGE_SPAN = FALLBACK_PORT_END - FALLBACK_PORT_START;
-// QuantPilot 主应用默认端口，扫描范围避开生成项目预览端口池
+// SignalForge 主应用默认端口，扫描范围避开生成项目预览端口池
 const DEFAULT_WEB_PORT = 3_000;
 const DEFAULT_WEB_SCAN_SPAN = 99; // scan up to 3099 at most
 const DEFAULT_WEB_MAX = DEFAULT_WEB_PORT + DEFAULT_WEB_SCAN_SPAN;
@@ -367,7 +367,7 @@ async function ensureEnvironment(options = {}) {
   let updatedEnv =
     envContents ||
     [
-      '# QuantPilot local infrastructure defaults.',
+      '# SignalForge local infrastructure defaults.',
       '# Generated and maintained by scripts/dev/setup-env.js; this file is ignored by Git.',
       '# Keep non-secret shared defaults here. Put credentials and machine-specific overrides',
       '# in .env.local. Runtime precedence: process environment > .env.local > .env.',
@@ -386,7 +386,7 @@ async function ensureEnvironment(options = {}) {
   let envLocalContents = envLocalContentsRaw;
   if (!envLocalContents.trim()) {
     envLocalContents = [
-      '# QuantPilot local secrets and machine-specific overrides.',
+      '# SignalForge local secrets and machine-specific overrides.',
       '# This file is ignored by Git. Never copy upstream Provider keys into a committed file.',
       '# Runtime precedence: process environment > .env.local > .env.',
       '# See docs/configuration.md for ModelPort, direct DeepSeek, and Memory-off examples.',

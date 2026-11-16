@@ -8,7 +8,7 @@ function usage() {
     [--include-working-tree]
     [--request-data-operation <operation-name>]
 
-Classify a QuantPilot release without changing files, data, or external systems.`);
+Classify a SignalForge release without changing files, data, or external systems.`);
 }
 
 function fail(message) {

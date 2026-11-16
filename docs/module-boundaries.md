@@ -1,6 +1,6 @@
 # 模块边界与模块化单体治理
 
-QuantPilot 目前不适合拆成多语言微服务，也不需要引入 Java/Dubbo 式运行时复杂度。更合适的方向是模块化单体：运行态保持 `Next.js + Python market-data` 两条主线，但代码组织按模块管理，模块之间只通过稳定 public surface 协作。
+SignalForge 目前不适合拆成多语言微服务，也不需要引入 Java/Dubbo 式运行时复杂度。更合适的方向是模块化单体：运行态保持 `Next.js + Python market-data` 两条主线，但代码组织按模块管理，模块之间只通过稳定 public surface 协作。
 
 模块清单和质量门定义在 `config/module-boundaries.json`，检查脚本是 `npm run check:module-boundaries`。
 

@@ -57,12 +57,12 @@ describe('project authentication proxy', () => {
   });
 
   it.each([
-    '/quantpilot-mark.svg',
+    '/signalforge-mark.svg',
     '/favicon-16.png',
     '/favicon-32.png',
     '/apple-touch-icon.png',
-    '/icons/quantpilot-192.png',
-    '/icons/quantpilot-512.png',
+    '/icons/signalforge-192.png',
+    '/icons/signalforge-512.png',
     '/manifest.webmanifest',
   ])('serves the public brand asset %s without a session', async (pathname) => {
     const response = await proxy(request(pathname));

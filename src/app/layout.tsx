@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
-      { url: '/quantpilot-mark.svg?v=3', type: 'image/svg+xml' },
+      { url: '/signalforge-mark.svg?v=3', type: 'image/svg+xml' },
       { url: '/favicon-32.png?v=3', sizes: '32x32', type: 'image/png' },
       { url: '/favicon-16.png?v=3', sizes: '16x16', type: 'image/png' },
     ],

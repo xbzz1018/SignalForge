@@ -829,7 +829,7 @@ export async function prepareFinanceActGeneration(
           queryRewriteQuotaReservationId = null;
         }
         console.error(
-          "[API] Failed to prepare QuantPilot run plan or data prefetch:",
+          "[API] Failed to prepare SignalForge run plan or data prefetch:",
           error,
         );
         const preparationMessage =

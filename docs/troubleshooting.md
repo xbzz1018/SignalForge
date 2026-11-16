@@ -2,7 +2,7 @@
 
 ## 先分层
 
-遇到问题时先判断是哪一层，不要一上来就重启所有服务。QuantPilot 的问题大多可以落在这几层：
+遇到问题时先判断是哪一层，不要一上来就重启所有服务。SignalForge 的问题大多可以落在这几层：
 
 | 层 | 典型现象 | 第一入口 |
 | --- | --- | --- |
@@ -145,37 +145,37 @@ Alloy: http://localhost:12345
 
 ## 默认 ModelPort Qwen 未就绪
 
-确认 ModelPort 监听 `http://127.0.0.1:38082/v1`，并在 QuantPilot `.env.local` 中配置它签发的受限客户端 Key：
+确认 ModelPort 监听 `http://127.0.0.1:38082/v1`，并在 SignalForge `.env.local` 中配置它签发的受限客户端 Key：
 
 ```dotenv
 MODELPORT_API_KEY="your-scoped-modelport-client-key"
 ```
 
-默认 profile 固定为 `local_qwen:qwen3.5-9b-q5km`。可先请求 `/v1/models` 验证鉴权；`401` 表示服务已连通但客户端 Key 未被接受，`403` 表示 Key 未获准访问该 provider/model。配置修改后重启 QuantPilot。新项目和未显式指定模型的 Query Rewrite 会自动使用 Qwen。
+默认 profile 固定为 `local_qwen:qwen3.5-9b-q5km`。可先请求 `/v1/models` 验证鉴权；`401` 表示服务已连通但客户端 Key 未被接受，`403` 表示 Key 未获准访问该 provider/model。配置修改后重启 SignalForge。新项目和未显式指定模型的 Query Rewrite 会自动使用 Qwen。
 
 ## 日常 ModelPort DeepSeek 未就绪
 
-确认 ModelPort 自身运行环境包含 DeepSeek 上游 Key，QuantPilot 不保存该 Key：
+确认 ModelPort 自身运行环境包含 DeepSeek 上游 Key，SignalForge 不保存该 Key：
 
 ```dotenv
 DEEPSEEK_ANTHROPIC_AUTH_TOKEN="your-deepseek-upstream-key"
 ```
 
-ModelPort `deepseek` provider 必须使用 `protocol = "anthropic"`、Base URL `https://api.deepseek.com/anthropic`，并公布 `deepseek:deepseek-v4-flash`。QuantPilot 的 `MODELPORT_API_KEY` 还必须获准访问 `deepseek` provider 和该限定模型。管理台“查询余额”成功但模型请求失败时，重点检查协议/工具兼容；余额查询失败时检查上游 Key 与 DeepSeek 账户状态。
+ModelPort `deepseek` provider 必须使用 `protocol = "anthropic"`、Base URL `https://api.deepseek.com/anthropic`，并公布 `deepseek:deepseek-v4-flash`。SignalForge 的 `MODELPORT_API_KEY` 还必须获准访问 `deepseek` provider 和该限定模型。管理台“查询余额”成功但模型请求失败时，重点检查协议/工具兼容；余额查询失败时检查上游 Key 与 DeepSeek 账户状态。
 
-只有显式选择 `deepseek-v4-flash` 官方直连 profile 时，QuantPilot 运行环境才需要注入 `DEEPSEEK_API_KEY`；默认本地使用不配置它。
+只有显式选择 `deepseek-v4-flash` 官方直连 profile 时，SignalForge 运行环境才需要注入 `DEEPSEEK_API_KEY`；默认本地使用不配置它。
 
 ## DeepSeek 官方直连失败
 
-先确认项目选择的是 `deepseek-v4-flash`，不是带命名空间的 `deepseek:deepseek-v4-flash`。前者直连官方，后者经过 ModelPort。再检查当前 QuantPilot 进程能否读取：
+先确认项目选择的是 `deepseek-v4-flash`，不是带命名空间的 `deepseek:deepseek-v4-flash`。前者直连官方，后者经过 ModelPort。再检查当前 SignalForge 进程能否读取：
 
 ```bash
 test -n "${DEEPSEEK_API_KEY}" && echo configured || echo missing
 ```
 
-如果 Key 写在 `.env.local`，修改后必须重启 QuantPilot。官方直连不读取 `MODELPORT_API_KEY` 或 `DEEPSEEK_ANTHROPIC_AUTH_TOKEN`；也不会访问 `127.0.0.1:38082`。完全不运行 ModelPort 时，还要把账号/新项目默认模型显式改为官方直连，否则代码级默认 Qwen 的连接失败是预期行为。
+如果 Key 写在 `.env.local`，修改后必须重启 SignalForge。官方直连不读取 `MODELPORT_API_KEY` 或 `DEEPSEEK_ANTHROPIC_AUTH_TOKEN`；也不会访问 `127.0.0.1:38082`。完全不运行 ModelPort 时，还要把账号/新项目默认模型显式改为官方直连，否则代码级默认 Qwen 的连接失败是预期行为。
 
-可直接请求 `https://api.deepseek.com/chat/completions` 区分官方鉴权问题与 QuantPilot 运行问题；该验证会产生真实 Token 费用，示例见[模型 Provider 接入](model-providers.md#deepseek-官方直连不走-modelport)。
+可直接请求 `https://api.deepseek.com/chat/completions` 区分官方鉴权问题与 SignalForge 运行问题；该验证会产生真实 Token 费用，示例见[模型 Provider 接入](model-providers.md#deepseek-官方直连不走-modelport)。
 
 然后重启并检查：
 
@@ -333,6 +333,6 @@ curl -fsS http://127.0.0.1:3000/api/ready
 npm run doctor
 ```
 
-根路径必须包含 `api_contract=evolvable-memory-http/v1`，`/readyz` 必须是 `ready`，QuantPilot readiness 中的 `memory` 组件必须是 `ok`。根路径返回 200 但没有 `api_contract`，通常说明旧进程或旧镜像未重启；重新构建或重启 Memory 后再验证。
+根路径必须包含 `api_contract=evolvable-memory-http/v1`，`/readyz` 必须是 `ready`，SignalForge readiness 中的 `memory` 组件必须是 `ok`。根路径返回 200 但没有 `api_contract`，通常说明旧进程或旧镜像未重启；重新构建或重启 Memory 后再验证。
 
 服务健康但消息 metadata 为 `personalization.status=empty` 时，检查是否真的写入了允许的 `analysis.*`、`output.*` 或 `research.*` 键，`context.product` 是否为 `quantpilot`，项目级偏好的 `project_id` 是否与当前项目一致。`prepared` 表示候选偏好已通过过滤，但只有最终回复显示“本轮实际使用了 N 条个人偏好”才证明 capsule 真正进入 Agent；澄清、拒绝和平台直出不会产生可反馈归因。`unavailable` 表示可选集成已降级，核心任务会继续；具体 API 示例、状态解释和 Outcome 归因规则见[用户记忆服务接入、使用与效果验证](user-memory-integration.md)。

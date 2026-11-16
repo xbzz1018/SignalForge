@@ -46,7 +46,7 @@ function shouldRefreshScaffoldFile(filePath: string, existing: string): boolean 
       (
         existing.includes('0 条样本') ||
         (existing.includes('最新价</span>') && !hasStandardQuantDashboard) ||
-        (existing.includes('QuantPilot 看板') && !hasStandardQuantDashboard) ||
+        (existing.includes('SignalForge 看板') && !hasStandardQuantDashboard) ||
         existing.includes('SAMPLE_DATA') ||
         existing.includes('MOCK_DATA') ||
         existing.includes('STATIC_QUOTES')
@@ -507,7 +507,7 @@ async function ensureComparisonDashboardTemplate(projectPath: string) {
   const page = await fs.readFile(pagePath, 'utf8').catch(() => '');
   const hasLegacySelectionPage =
     /TradingPlanPanel|getTradingPlanRows|tradingRows|短线交易计划|买入区间|止损|目标价|仓位上限/.test(page) ||
-    /QuantPilot 选股分析|<strong>stock-selection<\/strong>|模板组件：|候选数量|候选视图|120 日收益|<dt>120 日<\/dt>/.test(page);
+    /SignalForge 选股分析|<strong>stock-selection<\/strong>|模板组件：|候选数量|候选视图|120 日收益|<dt>120 日<\/dt>/.test(page);
   const hasReadableSelectionPage =
     /data-template="stock-selection"/.test(page) &&
     /多标的指标矩阵|指标矩阵|ComparisonTable|comparison\.rows/.test(page) &&

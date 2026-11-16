@@ -134,6 +134,7 @@ describe('compilePiAgentSkills', () => {
     expect(result.taskContext).toContain('# PI Agent Skill Capsules');
     expect(result.taskContext).toContain('quant_api_get');
     expect(`${result.systemContext}\n${result.taskContext}`).not.toContain('.pi/skills/');
+    expect(`${result.systemContext}\n${result.taskContext}`).not.toContain('mcp__SignalForgeImage__');
     expect(`${result.systemContext}\n${result.taskContext}`).not.toContain('mcp__QuantPilotImage__');
     expect(`${result.systemContext}\n${result.taskContext}`).not.toContain('workspaceResponseContract');
     expect(`${result.systemContext}\n${result.taskContext}`).not.toContain('正在理解问题');
@@ -298,6 +299,7 @@ describe('compilePiAgentSkills', () => {
     );
     expect(installedSkill).toContain('图片提取能力');
     expect(installedSkill).toContain('quant_extract_uploaded_image');
+    expect(installedSkill).not.toContain('mcp__SignalForgeImage__');
     expect(installedSkill).not.toContain('mcp__QuantPilotImage__');
     await expect(fs.access(
       path.join(workspace, '.pi', 'skills', 'image-extraction', 'references', 'portfolio-image-contract.md'),

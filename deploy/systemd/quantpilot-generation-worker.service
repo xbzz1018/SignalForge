@@ -1,5 +1,5 @@
 [Unit]
-Description=QuantPilot durable Data Agent generation worker
+Description=SignalForge durable Data Agent generation worker
 After=network-online.target quantpilot-market-data.service
 Wants=network-online.target
 Requires=quantpilot-market-data.service

@@ -466,7 +466,7 @@ export function createImageExtractionTool(
   return {
     name: 'quant_extract_uploaded_image',
     description:
-      'Read QuantPilot uploaded-image attachments, verify the files inside the PI Agent workspace, and return the portfolio screenshot metadata/extraction contract. This tool performs no OCR and never invents uncertain fields.',
+      'Read SignalForge uploaded-image attachments, verify the files inside the PI Agent workspace, and return the portfolio screenshot metadata/extraction contract. This tool performs no OCR and never invents uncertain fields.',
     effect: 'read',
     idempotency: 'intrinsic',
     inputSchema: {

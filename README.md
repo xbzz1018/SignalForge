@@ -1,79 +1,64 @@
 # SignalForge
 
-**把自然语言研究问题，变成带数据来源、实验记录和验收结果的研究看板。**
+**智能量化投研与策略分析工作台**
 
-[![Stars](https://img.shields.io/github/stars/xbzz1018/SignalForge?style=flat-square&color=2563A9)](https://github.com/xbzz1018/SignalForge/stargazers) [![Quality](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml) [![License](https://img.shields.io/github/license/xbzz1018/SignalForge?style=flat-square&color=087E6B)](LICENSE)
+面向股票、指数与 ETF 的个人项目，支持通过对话查询行情、回测均线策略，并生成图表和研究报告。研究任务关联数据来源、计算参数、运行记录与独立工作空间，便于核查结果。
 
-[项目案例](docs/project-case.md) · [本地运行](docs/quick-start.md) · [验证记录](docs/validation-status.md) · [技术文档](docs/README.md)
+[![Quality](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml) [![License](https://img.shields.io/github/license/xbzz1018/SignalForge?style=flat-square&color=087E6B)](LICENSE)
 
-面向 A 股、指数与 ETF 的个人 Data Agent 项目。用户提出研究目标，系统解析标的、获取行情、调用分析与回测工具，再生成可预览的 Next.js 看板。每次研究保留数据和执行证据，便于检查与复盘。项目用于研究，不执行自动交易。
+[项目案例](docs/project-case.md) · [架构设计](docs/architecture.md) · [本地运行](docs/quick-start.md) · [验证记录](docs/validation-status.md)
 
-![510300 研究看板：行情、K 线、数据质量与研究摘要](docs/learning/assets/research-dashboard.png)
+![沪深 300 研究看板中的 K 线、均线、成交量与风险摘要](docs/assets/hs300-research.png)
 
-<sub>2026-09-15 本地 ETF 技术分析任务的真实生成页面节选。[截图来源与验证记录](docs/validation-status.md)</sub>
+<sub>2026-11-16 真实模型任务的图表区域节选，使用 120 根日线。该任务通过构建、数据契约、桌面及移动预览检查；截图仅展示界面。[来源与裁切记录](docs/evidence/20261116-showcase.json)</sub>
 
-## 用它做什么
+## 研究场景
 
-| 研究问题 | 交付内容 |
+| 输入 | 结果 |
 | --- | --- |
-| “分析沪深 300 近期趋势与回撤” | K 线、均线、量价及风险摘要 |
-| “用 20/60 日均线回测 510300” | 净值、回撤、交易明细与可离线复跑的实验记录 |
-| “查看贵州茅台的盈利质量” | 行情、财务、公告与数据质量看板 |
-| 比较标的、检查持仓风险 | 横向比较、风险暴露与来源记录 |
+| 分析沪深 300 近期趋势 | K 线、均线、量价结构与风险摘要 |
+| 用 20/60 日均线回测 510300 | 净值、回撤、交易明细与实验快照 |
+| 查看贵州茅台的基本面 | 行情、财务、公告与数据质量信息 |
 
-行业/板块分析和开放式策略研究仍在规划中。真实任务能否完成，取决于数据覆盖、模型响应和交付检查；[当前限制](docs/validation-status.md#待完善项)单独记录。
+## 核心实现
 
-## 工程实现
-
-**把语义解析与数据核对分开。** Query Rewrite 提取研究意图，证券 Resolver 确认代码与资产类型。初始计划在 PI Agent 执行前形成；Agent 在受控工具、Skills 和预算内完成分析与页面生成。
-
-**把实验留下来。** FastAPI 服务提供行情、指标和回测；实验保存实际输入 K 线、周期、复权、参数、费用、引擎身份与哈希。离线 replay 用于检查记录和复算结果是否一致。
-
-回测请求在规划阶段冻结窗口、日期及费用，取数与结果验收核对同一份参数；预热数据不计入评估区间，净收益包含费用。详见[研究请求与回测结果校验](docs/research-correctness.md)。
-
-**以验收回执结束任务。** Agent 提交候选产物后，平台继续检查构建、数据与产物契约、预览状态。Mission 关联 accepted receipt 后才标记交付完成。PostgreSQL Job/outbox、Worker lease 与 fencing 管理长任务和写入边界。
+- **有边界的 Agent 执行。** 先解析请求并独立核验证券，再由 PI Agent 按阶段加载 Skills；结合上下文预算、有限重试和定向修复控制执行过程。
+- **本地行情优先。** FastAPI 接入东方财富、Baostock 等来源，TimescaleDB 保存历史行情，Redis 缓存分时查询；缺失区间补数后复用本地数据。
+- **回测带着输入保存。** 按下一根开盘模拟成交，计入费用与固定滑点；保存行情、参数和费用配置，使用独立账本核对与离线复算检查结果。
+- **完成以验收为准。** PostgreSQL 事务、Outbox 和租约管理任务；生成页面经过数据证据、产物契约、构建和预览检查，通过后才记录交付完成。
 
 ```mermaid
 flowchart LR
-  A[研究问题] --> B[语义解析与证券核对]
-  B --> C[研究计划与数据预取]
-  C --> D[PI Agent / 工具 / Skills]
-  D --> E[看板源码与实验记录]
-  E --> F[构建 / 证据 / 预览检查]
-  F --> G[Mission 验收回执]
+  A[对话请求] --> B[意图解析与证券核对]
+  B --> C[研究计划]
+  C --> D[FastAPI 行情与计算]
+  D --> E[PI Agent 与 Skills]
+  E --> F[报告与 Next.js 看板]
+  F --> G[数据、构建与预览验收]
+  G --> H[结果与运行记录]
 ```
 
-[看完整案例与设计取舍 →](docs/project-case.md)
+标准任务可复用受控模板；需要模型生成时进入 PI Agent 工具循环。金融指标和回测由后端计算，页面引用已保存的数据。[案例与设计取舍 →](docs/project-case.md)
 
-## 运行与验证
+## 技术与运行
 
-开发环境：Ubuntu 22.04 / WSL2、Node.js 24、Python 3.14、uv 和 Docker。Web 使用 Next.js/React/TypeScript；Python/FastAPI 提供数据与计算，PostgreSQL/TimescaleDB 保存状态和行情，Redis 缓存部分热点读取。
+Python / FastAPI · TypeScript / Next.js / React · PI Agent · PostgreSQL / TimescaleDB · Redis
 
-```bash
-git clone https://github.com/xbzz1018/SignalForge.git
-cd SignalForge
-npm ci
-uv sync --project services/market-data --extra baostock --extra akshare --locked
-```
+开发环境要求 Node.js ≥ 22.19、Python ≥ 3.14、uv 和 Docker。生成代码的隔离构建、预览在 Linux/WSL2 中运行。安装、模型配置及启动步骤见[本地运行](docs/quick-start.md)；Memory、知识服务与集中日志为可选接入。
 
-接着按[本地运行指南](docs/quick-start.md)配置服务端模型凭据、启动数据库和应用。Memory、知识服务与集中日志为可选组件。
+## 验证与范围
 
-拉取依赖更新后重新执行 `npm ci` 和带 `--locked` 的 `uv sync`；审计范围见[依赖维护记录](docs/validation-status.md#依赖维护记录)。
+2026-11-16 本地验收：TypeScript 单元测试 1489 项、Python 测试 269 项通过；生产构建、57 项浏览器检查和一个真实模型看板样本通过。测试环境、跳过项与失败历史见[验证记录](docs/validation-status.md)，远端检查以当前提交的 Quality CI 为准。
 
-| 要检查什么 | 入口 |
+对话回测目前支持单标的均线交叉、做多或空仓；尚无自动实盘交易，也未模拟完整交易约束。一个模型样本不代表长期成功率。
+
+## 代码入口
+
+| 模块 | 入口 |
 | --- | --- |
-| 静态检查、测试、构建与确定性合同 | [Quality CI](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml) |
-| 本机环境与实际所选模型 | `npm run doctor:full -- --model=deepseek-v4-flash` |
-| 行情是否跟上交易日 | `npm run check:market-freshness` |
-| 真实模型任务与已知失败 | [验证记录与边界](docs/validation-status.md) |
+| 请求、证券与研究计划 | [Finance Domain](src/lib/domains/finance/) |
+| Agent 与执行约束 | [PI Runtime](src/lib/agent/pi/)、[上下文管理](src/lib/agent/context/) |
+| 行情、指标与回测 | [Python market-data](services/market-data/) |
+| 持久任务与交付判定 | [任务队列](src/lib/quant/generation-queue.ts)、[Mission store](src/lib/services/pi-agent-mission-store.ts) |
 
-## 从哪里读代码
-
-| 关注点 | 代码 / 文档 |
-| --- | --- |
-| 研究意图与金融计划 | [Finance Domain](src/lib/domains/finance/) |
-| Agent 工具循环与执行约束 | [PI Runtime](src/lib/agent/pi/)、[上下文管理](src/lib/agent/context/) |
-| 行情、指标与回测 | [Python market-data](services/market-data/)、[策略与回测指南](docs/strategy-platform-guide.md) |
-| 持久任务与完成判定 | [队列](src/lib/quant/generation-queue.ts)、[Mission store](src/lib/services/pi-agent-mission-store.ts)、[证据核验](src/lib/agent/mission/evidence-verifier.ts) |
-
-更多页面入口、部署、评测与排障见[技术文档总览](docs/README.md)。源码中的 `QuantPilot`、数据库标识和环境变量沿用内部名称。
+专题、接口和开发资料见[文档索引](docs/README.md)。

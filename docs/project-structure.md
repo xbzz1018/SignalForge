@@ -1,6 +1,6 @@
 # 项目结构与分层边界
 
-QuantPilot 采用一个 Next.js 主应用、一个 Python 市场数据后端和一组本地基础设施脚本。目录分层以“用户入口、业务服务、量化领域、基础设施、生成工作空间”区分。
+SignalForge 采用一个 Next.js 主应用、一个 Python 市场数据后端和一组本地基础设施脚本。目录分层以“用户入口、业务服务、量化领域、基础设施、生成工作空间”区分。
 
 ## 顶层结构
 
@@ -11,7 +11,7 @@ QuantPilot 采用一个 Next.js 主应用、一个 Python 市场数据后端和�
 | `src/components/` | 可复用前端组件，按业务域拆分为 `chat`、`quant`、`settings`、`ui` 等 |
 | `src/hooks/`、`src/contexts/` | 前端状态、上下文和浏览器侧 hooks |
 | `src/lib/services/` | 主应用业务服务层，封装项目、消息、设置、令牌、预览和外部服务接入 |
-| `src/lib/agent/` | PI Agent loop 适配与 QuantPilot 治理层：Provider、Context Manager、durable runtime、类型化工具、Skill 编译器和运行协议类型 |
+| `src/lib/agent/` | PI Agent loop 适配与 SignalForge 治理层：Provider、Context Manager、durable runtime、类型化工具、Skill 编译器和运行协议类型 |
 | `src/lib/quant/` | 量化平台领域层，封装能力中心、评测、策略、工作空间健康、生成观测和验证 |
 | `src/lib/db/` | Prisma Client 和数据库访问入口 |
 | `src/types/` | 主应用共享类型 |
@@ -66,7 +66,7 @@ QuantPilot 采用一个 Next.js 主应用、一个 Python 市场数据后端和�
 
 ## 量化领域层
 
-`src/lib/quant/` 和 `src/lib/eval/` 面向 QuantPilot 自身能力：
+`src/lib/quant/` 和 `src/lib/eval/` 面向 SignalForge 自身能力：
 
 - `capabilities.ts`、`capability-center.ts`：能力域、数据接口、skills 和验证边界。
 - `src/lib/eval/`：评测用例、评测集、运行报告、队列、运行时选项、持久化映射和修复单；`runtime-mappers.ts` 承接纯解析/数据库映射并有单元测试。

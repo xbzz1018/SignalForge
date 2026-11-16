@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "verifiedDate": "2026-11-16",
+  "product": "SignalForge",
+  "checks": {
+    "fullTypeScriptRegression": {
+      "passed": 1489,
+      "skipped": 30,
+      "filesPassed": 229,
+      "filesSkipped": 5,
+      "environment": "WSL2 Linux"
+    },
+    "productionBuild": {
+      "passed": true,
+      "includesFinalProductCopy": true
+    },
+    "skillsIntegrity": {
+      "passed": true,
+      "currentPackages": 12,
+      "versionedReleaseSnapshots": 12
+    },
+    "typecheck": {
+      "passed": true
+    },
+    "eslint": {
+      "errors": 0,
+      "existingWarnings": 2
+    },
+    "documentationLinks": {
+      "markdownFiles": 54,
+      "localLinks": 244,
+      "passed": true
+    },
+    "brandBrowser": {
+      "passed": true,
+      "desktopWidth": 1440,
+      "mobileWidth": 390,
+      "oldBrandVisible": false,
+      "javascriptErrors": 0,
+      "failedResources": 0,
+      "assetsHttp200": 5,
+      "scope": "Skills market and detail; isolated production build, auth disabled and database disabled"
+    }
+  },
+  "preservedCompatibility": [
+    "Database identifiers, configuration keys and Python import names remain compatible.",
+    "Original license, upstream attribution and historical evidence retain their original identities."
+  ],
+  "limits": [
+    "The real model sample was not rerun for product-copy changes.",
+    "Registry health describes Skill integrity, not the success rate of generated tasks."
+  ],
+  "localRawFilesSha256": {
+    "tmp/showcase-vitest-linux.log": "8764713cb1809aa25d27b52258f13e712ee44392b42db21c88b3e202c3945a0d",
+    "tmp/showcase-build-final.log": "09bb8e66a6af26805c73af55b982c29a57a4a6f38ebc0471d67ed6e444d0f84d",
+    "tmp/showcase-skills-linux.log": "11be9357f107069b20f16b84290a6802cfeee09c6b7e1cead2a538370c18cad8",
+    "tmp/showcase-guardrails-linux.log": "d31f46b39b461a9c518667a095b6b4eb860435039209ea09d15a9dc5cf9f4dc9",
+    "tmp/showcase-typecheck-linux.log": "62b42c2d087594300ab3abb4ff22b412d0314294ae69e55733ea59cf33c4991b",
+    "tmp/showcase-focused-linux.log": "4c434de5c9dbda18610ef50b263092605ee8f129bc2a7872b0e08f7bc09a42ed",
+    "tmp/showcase-eslint.log": "eaac83109e284f2aca3023947ca9efd5aed1bf31d2437cff4ed90b4ce3609424",
+    "tmp/showcase-brand-browser/report.json": "5d6fd4c56022def35f6a752a14013a1ba45e1bece28bc84f8f39a5a6f395878e"
+  }
+}

@@ -34,7 +34,7 @@ async function main() {
   const usesDevelopmentDefaults = !configuredEmail && !configuredPassword && Boolean(defaults);
   const email = configuredEmail || defaults?.email || '';
   const password = configuredPassword || defaults?.password || '';
-  const name = process.env[config.bootstrap.nameEnv]?.trim() || defaults?.name || 'QuantPilot 管理员';
+  const name = process.env[config.bootstrap.nameEnv]?.trim() || defaults?.name || 'SignalForge 管理员';
 
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
     throw new Error(

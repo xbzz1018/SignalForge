@@ -1,5 +1,5 @@
 [Unit]
-Description=Refresh QuantPilot trading calendar and daily market data
+Description=Refresh SignalForge trading calendar and daily market data
 After=network-online.target quantpilot-market-data.service
 Wants=network-online.target
 Requires=quantpilot-market-data.service

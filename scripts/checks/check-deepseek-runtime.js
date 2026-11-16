@@ -122,7 +122,7 @@ async function main() {
   console.log('可选直连：deepseek-v4-flash（官方 API）');
 
   if (!piAgentRuntimeExists()) {
-    throw new Error('PI Agent 上游执行内核或 QuantPilot 适配层不完整。');
+    throw new Error('PI Agent 上游执行内核或 SignalForge 适配层不完整。');
   }
   console.log('✅ PI Agent 核心、Provider、Tools 与产品接入层已就绪');
   await checkSelectedProvider();

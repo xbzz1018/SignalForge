@@ -310,7 +310,7 @@ export async function checkArtifactPolicy(
   if (violations.length > 0) {
     return {
       status: 'failed',
-      summary: '生成产物未满足 QuantPilot 硬约束。',
+      summary: '生成产物未满足 SignalForge 硬约束。',
       details: violations.slice(0, 20).join('\n'),
       metadata: {
         checkedFiles: files.length,

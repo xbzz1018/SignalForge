@@ -111,7 +111,7 @@ export default async function Page() {
 
   return (
     <main data-source-file={DATA_FILE}>
-      <h1>QuantPilot 看板</h1>
+      <h1>SignalForge 看板</h1>
       <section aria-label="K 线与量价结构">
         <svg role="img" viewBox="0 0 120 60">
           <title>K 线与成交量</title>

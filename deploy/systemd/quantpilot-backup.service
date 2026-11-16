@@ -1,5 +1,5 @@
 [Unit]
-Description=Create a verified QuantPilot release backup
+Description=Create a verified SignalForge release backup
 After=network-online.target
 
 [Service]

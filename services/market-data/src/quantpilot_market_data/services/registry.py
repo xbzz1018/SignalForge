@@ -24,7 +24,7 @@ def build_data_providers(ttls: ProviderRegistryTtls) -> list[DataProviderInfo]:
     return [
         DataProviderInfo(
             id="quantpilot-analysis-context",
-            name="QuantPilot 分析取数合同",
+            name="SignalForge 分析取数合同",
             category="analysis-context",
             status="available",
             description=(
@@ -94,7 +94,7 @@ def build_data_providers(ttls: ProviderRegistryTtls) -> list[DataProviderInfo]:
         ),
         DataProviderInfo(
             id="quantpilot-technical-indicators",
-            name="QuantPilot 技术指标",
+            name="SignalForge 技术指标",
             category="indicator",
             status="available",
             description=(
@@ -106,7 +106,7 @@ def build_data_providers(ttls: ProviderRegistryTtls) -> list[DataProviderInfo]:
         ),
         DataProviderInfo(
             id="quantpilot-ma-crossover-backtest",
-            name="QuantPilot 策略回测",
+            name="SignalForge 策略回测",
             category="backtest",
             status="available",
             description=(
@@ -122,7 +122,7 @@ def build_data_providers(ttls: ProviderRegistryTtls) -> list[DataProviderInfo]:
         ),
         DataProviderInfo(
             id="quantpilot-research-universe",
-            name="QuantPilot 策略研究股票池",
+            name="SignalForge 策略研究股票池",
             category="research-config",
             status="available",
             description=(
@@ -142,7 +142,7 @@ def build_data_providers(ttls: ProviderRegistryTtls) -> list[DataProviderInfo]:
         ),
         DataProviderInfo(
             id="quantpilot-a-share-screener",
-            name="QuantPilot A 股选股筛选器",
+            name="SignalForge A 股选股筛选器",
             category="strategy-screener",
             status="available",
             description=(
@@ -155,7 +155,7 @@ def build_data_providers(ttls: ProviderRegistryTtls) -> list[DataProviderInfo]:
         ),
         DataProviderInfo(
             id="quantpilot-clickhouse-analytics",
-            name="QuantPilot ClickHouse 分析加速层",
+            name="SignalForge ClickHouse 分析加速层",
             category="analytics",
             status="available" if is_clickhouse_enabled() else "planned",
             description=(
@@ -344,7 +344,7 @@ def build_data_providers(ttls: ProviderRegistryTtls) -> list[DataProviderInfo]:
         ),
         DataProviderInfo(
             id="quantpilot-fundamental-indicators",
-            name="QuantPilot 财务衍生指标",
+            name="SignalForge 财务衍生指标",
             category="fundamental",
             status="available",
             description="基于财务摘要计算净利率、平均 ROE、平均毛利率和最近报告期核心指标。",

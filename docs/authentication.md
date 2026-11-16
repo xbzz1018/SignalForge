@@ -1,6 +1,6 @@
 # 用户、权限与会话管理
 
-QuantPilot 支持项目级可配置登录。它默认保持 `disabled`，兼容原来的本地单用户开发方式；部署到共享环境时应切换为 `local`，由 PostgreSQL 保存用户、凭据、会话和登录限流状态。
+SignalForge 支持项目级可配置登录。它默认保持 `disabled`，兼容原来的本地单用户开发方式；部署到共享环境时应切换为 `local`，由 PostgreSQL 保存用户、凭据、会话和登录限流状态。
 
 ## 能力边界
 
@@ -57,7 +57,7 @@ npm run ensure:env -- --enable-auth
 ```bash
 QUANTPILOT_AUTH_ADMIN_EMAIL=admin@example.com
 QUANTPILOT_AUTH_ADMIN_PASSWORD=<至少-12-字符-的强密码>
-QUANTPILOT_AUTH_ADMIN_NAME=QuantPilot 管理员
+QUANTPILOT_AUTH_ADMIN_NAME=SignalForge 管理员
 ```
 
 生产环境的 `BETTER_AUTH_URL` 与可信来源应使用实际 HTTPS 地址，同时设置 `QUANTPILOT_AUTH_SECURE_COOKIES=1`。随机密钥可用 `openssl rand -base64 32` 生成，不要把密钥或管理员密码提交到 Git。

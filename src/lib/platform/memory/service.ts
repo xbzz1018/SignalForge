@@ -24,7 +24,7 @@ import {
 import {
   assertPersonalizationKey,
   buildPreferenceContext,
-  isQuantPilotPreference,
+  isSignalForgePreference,
   selectPersonalizationProjection,
 } from './policy';
 import {
@@ -388,7 +388,7 @@ export async function listPersonalPreferences(input: {
     subjectId: actor,
     purpose: runtime.config.purpose,
   }, input.requestId);
-  return preferences.filter(isQuantPilotPreference);
+  return preferences.filter(isSignalForgePreference);
 }
 
 export async function rememberPersonalPreference(input: {
@@ -464,7 +464,7 @@ export async function correctPersonalPreference(input: {
     subjectId: actor,
     purpose: runtime.config.purpose,
   }, input.eventId);
-  if (!visible.some((item) => item.recordId === recordId && isQuantPilotPreference(item))) {
+  if (!visible.some((item) => item.recordId === recordId && isSignalForgePreference(item))) {
     throw new MemoryIntegrationError('MEMORY_PREFERENCE_NOT_FOUND', 404, 'Memory preference was not found.');
   }
   return runtime.port.correctPreference({
@@ -500,7 +500,7 @@ export async function getPersonalPreferenceRevisions(input: {
     subjectId: actor,
     purpose: runtime.config.purpose,
   }, input.requestId);
-  if (!visible.some((item) => item.recordId === recordId && isQuantPilotPreference(item))) {
+  if (!visible.some((item) => item.recordId === recordId && isSignalForgePreference(item))) {
     throw new MemoryIntegrationError('MEMORY_PREFERENCE_NOT_FOUND', 404, 'Memory preference was not found.');
   }
   return runtime.port.getRevisions({

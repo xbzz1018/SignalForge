@@ -329,7 +329,7 @@ function checkCommand(name, command, args, options = {}) {
 }
 
 async function main() {
-  console.log(`\nQuantPilot Doctor ${FULL_CHECKS ? '(full)' : '(quick)'}\n`);
+  console.log(`\nSignalForge Doctor ${FULL_CHECKS ? '(full)' : '(quick)'}\n`);
   const degradation = degradationConfig();
 
   const packageJson = readJson(path.join(ROOT, 'package.json'));

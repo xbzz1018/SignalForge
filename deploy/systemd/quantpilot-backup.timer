@@ -1,5 +1,5 @@
 [Unit]
-Description=Create a QuantPilot backup every six hours
+Description=Create a SignalForge backup every six hours
 
 [Timer]
 OnCalendar=*-*-* 00/6:10:00 Asia/Shanghai

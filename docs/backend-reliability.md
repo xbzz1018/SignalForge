@@ -37,7 +37,7 @@ export PI_AGENT_TEST_DATABASE_URL=postgresql://signalforge_test:signalforge_test
 npm run test:pi-agent:postgres
 ```
 
-`createdb` 只需首次运行。集成入口自动应用 Prisma 版本迁移。PowerShell 中改用 `$env:变量名='值'`；原生 Windows 上 psycopg 异步连接需要 SelectorEventLoop，本轮通过专用本地测试启动器运行，Linux/WSL 可以直接使用上述命令。验收脚本已自行选择 Windows 兼容事件循环。
+`createdb` 只需首次运行。集成入口自动应用 Prisma 版本迁移。PowerShell 中改用 `$env:变量名='值'`；原生 Windows 上 psycopg 异步连接需要 SelectorEventLoop；市场服务 CLI 与验收脚本已显式选择兼容循环。pytest 运行器仍需兼容的事件循环，Linux/WSL 可直接使用上述命令。
 
 此 Compose 项目使用独立端口和 tmpfs，凭据仅用于隔离测试；停止后数据不保留。先保存所需证据，再清理该项目：
 

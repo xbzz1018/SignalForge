@@ -226,7 +226,7 @@ function CreateEvalSetSheet({
         <SheetHeader className="border-b border-border/40 bg-background/95 px-5 py-4 backdrop-blur-xl">
           <SheetTitle className="text-base">创建评测集</SheetTitle>
           <SheetDescription className="text-xs">
-            自定义评测集会写入 benchmarks/quantpilot/eval-sets.json，可直接参与运行和筛选。
+            保存自定义评测集后，可用于运行和筛选。
           </SheetDescription>
         </SheetHeader>
 

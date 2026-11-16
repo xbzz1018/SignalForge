@@ -48,7 +48,7 @@ const connectorOperations = Array.from(new Set(
 )).map((endpoint) => ({
   id: operationId(endpoint),
   title: endpoint,
-  description: `QuantPilot market-data operation ${endpoint}`,
+  description: `SignalForge market-data operation ${endpoint}`,
   effect: 'read' as const,
   inputSchema: { type: 'object', additionalProperties: false },
 }));
@@ -104,17 +104,17 @@ export const QUANTPILOT_AGENT_PROFILE: DataAgentProfile = {
   knowledgePolicyId: 'quantpilot.governed-knowledge',
 };
 
-export function createQuantPilotDataAgentRegistry(): DataAgentRegistry {
+export function createSignalForgeDataAgentRegistry(): DataAgentRegistry {
   return new DataAgentRegistry()
     .registerDeliveryPack(NEXT_DASHBOARD_DELIVERY_PACK)
     .registerDomainPack(FINANCE_DOMAIN_PACK)
     .registerProfile(QUANTPILOT_AGENT_PROFILE);
 }
 
-export function resolveQuantPilotDataAgentProfile(
+export function resolveSignalForgeDataAgentProfile(
   profileId = QUANTPILOT_AGENT_PROFILE_ID,
 ) {
-  return createQuantPilotDataAgentRegistry().resolveProfile(profileId);
+  return createSignalForgeDataAgentRegistry().resolveProfile(profileId);
 }
 
 export function getFinanceSkillCapabilityDescriptor(

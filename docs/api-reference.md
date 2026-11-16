@@ -1,8 +1,8 @@
 # API 总览
 
-这份文档记录 QuantPilot 当前对外和内部页面使用的主要 API。它不是替代源码的逐行说明，而是帮助维护者快速判断“这个页面读的是哪个入口、后端职责在哪里、出问题先看哪一层”。
+这份文档记录 SignalForge 当前对外和内部页面使用的主要 API。它不是替代源码的逐行说明，而是帮助维护者快速判断“这个页面读的是哪个入口、后端职责在哪里、出问题先看哪一层”。
 
-生成类 API 由 PI Agent `0.82.1` 执行完整多轮工具循环，权限、审批、durable run、Mission 和交付验证由 QuantPilot 承担。所有 Agent API、设置和任务信封只接受规范 CLI 值 `pi`。详见 [PI Agent 采用与治理边界](pi-agent-migration.md)。
+生成类 API 由 PI Agent `0.82.1` 执行完整多轮工具循环，权限、审批、durable run、Mission 和交付验证由 SignalForge 承担。所有 Agent API、设置和任务信封只接受规范 CLI 值 `pi`。详见 [PI Agent 采用与治理边界](pi-agent-migration.md)。
 
 ## 服务边界
 
@@ -27,7 +27,7 @@
 | 路由 | 方法 | 调用方 | 责任 |
 | --- | --- | --- | --- |
 | `/api/projects` | `GET/POST` | 首页工作台 | 项目列表、创建项目和 workspace 索引 |
-| `/api/projects/[project_id]` | `GET/PATCH/DELETE` | 首页、项目页 | 单项目状态、元数据和删除 |
+| `/api/projects/[project_id]` | `GET/PUT/DELETE` | 首页、项目页 | 单项目状态、元数据和删除 |
 | `/api/projects/[project_id]/files` | `GET` | 项目聊天页 | 浏览生成工作空间文件树 |
 | `/api/projects/[project_id]/artifact` | `GET` | 预览、运行治理中心 | 读取生成产物或验证报告摘要 |
 | `/api/projects/[project_id]/install-dependencies` | `POST` | 项目聊天页 | 生成项目依赖安装 |
@@ -114,6 +114,7 @@ LLM 通过 Tool Schema 解析标的原文、时间范围、分析重点和输出
 | 路由 | 方法 | 调用方 | 责任 |
 | --- | --- | --- | --- |
 | `/api/skills` | `GET/POST` | Skills 管理 | skill 列表、文件读取、保存、发布和回滚 |
+| `/api/skills/[skillId]/source` | `GET` | Skills 源码查看 | 按 `path` 读取文件，要求 `platform.settings.manage`，响应为 `private, no-store`；沿用安全路径校验 |
 | `/api/skills/[skillId]/package` | `GET` | Skills 管理 | 下载 skill 包 |
 | `/api/settings` | `GET/POST` | 设置弹窗 | 平台设置聚合入口 |
 | `/api/settings/global` | `GET/POST` | 设置弹窗 | 全局设置 |
@@ -128,13 +129,13 @@ LLM 通过 Tool Schema 解析标的原文、时间范围、分析重点和输出
 
 | 路由 | 方法 | 调用方 | 责任 |
 | --- | --- | --- | --- |
-| `/api/projects/[project_id]/memory/preferences` | `GET/POST` | 偏好管理客户端 | 列出或显式新增当前用户的 QuantPilot 偏好 |
+| `/api/projects/[project_id]/memory/preferences` | `GET/POST` | 偏好管理客户端 | 列出或显式新增当前用户的 SignalForge 偏好 |
 | `/api/projects/[project_id]/memory/preferences/[record_id]/corrections` | `POST` | 偏好管理客户端 | 追加不可变纠正 revision |
 | `/api/projects/[project_id]/memory/preferences/[record_id]/revisions` | `GET` | 偏好管理客户端 | 查看 revision 历史 |
 | `/api/projects/[project_id]/memory/uses/[request_id]` | `GET` | 审计/反馈入口 | 查询本轮实际暴露的 revision 与内容哈希 |
 | `/api/projects/[project_id]/memory/outcomes` | `POST` | 显式用户反馈 | 对本轮真实使用过的 revision 记录可归因结果 |
 
-聊天 `/api/chat/[project_id]/act` 会在 Agent 执行前自动调用 Memory 的 `/v1/recall` 和 `/v1/recall-contexts`。浏览器不直接提交 tenant/subject；QuantPilot 在项目授权后使用可信 `actorUserId` 构造 Scope，并再次执行产品、项目、键和长度过滤。完整配置、请求示例、效果状态与安全边界见[用户记忆服务接入、使用与效果验证](user-memory-integration.md)。
+聊天 `/api/chat/[project_id]/act` 会在 Agent 执行前自动调用 Memory 的 `/v1/recall` 和 `/v1/recall-contexts`。浏览器不直接提交 tenant/subject；SignalForge 在项目授权后使用可信 `actorUserId` 构造 Scope，并再次执行产品、项目、键和长度过滤。完整配置、请求示例、效果状态与安全边界见[用户记忆服务接入、使用与效果验证](user-memory-integration.md)。
 
 ### 认证、权限、配额与用户治理
 
@@ -159,7 +160,7 @@ LLM 通过 Tool Schema 解析标的原文、时间范围、分析重点和输出
 
 默认成员配额共 9 项：`projects.owned=10 hard/lifetime`、`agent.pending=4 hard/lifetime`、`agent.concurrent=2 hard/lifetime`、`agent.requests.daily=100 hard/day`、`llm.total_tokens.monthly=2000000 warn/month`、`query_rewrite.llm.daily=200 hard/day`、`quant.data_units.daily=2000 warn/day`、`research.report_runs.daily=20 hard/day`、`research.report_sends.daily=10 hard/day`。Token 与数据单元只能在结果产生后结算，因此超额时告警而不丢弃已完成结果；请求前可判断的次数执行硬限制。管理员的限额和 `remaining` 为 `null`（表示无限），但结构状态和实际用量仍按 actor 展示。
 
-启用认证时，聊天入口把当前用户写入 `user_requests.actor_user_id`，物理 Agent run 继承为 `agent_runs.actor_user_id`，后续用量事件关联 actor、project 和 source。相同 request ID 不能跨用户或跨项目复用。LLM 问题改写的确定性 `preview` 不消费 `query_rewrite.llm.daily`；只有 execution 实际进入模型链路时才计该指标和模型 Token。
+启用认证时，聊天入口把当前用户写入 `user_requests.actor_user_id`，物理 Agent run 继承为 `agent_runs.actor_user_id`，后续用量事件关联 actor、project 和 source。相同 request ID 不能跨用户或跨项目复用。Query Rewrite 的 `preview` 与 `execution` 都会调用所选模型；启用认证时，两者均预留 `query_rewrite.llm.daily` 配额，按实际模型尝试结算次数并记录返回的 Token 用量。使用同一幂等键重放已完成响应不重复调用模型。
 
 ## 市场数据服务 API
 
@@ -281,3 +282,5 @@ fundamental 复用 financials；单个上游故障不会丢弃其他成功区块
 - 新增市场数据端点时，同步更新 `services/market-data/README.md` 和 `docs/market-data-source-knowledge.md`。
 - 改变字段口径时，同步更新 [数据字典](data-dictionary.md)。
 - 新增长任务时，必须说明是否写 `quant.platform_jobs` 或专用任务表，以及暂停、继续、停止语义。
+
+策略和报告 POST 要求请求体为 JSON 对象，损坏 JSON、数组、标量或 `null` 返回 400。报告接口额外校验操作名、标识和布尔字段，非法输入不会启动报告或预留配额。

@@ -363,7 +363,7 @@
       {
         "from": "src/lib/domains/finance/**",
         "to": "src/lib/quant/**",
-        "reason": "Finance Domain Pack 不能反向依赖 QuantPilot 产品编排层。"
+        "reason": "Finance Domain Pack 不能反向依赖 SignalForge 产品编排层。"
       },
       {
         "from": "services/market-data/**",
@@ -454,7 +454,7 @@
       },
       {
         "path": "src/lib/agent/skills/compiler.ts",
-        "pattern": "QuantPilotImage|mcp__MiniMax__understand_image",
+        "pattern": "(?:QuantPilot|SignalForge)Image|mcp__MiniMax__understand_image",
         "reason": "PI Agent Skill 编译器不保留具体产品或 Provider 的旧工具别名兼容。"
       },
       {

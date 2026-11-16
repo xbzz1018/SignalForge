@@ -52,7 +52,7 @@ export function buildPreferenceContext(input: {
   return context;
 }
 
-export function isQuantPilotPreference(preference: { key: string; context: MemoryContext }): boolean {
+export function isSignalForgePreference(preference: { key: string; context: MemoryContext }): boolean {
   try {
     assertPersonalizationKey(preference.key);
     return preference.context.product === 'quantpilot';
@@ -92,7 +92,7 @@ export function selectPersonalizationProjection(
     const stringContext = Object.fromEntries(
       Object.entries(context).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
     );
-    if (!isQuantPilotPreference({ key, context: stringContext })) continue;
+    if (!isSignalForgePreference({ key, context: stringContext })) continue;
     memories.push({ context: stringContext, key: assertPersonalizationKey(key), value });
     revisionIds.push(...segment.sources.map((source) => source.revisionId));
   }

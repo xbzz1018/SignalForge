@@ -58,9 +58,9 @@ const envExample = read('.env.example');
 if (!/^MODELPORT_API_KEY=/m.test(envExample)) {
   fail('.env.example 必须声明 MODELPORT_API_KEY');
 } else if (/^(?:DEEPSEEK_API_KEY|LOCAL_OPENAI_API_KEY)=/m.test(envExample)) {
-  fail('.env.example 不得鼓励在 QuantPilot 本地保存上游 DeepSeek 或旧本地 Provider Key');
+  fail('.env.example 不得鼓励在 SignalForge 本地保存上游 DeepSeek 或旧本地 Provider Key');
 } else {
-  pass('QuantPilot 只声明 ModelPort 客户端凭据；上游 DeepSeek Key 留在 ModelPort');
+  pass('SignalForge 只声明 ModelPort 客户端凭据；上游 DeepSeek Key 留在 ModelPort');
 }
 
 for (const key of [
@@ -247,7 +247,7 @@ if (
 ) {
   fail('聊天执行链路仍依赖供应商 session id');
 } else {
-  pass('QuantPilot inline 与 Worker 主执行链路均通过 Domain handler 使用 PI Agent');
+  pass('SignalForge inline 与 Worker 主执行链路均通过 Domain handler 使用 PI Agent');
 }
 
 const queryRewriteRoute = read('src/app/api/quant/query/rewrite/route.ts');

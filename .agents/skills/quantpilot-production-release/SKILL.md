@@ -1,9 +1,9 @@
 ---
 name: quantpilot-production-release
-description: Plan, validate, execute, verify, or roll back a QuantPilot production release. Use for feature releases, hotfixes, production deployments, release checks, database migration decisions, service restarts, post-release smoke tests, or rollback preparation. Keep routine releases code-only by default; never copy or fully synchronize production business data unless the user explicitly authorizes a separately reviewed data operation.
+description: Plan, validate, execute, verify, or roll back a SignalForge production release. Use for feature releases, hotfixes, production deployments, release checks, database migration decisions, service restarts, post-release smoke tests, or rollback preparation. Keep routine releases code-only by default; never copy or fully synchronize production business data unless the user explicitly authorizes a separately reviewed data operation.
 ---
 
-# QuantPilot Production Release
+# SignalForge Production Release
 
 Release an immutable Git revision through the repository's existing production
 contract. Treat code, schema, bounded backfills, and disaster recovery as
@@ -19,7 +19,7 @@ Before changing production, read:
 - `references/release-modes.md`
 - `references/production-target.md`
 
-Use repository-relative paths from the QuantPilot root. Do not copy secrets into
+Use repository-relative paths from the SignalForge root. Do not copy secrets into
 logs, commits, release notes, artifacts, or chat.
 
 ## Classify the release

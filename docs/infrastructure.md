@@ -1,6 +1,6 @@
 # 基础设施配置
 
-QuantPilot 本地开发默认使用 PostgreSQL + TimescaleDB + Redis，并提供 Loki + Grafana + Alloy 作为本地可观测性组件。PostgreSQL 承载工作空间、项目、评测、配置、generation job/outbox、运行事实和数据库权威租约；TimescaleDB 承载股票 K 线、因子、策略信号和组合净值等时序数据；Redis 只承载可丢失的短期缓存，后续可扩展为 dispatcher 唤醒与进度投影，但不作为锁、任务事实或完成态权威；Loki 承载集中日志查询。可选的 Evolvable User Memory 独立部署在 `38089`，通过版本化 HTTP 契约为聊天提供用户级偏好召回，不与 QuantPilot 共用数据库。环境文件优先级、ModelPort/官方直连与关闭 Memory 的完整方式见[配置指南](configuration.md)。
+SignalForge 本地开发默认使用 PostgreSQL + TimescaleDB + Redis，并提供 Loki + Grafana + Alloy 作为本地可观测性组件。PostgreSQL 承载工作空间、项目、评测、配置、generation job/outbox、运行事实和数据库权威租约；TimescaleDB 承载股票 K 线、因子、策略信号和组合净值等时序数据；Redis 只承载可丢失的短期缓存，后续可扩展为 dispatcher 唤醒与进度投影，但不作为锁、任务事实或完成态权威；Loki 承载集中日志查询。可选的 Evolvable User Memory 独立部署在 `38089`，通过版本化 HTTP 契约为聊天提供用户级偏好召回，不与 SignalForge 共用数据库。环境文件优先级、ModelPort/官方直连与关闭 Memory 的完整方式见[配置指南](configuration.md)。
 
 ## 本地启动
 
@@ -30,7 +30,7 @@ uv run quantpilot-market-api
 npm run dev
 ```
 
-需要个性化记忆时，先在独立的 `evolvable-user-memory` 仓库启动 Memory API，再启动或重启 QuantPilot Web。持久化本地模式推荐在 Memory 仓库运行：
+需要个性化记忆时，先在独立的 `evolvable-user-memory` 仓库启动 Memory API，再启动或重启 SignalForge Web。持久化本地模式推荐在 Memory 仓库运行：
 
 ```bash
 docker compose up --build -d
@@ -93,7 +93,7 @@ QUANTPILOT_MARKET_ADMIN_TOKEN=""
 
 ## 服务目录和轻量发现
 
-当前不引入 Dubbo3 这类 Java 服务治理栈。QuantPilot 会长期保持 Python/FastAPI + Node/Next.js 的主线，所以服务注册、配置中心和依赖发现先用更轻的方式落地：
+当前不引入 Dubbo3 这类 Java 服务治理栈。SignalForge 会长期保持 Python/FastAPI + Node/Next.js 的主线，所以服务注册、配置中心和依赖发现先用更轻的方式落地：
 
 | 文件或入口 | 作用 |
 | --- | --- |
@@ -183,9 +183,9 @@ Loki 宿主机端口默认使用 `33100`，生成项目预览端口池从 `4100`
 
 Docker 暴露的 PostgreSQL、Redis、ClickHouse、Loki、Grafana 和 Alloy 端口默认只绑定 `127.0.0.1`。生产部署不要通过修改 Compose 端口直接公开数据库或管理接口，应通过受控网络、认证网关和最小权限令牌接入。
 
-PI Agent loop 在主应用或独立 Worker 进程内运行，不启动 Agent CLI 子进程，也不提供通用 Shell。模型只能调用 QuantPilot 注册并包装的类型化工具：文件工具受工作空间 realpath、symlink 和写入 allowlist 约束，量化 API 工具只允许访问本机 market-data API；数据库、GitHub 和云服务令牌不会作为工具输入暴露给模型。
+PI Agent loop 在主应用或独立 Worker 进程内运行，不启动 Agent CLI 子进程，也不提供通用 Shell。模型只能调用 SignalForge 注册并包装的类型化工具：文件工具受工作空间 realpath、symlink 和写入 allowlist 约束，量化 API 工具只允许访问本机 market-data API；数据库、GitHub 和云服务令牌不会作为工具输入暴露给模型。
 
-每个 PI Agent 物理执行会通过 QuantPilot 治理层在共享文件系统资源锁内审计旧 attempt，并在 PostgreSQL 原子取得 project/canonical-workspace lease、创建 durable run；独立 heartbeat 同步续租 workspace 与 run 两层 lease，租约判断使用数据库权威时钟。事件写入与 heartbeat 共用 CAS 串行队列，旧 fencing token 不能继续提交。工具副作用前先写 `prepared` ledger；文件写入从临时文件创建前开始持有 `<workspace>/.pi-workspace.lock`，数据库短事务消费一次性 `commit_authorized` 后，资源锁继续覆盖目标复验和最终 rename；mutating outcome 不明时当前 run 立即停止并禁止后续写。孤儿资源锁不会自动强拆，owner metadata 会记录 instance/host/pid 和可用的 project/request/run/operation 身份，必须按排障 runbook 调和后移除。Checkpoint 只表示 `replan_required`，不包含 Provider session、prompt、messages 或 reasoning。该协调只覆盖 QuantPilot typed workspace-write 工具与 run takeover，不覆盖外层数据预取、scaffold、build、preview 或验证编排；生产多实例不得并发运行同一 project 的完整 generation pipeline。共享卷还必须支持跨客户端原子 mkdir/rename/fsync，并在目标 NFS/CSI 上完成多进程、多主机故障验收。开发与生产都通过 `prisma/migrations/` 中的版本化迁移升级；统一运行 `npm run prisma:deploy`。已有数据库必须先按 `prisma/migrations/README.md` 完成备份、基线识别和 schema readiness 校验。
+每个 PI Agent 物理执行会通过 SignalForge 治理层在共享文件系统资源锁内审计旧 attempt，并在 PostgreSQL 原子取得 project/canonical-workspace lease、创建 durable run；独立 heartbeat 同步续租 workspace 与 run 两层 lease，租约判断使用数据库权威时钟。事件写入与 heartbeat 共用 CAS 串行队列，旧 fencing token 不能继续提交。工具副作用前先写 `prepared` ledger；文件写入从临时文件创建前开始持有 `<workspace>/.pi-workspace.lock`，数据库短事务消费一次性 `commit_authorized` 后，资源锁继续覆盖目标复验和最终 rename；mutating outcome 不明时当前 run 立即停止并禁止后续写。孤儿资源锁不会自动强拆，owner metadata 会记录 instance/host/pid 和可用的 project/request/run/operation 身份，必须按排障 runbook 调和后移除。Checkpoint 只表示 `replan_required`，不包含 Provider session、prompt、messages 或 reasoning。该协调只覆盖 SignalForge typed workspace-write 工具与 run takeover，不覆盖外层数据预取、scaffold、build、preview 或验证编排；生产多实例不得并发运行同一 project 的完整 generation pipeline。共享卷还必须支持跨客户端原子 mkdir/rename/fsync，并在目标 NFS/CSI 上完成多进程、多主机故障验收。开发与生产都通过 `prisma/migrations/` 中的版本化迁移升级；统一运行 `npm run prisma:deploy`。已有数据库必须先按 `prisma/migrations/README.md` 完成备份、基线识别和 schema readiness 校验。
 
 开发启动脚本会做一次轻量恢复探测：如果上一次是通过 `SKIP_DB_SYNC=1`、`offline` 或关闭组件的方式降级启动，但本次启动时 PostgreSQL/TimescaleDB、market-data、Redis 或 Loki 已经恢复可用，脚本会在当前进程内把这些组件切回启用状态，并把模式恢复为 `auto`。这不会改写 `.env`，只是避免“组件已经拉起来了，前端仍沿用旧的降级环境”。如果确实想强制保持降级，可临时设置：
 

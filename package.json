@@ -1,5 +1,5 @@
 {
-  "name": "quantpilot",
+  "name": "signalforge",
   "version": "2.0.0",
   "description": "SignalForge personal quantitative research workspace powered by PI Agent and configurable model providers",
   "private": true,
@@ -181,11 +181,11 @@
   "keywords": [
     "ai",
     "deepseek",
-    "app-builder",
+    "quantitative-research",
     "nextjs",
-    "code-generation",
-    "no-code",
-    "low-code"
+    "financial-data",
+    "backtesting",
+    "data-agent"
   ],
   "author": "xbzz1018",
   "license": "MIT",

@@ -1,118 +1,97 @@
 # 验证记录与当前边界
 
-[仓库首页](../README.md) · [项目案例](project-case.md) · [评测体系](evals-guide.md)
+[仓库首页](../README.md) · [项目案例](project-case.md) · [评测指南](evals-guide.md)
 
-本页区分代码检查、确定性合同与真实模型任务。更新日期：2026-11-16。本轮在真实行情、PostgreSQL/TimescaleDB 与 Redis 验收后，继续检查基础前后端，并使用官方模型 API 完成一个真实看板交付样本。
+记录日期：2026-11-16。以下区分本地代码检查、确定性合同和真实模型交付；GitHub CI 以[对应提交的运行结果](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml)为准。
 
-## 2026-11-16 基础前后端与 API 复查
+## 当前验收结果
 
-修复 Windows Uvicorn 默认事件循环与 Psycopg 异步连接不兼容、生产模式 Skills 源码查看返回 403、策略和报告接口错误 JSON 处理，以及生成工作空间缺少图标导致视觉验收失败的问题。报告接口另外拒绝错误字段类型，避免在参数校验前执行任务或占用配额。Skills 源码读取继续要求管理员能力，写接口的宿主授权边界保持有效。
-
-| 验证 | 结果与范围 |
+| 检查 | 结果与范围 |
 | --- | --- |
-| Linux TypeScript 完整单元回归 | 229 文件、1489 项通过；5 文件、30 项依赖专用环境的测试跳过 |
-| Python 后端完整回归 | 269 通过、0 跳过，包含本轮独立 PostgreSQL/TimescaleDB 和 Redis 集成 |
-| 生产构建与静态检查 | Next.js build、TypeScript 和 Ruff 通过；ESLint 无错误，保留两项既有导航方式提示 |
-| Playwright 页面合同 | 18 项通过，覆盖桌面与移动端；这是受控合同测试 |
-| 真实基础浏览器验收 | 57 项通过；登录与退出、项目增删改查、20 个桌面/移动页面、模型语义解析，以及 17 组非法 JSON 与报告参数类型检查 |
-| 真实行情 HTTP | 9 项通过；ETF 历史行情、均线回测及非法窗口、费率、周期、未知/重复参数校验 |
-| 真实模型看板 | 沪深 300 技术趋势任务通过：正式 `/act`、PI Agent、构建、数据契约、双端视觉检查及 Mission accepted receipt；3 轮、cache-miss 输入 11068 Tokens、无异常工具失败，耗时 44.021 秒 |
+| TypeScript 完整回归 | Linux 下 229 文件、1489 项通过；5 文件、30 项专用环境测试跳过 |
+| Python 完整回归 | 269 通过、0 跳过，含隔离 PostgreSQL/TimescaleDB 与 Redis 集成；2 项依赖提示 |
+| 静态检查与构建 | TypeScript、Ruff、Next.js 生产构建通过；ESLint 0 错误、2 项既有导航提示 |
+| Playwright 页面合同 | 桌面及移动端 18 项通过，使用受控数据，不算真实模型成绩 |
+| 实际浏览器检查 | 57 项通过：登录退出、项目 CRUD、20 个双端页面、模型语义解析及 17 组非法请求 |
+| 真实行情 HTTP | 9 项通过：ETF 历史行情、均线回测与非法参数拒绝 |
+| PostgreSQL 任务集成 | 29 项通过：并发首次入队、幂等冲突、失联接管、迟到心跳和结果拒绝、Outbox 顺序 |
+| 真实行情与存储 | 股票 600519、ETF 510300、指数 000300 各 250 根行情；入库、故障回滚、账本核对、离线复算与 Redis 往返通过 |
 
-摘要及原始报告哈希见 [20261116-basic-fullstack.json](evidence/20261116-basic-fullstack.json)。原始报告、截图、日志和隔离数据库快照保存在本机 `tmp/basic-live-e2e-20261116/`、`tmp/basic-frontend-audit-20261116/` 等目录；API 密钥只注入验收进程。全部结果来自未提交工作区，不代表远端 main 或 GitHub CI 已更新。
+摘要见 [基础前后端验收](evidence/20261116-basic-fullstack.json)与[后端可靠性验收](evidence/20261116-backend-reliability.json)。两份摘要保留验收时的源码身份、未提交状态和原始报告哈希；后续提交不改写这些历史字段。原始日志、截图和隔离数据库快照保留在本机 `tmp/`，密钥不进入证据或仓库。
 
-保留两次前置失败：ETF 看板因图标 404 被严格门禁拒绝；补齐图标后的指数任务完成标准模板交付，但因未进入模型路径而被模型 E2E 门禁拒绝。随后显式设置已有的 `QUANTPILOT_EVAL_FORCE_MODEL_AGENT=1`，才得到上述真实模型通过记录。未降低验收条件，也不将标准模板任务计算为模型成绩。
+## 一个真实模型交付样本
 
-一个真实样本不能代表完整发布回归集或稳定通过率。Windows 原生环境的生成代码隔离仍有限制，实际生成验收在 WSL2/Linux namespace 中执行；Skills 编辑、发布等生产管理写操作，以及可选 Memory、Knowledge、ModelPort 和日志服务未在本次联调范围内。
+`index-technical-hs300` 使用官方模型 API，经正式 `/act`、PI Agent 生成、构建、数据契约、双端视觉检查和 Mission accepted receipt 完成交付。
 
-## 2026-11-16 回测与后端可靠性
-
-继续使用 Python/FastAPI、PostgreSQL/TimescaleDB 与 Redis，没有迁移 MySQL。回测升级为下一根开盘成交，增加固定滑点和独立账本校验；任务首次入队按项目行锁串行化，并校验完整幂等执行参数。财报历史查询使用与采集一致的数据库时间，覆盖应用时钟前后偏移一小时的场景。
-
-| 验证 | 结果与范围 |
+| 项目 | 记录 |
 | --- | --- |
-| Python 3.14.7 后端完整回归 | 265 通过、0 跳过，包含真实 PostgreSQL 财报历史和 Redis 集成 |
-| PostgreSQL 任务集成 | 29 通过，包含六请求并发首次入队、参数冲突回滚、失联接管、迟到心跳/完成拒绝和 Outbox 顺序 |
-| TypeScript 定向回归 | 8 文件共 105 通过；请求编译、响应拒绝、数据预取、归档、队列和固定行情合同 |
-| 类型与代码检查 | TypeScript、修改文件 ESLint、后端及验收脚本 Ruff、架构/模块边界和工作流检查通过；模块体积存在既有提示 |
-| 生成模板 | 四类模板实际 Next.js 构建通过；修复 Windows 目录链接与跨盘临时目录问题 |
-| 真实行情及存储 | 东方财富返回股票 600519、ETF 510300、指数 000300 各 250 条历史行情；TimescaleDB 入库、故障注入回滚、HTTP 回测、账本校验、离线复算、Redis 往返均通过 |
-| 真实模型及浏览器交付 | 此阶段未执行，随后通过上节基础前后端复查完成一个官方模型样本；默认模型配置仍需单独配置，不能将 API 探测或固定合同视为完整生成验收 |
+| 模型配置 | DeepSeek / `deepseek-v4-flash` |
+| 执行 | 3 轮、44.021 秒、0 异常工具失败、0 修复轮次 |
+| 用量 | 输入 27964、输出 3354 Tokens；cache-miss 输入 11068 |
+| 隔离 | WSL2 / Linux namespace，未允许无沙箱生成执行 |
+| 范围 | 1 个样本；未执行完整发布回归，不推导长期成功率 |
 
-摘要见 [20261116-backend-reliability.json](evidence/20261116-backend-reliability.json)。完整行情、回测、查询计划和报告保存在本机 `tmp/research-acceptance-20261116-verified/`，摘要保留其 SHA-256；回测响应另含引擎代码、运行时及输入/结果哈希。报告来自未提交工作区，记录基准 revision 与差异，不等于当前 main 的 CI 或生产验收。复跑方法见[后端可靠性验收](backend-reliability.md)。
+此前两次尝试仍保留：ETF 页面因图标 404 被拒绝；修复图标后的指数任务通过标准模板交付，但因没有进入模型生成路径被严格模型门禁拒绝。显式使用已有的 `QUANTPILOT_EVAL_FORCE_MODEL_AGENT=1` 后才得到上述模型样本，未放宽条件或把模板算作模型成绩。
 
-## 依赖维护记录
+本次也修复了 Windows 行情服务事件循环、Skills 源码查看权限链路、策略和报告的错误 JSON 处理。该模型报告早于最后一处无关的报告字段校验，摘要保留各自构建身份。品牌文案和文档整理后的检查另行记录，不据此声称重跑了模型样本。
 
-2026-11-04，展示 PR 的 Quality CI 在前后端生产依赖审计处失败。维护更新将 Next.js 与 ESLint 配置锁定到 `16.4.5`、Better Auth 到 `1.7.16`、Zod 到 `4.6.7`、Sharp 到 `0.35.5`，并同步 Vitest/coverage `4.1.12` 及相关传递依赖；更新了过期的 brace-expansion 覆盖版本。后端仅更新 anyio `4.14.2`、certifi `2026.10.23`、soupsieve `2.9` 和 urllib3 `2.8.0`。
+品牌与文档整理后，完整 TypeScript 回归、生产构建、Skills 完整性及双端页面实查通过；范围与日志哈希见[展示更新验收](evidence/20261116-project-showcase.json)。
 
-本地 `npm audit --omit=dev --audit-level=high` 为 0 项；后端包含全部可选提供商的哈希锁定依赖审计未发现已知漏洞。全 npm 审计仍有 16 项中等级别的开发工具链报告，根因是 minimatch；未用审计建议的强制替换修改工具链主版本。审计结果会随公告更新，后续仍需定期复查。
+## 截图来源
 
-回归验收以本 PR 最新提交的 Quality CI 为准，包含类型、覆盖率、构建、浏览器合同、登录和 PostgreSQL fencing 检查；本节不代表新的真实模型评测或生产部署验收。
+首页仅展示该通过任务的 K 线与风险摘要区域，保留实际回撤和高风险结论；没有修改页面文字或状态。[裁切坐标、原图及输出哈希](evidence/20261116-showcase.json)可用于核对。截图展示界面，计算正确性另由业务测试核查。
 
-## 可执行的验证入口
+旧教学截图中的失败列表、重复任务及过时执行器已撤下展示。2026-09-15 的历史研究图来源仍保存在[历史摘要](evidence/20260915-e2e-summary.json)，不与新样本合并统计。
+
+## 当前边界
+
+| 范围 | 实现与限制 |
+| --- | --- |
+| 对话回测 | 单标的简单均线交叉、做多或空仓；自定义参数及区间须通过冻结合同校验 |
+| 成交与收益 | 下一根开盘、费用及固定滑点进入账本；尚不模拟完整停牌、涨跌停、容量及退市约束 |
+| 数据与复算 | 保存行情快照、参数与引擎身份；哈希与离线复算不证明供应商数据真实性或策略有效性 |
+| 中断恢复 | 真实数据库覆盖接管、取消及迟到结果；恢复需要重新规划，不支持任意工具断点续跑 |
+| 生成隔离 | 完整 build/preview 在 Linux/WSL2 验收，Windows 原生执行有支持边界 |
+| 外部服务 | 本轮未验收生产 Skills 编辑/发布及可选 Memory、Knowledge、ModelPort 和集中日志联调 |
+| 交易 | 无券商接入、实盘下单或自动交易 |
+
+计算口径见[研究正确性](research-correctness.md)，实现落点见[能力对应表](resume-implementation-map.md)，集成复跑见[后端可靠性](backend-reliability.md)。
+
+## 验证入口
 
 ```bash
 npm run lint
 npm run type-check
 npm test
-npm run test:coverage
 npm run build
 npm run test:e2e
 npm run benchmark:quant:contract
 ```
 
-[Quality workflow](../.github/workflows/quality.yml)包含前后端检查、浏览器合同、确定性评测与 PostgreSQL fencing 集成。实际结论以[对应提交的 Actions 结果](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml)为准。
+真实模型评测使用 `npm run benchmark:quant:e2e -- --model deepseek-v4-flash`，需要有效凭据并消耗服务商额度。固定用例、数据和预算后保留所有失败；不要用合同测试替代模型验收。详细配置见[评测指南](evals-guide.md)。
 
-确定性合同模式使用版本化数据与仓库模板；CI 对此路径显式启用无 namespace 执行，不代表真实模型生成代码的沙箱路径已经通过。真实生成仍应在受支持的 Linux 隔离环境验收。
+## 历史记录
 
-真实模型 E2E 单独执行，会消耗服务商额度：
+<details>
+<summary>2026-09-15 的有限模型批次</summary>
 
-```bash
-npm run benchmark:quant:e2e -- --model deepseek-v4-flash
-```
+5 次运行中 3 次通过、2 次失败；模型配置为 `deepseek-v4-flash`，并发 1，cache-miss 输入预算 24000。
 
-固定用例、模型、数据快照和预算，保留原始报告、失败阶段、源码身份、Token 与成本。不同代码版本的成绩分别保存。
+| 场景 | 结果 | 耗时 | 记录 |
+| --- | --- | ---: | --- |
+| 茅台基本面 | PASS | 37.351 秒 | 构建与预览通过 |
+| 沪深 300 趋势 | PASS | 35.920 秒 | 构建与预览通过 |
+| 510300 均线回测 | PASS | 37.792 秒 | 实验与看板交付通过 |
+| 510300 均线回测 | FAIL | 48.643 秒 | `SEMANTIC_TARGET_UNSAFE`，严格门禁拒绝 |
+| 510300 均线回测 | FAIL | 42.462 秒 | Provider JSON 截断，验收失败 |
 
-## 历史模型运行
+[历史摘要](evidence/20260915-e2e-summary.json)保留本地 dirty build 身份及原报告哈希。60% 只是这 5 次的样本比例，不表示当前版本成功率。
 
-2026-09-15 的有限批次运行 5 次：3 次通过、2 次失败。模型为配置中记录的 `deepseek-v4-flash`，并发 1，每次 cache-miss 输入预算 24,000；不对失败盲目重试。
+</details>
 
-| 次数 | 场景 | 结果 | 耗时 | 说明 |
-| --- | --- | --- | ---: | --- |
-| 1 | 茅台基本面看板 | PASS | 37.351 s | Mission、构建与预览通过 |
-| 2 | 沪深 300 技术趋势 | PASS | 35.920 s | Mission、构建与预览通过 |
-| 3 | 510300 均线回测 | PASS | 37.792 s | 实验与看板交付通过 |
-| 4 | 510300 均线回测 | FAIL | 48.643 s | 出现 `SEMANTIC_TARGET_UNSAFE`；即使 Mission accepted，严格运行门禁仍判失败 |
-| 5 | 510300 均线回测 | FAIL | 42.462 s | Provider 返回截断 JSON，验收阶段失败 |
+<details>
+<summary>依赖维护记录</summary>
 
-公开摘要见 [20260915-e2e-summary.json](evidence/20260915-e2e-summary.json)。它从本地历史报告提取结果和配置，保留原报告 SHA256 与 build revision，移除了本机路径和调用标识；它不是完整原始日志或新的签名证明。
+2026-11-04 的维护记录包含前后端生产依赖更新和审计：当时 npm 生产依赖审计为 0 项，后端哈希锁定依赖未发现已知漏洞；全 npm 审计保留 16 项中等级别开发工具链报告。公告会变化，此记录不代表后续时点的审计结论，更新后以实际审计和 Quality CI 为准。
 
-这批报告来自历史本地 dirty build，不等于当前 main 提交；60% 是 5 次有限样本比例。CI、回放、Mission accepted 都不能单独证明研究结论、收益或长期稳定性。
-
-## 截图来源
-
-[首页截图](learning/assets/research-dashboard.png)来自 2026-09-15 的独立 ETF 技术分析工作空间 `benchmark-etf-technical-300etf`，只裁切到页面上部，未改动页面内容。它与上表五次运行分别保存，不计入该批次的通过次数。原图文件名、摘要、尺寸和裁切范围保存在 [JSON 摘要](evidence/20260915-e2e-summary.json)的 `screenshot` 字段中。
-
-它展示实际生成的界面，不作为指标计算正确性的验证。旧教学文档中的 QuantPilot 截图保留其历史上下文。
-
-## 待完善项
-
-2026-11-03 的源码审查定位到请求、计算及进展判断问题。2026-11-11 合并远端已有修复与本地改进，2026-11-16 继续补充执行与后端可靠性，当前实现及剩余边界如下。
-
-| 范围 | 当前实现 | 验证及边界 |
-| --- | --- | --- |
-| 请求与执行参数 | 规划冻结均线窗口、周期、复权、日期、资金与费率；预取及最终数据验收核对同一合同 | 对话仅支持简单均线交叉；不支持或含糊的输入进入澄清；区间前行情仅用于指标预热 |
-| 参数校验 | 拒绝非法、非有限、越界、未知及重复查询参数；实验保存实际默认值 | 后端 pytest 验证实际 HTTP 参数贯通及非法请求在取数前失败 |
-| 指标窗口 | 最近 21 根有效日线产生 20 个收益；完整均线、区间收益和成交量窗口保留缺失位置；空样本风险值为 `null` | 前端排序有效日期，日期非法/重复时不输出 20 日波动率；后端回测拒绝乱序、重复或缺失收盘价 |
-| 费用与收益 | 下一根开盘模拟成交，费用与固定滑点进入资金账本；独立校验逐期收益、回撤和交易损益 | 跳空、期末未成交信号和篡改拒绝有回归；仍不模拟完整交易约束 |
-| 年化周期 | 日/周/月线分别使用 252/52/12；拒绝分钟线回测 | pytest 比较频率变化下的年化收益和波动率 |
-| Agent 进展 | 规范工具输入与有效观察，宿主提供工作空间内容摘要；连续无进展时停止 | 脚本化 PI 工具循环覆盖重复读取、失败、同内容写入，以及真实内容变化后的终端提交 |
-
-关键代码：[预取](../src/lib/quant/data-prefetch/market.ts)、[前端指标](../src/lib/quant/data-prefetch/technical.ts)、[回测引擎](../services/market-data/src/quantpilot_market_data/backtest.py)、[PI Runtime](../src/lib/agent/pi/run-engine.ts)。
-
-分钟线 Redis 缓存按 `end` 隔离，见 [缓存回归](../services/market-data/tests/test_quotes_service.py)。本轮另有[真实 Redis 集成](../services/market-data/tests/test_cache_redis_integration.py)，验证较早刷新晚返回不能覆盖新版本、删除缓存不能被在途刷新复活，以及 TTL 和损坏 JSON 清理；断连冷却重试通过受控连接故障测试验证。
-
-2026-11-11 的历史本地结果为后端 208 通过、4 跳过，已被本页顶部本轮结果更新。Windows 原生环境的工作空间目录同步及 Linux namespace 执行仍有支持边界；四类静态模板构建通过不能替代真实模型生成代码的沙箱验收。
-
-计算用例见[前端窗口回归](../src/lib/quant/data-prefetch/technical.test.ts)、[回测正确性](../services/market-data/tests/test_backtest_correctness.py)及[离线回放](../services/market-data/tests/test_backtest_experiments.py)。确定性市场服务的回测夹具现在返回评估区间，并拒绝其固定结果不支持的参数，避免夹具被误认为通用计算引擎。详细计算口径见[请求与回测校验](research-correctness.md)，功能落点见[能力对应表](resume-implementation-map.md)。
-
-Worker 中断恢复、取消与迟到结果竞态已纳入真实 PostgreSQL 集成；真实模型驱动的交付已完成本页顶部的单样本验收，完整发布回归集仍需另跑。Memory、ModelPort 和 Loki 各有独立服务条件；关闭可选组件的诊断通过不等于完整生产联调。
+</details>

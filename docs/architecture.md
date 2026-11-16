@@ -1,55 +1,23 @@
 # 架构总览
 
-QuantPilot 是通用 Data Agent 平台上的第一个金融应用。核心链路是：用户提出研究问题，Data Agent 使用所选 LLM 形成通用任务合同，Finance Domain Pack 再通过独立 Resolver 核验证券、生成金融 run plan 并注入数据、Skills、工具和 Mission；PI Agent 根据受控合同运行完整多轮工具循环，QuantPilot 治理层约束副作用并生成工作空间，最后由 Delivery 验证、视觉检查、产物契约和评测决定是否可交付。
+SignalForge 是面向股票、指数与 ETF 的个人投研工作台。Next.js 提供交互和任务接口，Python/FastAPI 负责行情与计算，PI Agent 按研究计划生成工作空间，平台核验当前版本的产物与运行证据。
 
 ```mermaid
 flowchart LR
-  U[用户问题/图片] --> W[Next.js 工作台 :3000]
-  W --> D[Data Agent Profile]
-  D --> Q[LLM-first Task / Query Rewrite]
-  D --> F[Finance Domain Pack]
-  F --> Q
-  Q --> MP[ModelPort / Qwen 或受控直连]
-  Q --> M[证券 Resolver / 市场数据 :8000]
-  Q --> J[(Generation Job / Outbox)]
-  J --> WK[独立 Data Agent Worker]
-  WK --> G[Domain Handler / Mission -> Agent Governance]
-  W --> DB[(PostgreSQL / TimescaleDB :5432)]
-  G --> R[PI Agent Runtime]
-  G --> DB
-  F --> S[Finance Skills / Tools / Validators]
-  S --> R
-  W --> K[Agent Knowledge Platform / AKEP]
-  R --> MP
-  W --> M
-  W --> SC[服务目录 config/service-catalog.json]
-  SC --> W
-  SC --> M
-  M --> DB
-  W --> L[(Loki / Grafana / Alloy)]
-  R --> P[data/projects/project-*]
-  M --> P
-  P --> V[生成项目预览 :4100+]
-  G --> V
-  P --> H[运行治理中心 /ops-platform]
-  W --> T[策略平台 /strategy-platform]
-  W --> C[量化业务知识中心 /business-knowledge]
-  W --> E[评测平台 /eval-platform]
-  W --> A[Skills 管理 /skills]
+  U[对话请求] --> W[Next.js 工作台]
+  W --> Q[语义解析与证券核对]
+  Q --> J[计划与持久任务]
+  J --> R[Worker / PI Agent / Skills]
+  R --> M[FastAPI 行情与计算]
+  M --> T[(TimescaleDB)]
+  M --> C[(Redis 缓存)]
+  J --> P[(PostgreSQL 任务状态)]
+  R --> S[项目工作空间]
+  S --> V[构建、数据与预览验收]
+  V --> P
 ```
 
-## 怎么读这张图
-
-这张图可以按四条线来看。
-
-| 线索 | 你要关注什么 |
-| --- | --- |
-| 用户线 | 用户从首页提出问题，进入项目聊天，再打开生成项目预览 |
-| 数据线 | 市场数据后端把外部源采集到 PostgreSQL/TimescaleDB，页面和 Agent 都优先读本地库 |
-| 生成线 | Agent Runtime 使用 skills 规划、取数、写页面，并把事件和产物写入 workspace |
-| 质量线 | 验证、视觉检查、产物契约、评测和运维共同判断结果是否可交付 |
-
-如果你在排查问题，可以先判断自己站在哪条线上。比如 K 线没有成交额，多半是数据线；页面生成了但很丑，多半是生成线和 skills；预览打不开，多半是生成线、工作空间契约或基础环境；评测失败，多半要沿着质量线回看产物。
+任务与计算结果以数据库和工作空间为准，Redis 用于可失效的查询缓存。模型负责语义和生成，金融计算由确定性后端执行。Memory、Knowledge、ModelPort 与集中日志是可选接入，配置见[组件指南](configuration.md)。
 
 ## 主链路
 
@@ -61,7 +29,7 @@ flowchart LR
 6. 平台根据 run plan 调用 `8000` 后端获取真实数据。
 7. 数据、来源和质量报告写入工作空间。
 8. Web 在返回排队成功前持久化 schema v3 Data Agent generation envelope 与 job/outbox；独立 Worker 先取得数据库全局容量槽，再按 actor 公平顺序 claim Job。普通成员最多保留 4 个待执行请求、同时运行 2 个 Job；同一 Project 始终单写。inline 模式仍经过同一 registry，并按 Profile ID 分派 handler，同时核对组合哈希与 Consumer/Tenant/Project/Workspace/Request scope。
-9. Agent 通过 ModelPort 使用默认 Qwen，并结合 Skills、真实数据和有界知识 capsule 生成 Next.js 候选看板，以 `candidate_complete` 结束本次物理执行。
+9. 标准任务可复用受控模板；模型生成任务由 PI Agent 使用所选服务端模型、Skills 与真实数据生成 Next.js 候选看板，以 `candidate_complete` 结束物理执行。模型可通过 ModelPort 或官方直连接入。
 10. Mission Graph 为当前 candidate version 冻结 candidate receipt，平台执行自动验证、产物契约检查和视觉检查。
 11. EvidenceVerifier 核对 MissionSpec、subject manifest、必需检查和持久预览 HTTP 就绪证据；失败时进入修复并产生新的 candidate version。
 12. 只有 accepted receipt 在数据库事务中关联到 Mission 后，请求才进入 `completed`；此后才为实际进入 Agent 的 Citation 记录 AKEP Usage。
@@ -71,10 +39,10 @@ flowchart LR
 | 内部执行器 | 模型 | 接口边界 | 用途 |
 | --- | --- | --- | --- |
 | PI Agent（执行器 `pi`） | `local_qwen:qwen3.5-9b-q5km`（默认） | 本机 `http://127.0.0.1:38082/v1/chat/completions` | 分析、生成与评测 |
-| PI Agent（执行器 `pi`） | `deepseek:deepseek-v4-flash`（日常可选） | QuantPilot 调 ModelPort OpenAI-compatible `/chat/completions`；ModelPort 调 DeepSeek Anthropic `/v1/messages` | 分析与生成 |
+| PI Agent（执行器 `pi`） | `deepseek:deepseek-v4-flash`（日常可选） | SignalForge 调 ModelPort OpenAI-compatible `/chat/completions`；ModelPort 调 DeepSeek Anthropic `/v1/messages` | 分析与生成 |
 | PI Agent（执行器 `pi`） | `deepseek-v4-flash`（备用直连） | DeepSeek 官方 OpenAI-compatible `/chat/completions` | 绕过 ModelPort 的部署/CI 备用链路 |
 
-PI Agent `0.82.1` 是 QuantPilot 的进程内开源 Agent loop，不启动 Agent CLI 子进程；它可以运行在 Web 的本地开发进程，也可以运行在生产独立 Worker 进程。QuantPilot 把既有 Provider 和类型化工具适配给 PI，并继续负责权限、上下文、预算与 durable runtime。Provider 地址和模型标识由 `config/llm.json` 的版本化 profile 锁定，客户端不能提交任意 Base URL；凭据仅从服务端环境读取。运行前由 Context Manager 控制输入预算；generation job/outbox、项目级 generation lease、物理运行状态、公开事件、replan checkpoint、工具 operation ledger、MissionSpec 物化节点和不可变 evidence receipt 进入 PostgreSQL，hidden reasoning 永不持久化。generation lease 在 run plan 落盘前串行化外层编排，数据库唯一 active Mission slot 再保证同一项目不会被两个合规入口同时创建非终态 generation。
+PI Agent `0.82.1` 是 SignalForge 的进程内开源 Agent loop，不启动 Agent CLI 子进程；它可以运行在 Web 的本地开发进程，也可以运行在生产独立 Worker 进程。SignalForge 把既有 Provider 和类型化工具适配给 PI，并继续负责权限、上下文、预算与 durable runtime。Provider 地址和模型标识由 `config/llm.json` 的版本化 profile 锁定，客户端不能提交任意 Base URL；凭据仅从服务端环境读取。运行前由 Context Manager 控制输入预算；generation job/outbox、项目级 generation lease、物理运行状态、公开事件、replan checkpoint、工具 operation ledger、MissionSpec 物化节点和不可变 evidence receipt 进入 PostgreSQL，hidden reasoning 永不持久化。generation lease 在 run plan 落盘前串行化外层编排，数据库唯一 active Mission slot 再保证同一项目不会被两个合规入口同时创建非终态 generation。
 
 模型和 CLI 的注册入口：
 
@@ -130,7 +98,7 @@ Mission 表只保存有界结构和摘要哈希，不保存 prompt、hidden reas
 
 ## 服务目录
 
-QuantPilot 当前采用 Python/Node 长期主线，不引入 Dubbo3 作为配置中心、服务发现或服务注册。对应能力由轻量服务目录承担：
+SignalForge 当前采用 Python/Node 长期主线，不引入 Dubbo3 作为配置中心、服务发现或服务注册。对应能力由轻量服务目录承担：
 
 - `config/service-catalog.json` 记录 web、market-data、TimescaleDB、Redis、ClickHouse、Loki、Grafana 和 Alloy 的职责、runtime、endpoint、启动命令和依赖。
 - `src/lib/platform/service-catalog.ts` 负责 Node 侧解析、环境变量覆盖、endpoint 脱敏、依赖图和配置校验。
@@ -141,7 +109,7 @@ QuantPilot 当前采用 Python/Node 长期主线，不引入 Dubbo3 作为配置
 
 ## 模块化单体
 
-QuantPilot 当前采用模块化单体，而不是微服务化。运行态继续保持 `Next.js + Python market-data`，代码侧按模块治理：
+SignalForge 当前采用模块化单体，而不是微服务化。运行态继续保持 `Next.js + Python market-data`，代码侧按模块治理：
 
 - `config/module-boundaries.json` 定义 shared-kernel、ui-kit、platform-navigation-ui、product-shell、platform-core、agent-runtime、data-agent-core、finance-domain、quant-core、eval-core、ops-core 和 market-data-backend。
 - `npm run check:module-boundaries` 检查反向依赖、未声明跨模块依赖、依赖环、通用 UI 污染和大文件预算。
@@ -176,7 +144,7 @@ QuantPilot 当前采用模块化单体，而不是微服务化。运行态继续
 
 - PostgreSQL 承载 Prisma 管理的主业务表，包括工作空间、项目、评测、设置、物理 AgentRun、Mission Graph 节点和 evidence receipt。
 - TimescaleDB 承载 `quant.stock_bars`、`quant.stock_factors`、`quant.strategy_signals` 和 `quant.portfolio_snapshots` 等时序表。
-- Redis 承载短期缓存，优先用于板块资金、行情摘要和后续任务进度。
+- Redis 承载分时行情等短期查询缓存，不承担任务状态与完成事实。
 - Loki/Grafana/Alloy 承载集中日志采集和运维排查；Loki 未启动时运行治理中心会降级读取本地文件日志。
 - 行情字段来源、补数优先级和 provider 边界见 [行情数据源采集知识库](market-data-source-knowledge.md)。
 - 根目录 `sqls/` 保存组件默认需要的基础 SQL，Docker 首次创建容器时会执行；已有数据库可通过 `npm run db:init` 补齐 SQL 对象并同步 Prisma 应用表。
@@ -185,13 +153,13 @@ QuantPilot 当前采用模块化单体，而不是微服务化。运行态继续
 
 ## 设计取舍
 
-QuantPilot 当前最重要的取舍是“本地事实库优先”。外部接口可以不稳定，也可能字段不完整，但只要数据已经进入本地 TimescaleDB，策略、生成页面和评测都应该优先复用同一份事实。
+SignalForge 当前最重要的取舍是“本地事实库优先”。外部接口可以不稳定，也可能字段不完整，但只要数据已经进入本地 TimescaleDB，策略、生成页面和评测都应该优先复用同一份事实。
 
 | 取舍 | 原因 |
 | --- | --- |
 | PostgreSQL + TimescaleDB 作为核心底座 | 应用状态和时序数据都能在同一个 PostgreSQL 连接体系下管理 |
 | 文件系统继续保存 workspace 原件 | 生成项目源码、截图和大 JSON 适合保留原始文件，数据库保存索引和摘要 |
-| Redis 先做短期缓存 | 股票池摘要、板块资金和任务进度适合缓存，但长期结果仍写回数据库 |
+| Redis 先做短期缓存 | 分时行情等热点读取适合短 TTL 缓存，长期结果和任务状态仍写回数据库 |
 | Loki 可选但推荐 | 本地开发可以降级到文件日志，排复杂问题时集中日志更省时间 |
 | Skills 作为生成规则层 | 同类页面问题不应每次只修代码，要沉淀成下一次生成能复用的规则 |
 | Python 作为市场数据后端主语言 | 当前瓶颈主要是外部数据源、IO、缓存、批处理和存储形态，不是 CPU 密集计算；优先强化 FastAPI + async/批处理 + Redis/TimescaleDB/ClickHouse，而不是过早引入 Go 或 Rust |

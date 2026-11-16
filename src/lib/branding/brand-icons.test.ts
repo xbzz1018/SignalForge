@@ -8,7 +8,7 @@ const root = process.cwd();
 describe('SignalForge brand icons', () => {
   it('keeps the browser and application icons on the same SVG brand mark', async () => {
     const [publicMark, appIcon] = await Promise.all([
-      fs.readFile(path.join(root, 'public', 'quantpilot-mark.svg'), 'utf8'),
+      fs.readFile(path.join(root, 'public', 'signalforge-mark.svg'), 'utf8'),
       fs.readFile(path.join(root, 'src', 'app', 'icon.svg'), 'utf8'),
     ]);
 
@@ -25,9 +25,9 @@ describe('SignalForge brand icons', () => {
     ['public/favicon-32.png', 32],
     ['public/favicon.png', 128],
     ['public/apple-touch-icon.png', 180],
-    ['public/icons/quantpilot-192.png', 192],
-    ['public/icons/quantpilot-512.png', 512],
-    ['public/QuantPilot_Icon.png', 512],
+    ['public/icons/signalforge-192.png', 192],
+    ['public/icons/signalforge-512.png', 512],
+    ['public/SignalForge_Icon.png', 512],
   ])('provides %s at %ipx', async (relativePath, size) => {
     const metadata = await sharp(path.join(root, relativePath)).metadata();
     expect(metadata.format).toBe('png');

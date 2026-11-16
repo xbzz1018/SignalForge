@@ -1,8 +1,8 @@
 # 配置、模型接入与可选组件指南
 
-这篇文档是 QuantPilot 配置方式的权威入口。它回答几个最容易混淆的问题：配置应该放在哪个文件、模型是否必须经过 ModelPort、Memory 与受治理知识是否启用，以及不同组合如何验证。
+这篇文档是 SignalForge 配置方式的权威入口。它回答几个最容易混淆的问题：配置应该放在哪个文件、模型是否必须经过 ModelPort、Memory 与受治理知识是否启用，以及不同组合如何验证。
 
-QuantPilot 支持这些长期运行方式：
+SignalForge 支持这些长期运行方式：
 
 - 推荐拓扑：默认 Qwen 经 ModelPort，日常 DeepSeek 也经 ModelPort。
 - 官方直连：某个项目直接调用 DeepSeek 官方 OpenAI-compatible API，不经过 ModelPort。
@@ -40,7 +40,7 @@ Docker Compose 默认读取进程变量与 `.env`，不会自动读取 `.env.loc
 
 建议不要执行 `cp .env.example .env.local`。示例文件是完整字典，把它整体复制到本机覆盖层会制造大量重复值，之后很难判断哪个文件真正生效。`.env.local` 只保留本机确实需要的几行即可。
 
-布尔开关统一接受 `1/0`；部分解析器也接受 `true/false`、`yes/no`、`on/off`。文档和部署模板统一使用 `1/0`，避免不同工具解释不一致。修改服务端变量后需要重启 QuantPilot；修改 ModelPort 或 Memory 自身变量后需要重启对应服务。
+布尔开关统一接受 `1/0`；部分解析器也接受 `true/false`、`yes/no`、`on/off`。文档和部署模板统一使用 `1/0`，避免不同工具解释不一致。修改服务端变量后需要重启 SignalForge；修改 ModelPort 或 Memory 自身变量后需要重启对应服务。
 
 浏览器验收默认使用 Playwright 配套 Chromium。已有受管理浏览器时可在 `.env.local` 设置 `QUANTPILOT_CHROMIUM_EXECUTABLE_PATH`；产品页面 E2E、认证烟测、生成页面视觉验收与 benchmark 使用同一配置。CI 继续安装配套浏览器，不依赖本机路径。
 
@@ -60,7 +60,7 @@ npm run dev
 
 ### 方式对照
 
-| 模式 | QuantPilot 模型 ID | QuantPilot 凭据 | ModelPort 是否必需 | 适合场景 |
+| 模式 | SignalForge 模型 ID | SignalForge 凭据 | ModelPort 是否必需 | 适合场景 |
 | --- | --- | --- | --- | --- |
 | 本地 Qwen（默认） | `local_qwen:qwen3.5-9b-q5km` | `MODELPORT_API_KEY` | 是 | 日常默认、低成本本地推理 |
 | DeepSeek 经 ModelPort | `deepseek:deepseek-v4-flash` | `MODELPORT_API_KEY` | 是 | 日常线上 DeepSeek、集中密钥/用量/余额治理 |
@@ -70,7 +70,7 @@ npm run dev
 
 ### A. 推荐：Qwen 与 DeepSeek 都经过 ModelPort
 
-QuantPilot 的 `.env.local` 只需 ModelPort 客户端 Key：
+SignalForge 的 `.env.local` 只需 ModelPort 客户端 Key：
 
 ```dotenv
 MODELPORT_API_KEY="replace-with-scoped-modelport-client-key"
@@ -79,7 +79,7 @@ MODELPORT_API_KEY="replace-with-scoped-modelport-client-key"
 ModelPort 负责保存和调用真正的上游凭据。其 DeepSeek provider 使用 Anthropic 协议：
 
 ```dotenv
-# 只存在于 ModelPort，不要复制到 QuantPilot
+# 只存在于 ModelPort，不要复制到 SignalForge
 DEEPSEEK_ANTHROPIC_AUTH_TOKEN="replace-with-deepseek-upstream-key"
 ```
 
@@ -91,7 +91,7 @@ api_key_env = "DEEPSEEK_ANTHROPIC_AUTH_TOKEN"
 default_model = "deepseek-v4-flash"
 ```
 
-为 QuantPilot 签发的客户端 Key 应至少允许实际使用的 provider/model。只使用 Qwen 时不必给它 DeepSeek scope；两者都使用时应允许：
+为 SignalForge 签发的客户端 Key 应至少允许实际使用的 provider/model。只使用 Qwen 时不必给它 DeepSeek scope；两者都使用时应允许：
 
 - `local_qwen:qwen3.5-9b-q5km`
 - `deepseek:deepseek-v4-flash`
@@ -113,13 +113,13 @@ curl -fsS \
 
 ### B. DeepSeek 官方直连，不经过 ModelPort
 
-在 QuantPilot 的忽略文件 `.env.local` 中配置官方 OpenAI-compatible Key：
+在 SignalForge 的忽略文件 `.env.local` 中配置官方 OpenAI-compatible Key：
 
 ```dotenv
 DEEPSEEK_API_KEY="replace-with-official-deepseek-api-key"
 ```
 
-不要同时配置 `DEEPSEEK_ANTHROPIC_AUTH_TOKEN`。后者是 ModelPort Anthropic provider 的上游变量，QuantPilot 官方直连 profile 不读取它。
+不要同时配置 `DEEPSEEK_ANTHROPIC_AUTH_TOKEN`。后者是 ModelPort Anthropic provider 的上游变量，SignalForge 官方直连 profile 不读取它。
 
 然后在以下任一入口显式选择 **DeepSeek V4 Flash (Official Direct)**，对应模型 ID 为 `deepseek-v4-flash`：
 
@@ -145,7 +145,7 @@ curl -fsS https://api.deepseek.com/chat/completions \
 
 ### C. 只使用本地 Qwen，不安装 DeepSeek
 
-这是有效的长期拓扑。ModelPort 只启用 `local_qwen` provider，QuantPilot 使用一个仅允许该 provider/model 的客户端 Key：
+这是有效的长期拓扑。ModelPort 只启用 `local_qwen` provider，SignalForge 使用一个仅允许该 provider/model 的客户端 Key：
 
 ```dotenv
 MODELPORT_API_KEY="replace-with-qwen-only-client-key"
@@ -154,14 +154,14 @@ MODELPORT_API_KEY="replace-with-qwen-only-client-key"
 不配置以下变量：
 
 ```dotenv
-# QuantPilot 不需要
+# SignalForge 不需要
 # DEEPSEEK_API_KEY=
 
 # ModelPort 不需要
 # DEEPSEEK_ANTHROPIC_AUTH_TOKEN=
 ```
 
-默认 Qwen、Query Rewrite、workspace 生成、工具调用和自动验证都能工作。DeepSeek 模型仍可能出现在 QuantPilot 的受控模型目录中，但选择它会得到清晰的未授权或凭据缺失错误，不会自动把请求转给 Qwen。
+默认 Qwen、Query Rewrite、workspace 生成、工具调用和自动验证都能工作。DeepSeek 模型仍可能出现在 SignalForge 的受控模型目录中，但选择它会得到清晰的未授权或凭据缺失错误，不会自动把请求转给 Qwen。
 
 ### 模型总开关与 Query Rewrite
 
@@ -207,7 +207,7 @@ QUANTPILOT_KNOWLEDGE_BEARER_TOKEN="dev-reader"
 | `ENABLED=0` | 否 | 不受影响 | 不需要个性化或尚未部署 Memory |
 | `DEGRADATION_MODE=offline` | 否 | 同时关闭多项外部能力 | 局部开发、网络故障排查 |
 
-`REQUIRED=0` 不等于关闭 Memory。只要 `ENABLED=1`，服务健康时 QuantPilot 仍会进行 discovery、recall 和可归因反馈。如果要求完全没有 Memory 网络请求，必须设置 `QUANTPILOT_MEMORY_ENABLED=0`。
+`REQUIRED=0` 不等于关闭 Memory。只要 `ENABLED=1`，服务健康时 SignalForge 仍会进行 discovery、recall 和可归因反馈。如果要求完全没有 Memory 网络请求，必须设置 `QUANTPILOT_MEMORY_ENABLED=0`。
 
 ### 启用 Memory，本地可降级
 
@@ -222,7 +222,7 @@ QUANTPILOT_MEMORY_RECALL_LIMIT=6
 QUANTPILOT_MEMORY_MAX_CONTEXT_CHARACTERS=2000
 ```
 
-Memory tenant 是消费应用的硬隔离边界，不是随请求变化的 workspace ID。每个后续接入产品必须使用独立 tenant 和独立 workload token；QuantPilot 内部 workspace 由服务端写入的 `context.project_id` 选择，并在 capsule 交付前再次过滤。
+Memory tenant 是消费应用的硬隔离边界，不是随请求变化的 workspace ID。每个后续接入产品必须使用独立 tenant 和独立 workload token；SignalForge 内部 workspace 由服务端写入的 `context.project_id` 选择，并在 capsule 交付前再次过滤。
 
 本地单用户调试可以临时使用静态 Bearer Token：
 
@@ -298,7 +298,7 @@ DEEPSEEK_API_KEY="replace-with-official-deepseek-api-key"
 QUANTPILOT_MEMORY_ENABLED=0
 ```
 
-保存后还需在 QuantPilot 中选择 `deepseek-v4-flash`；只配置 Key 不会改变默认 Qwen。
+保存后还需在 SignalForge 中选择 `deepseek-v4-flash`；只配置 Key 不会改变默认 Qwen。
 
 ### 完全离线的界面/模板开发
 
@@ -342,15 +342,15 @@ generation dispatch 的关键配置是 `PI_AGENT_DISPATCH_LEASE_TTL_MS=120000`�
 
 必须保持以下归属：
 
-| Secret | 所属服务 | 是否放入 QuantPilot |
+| Secret | 所属服务 | 是否放入 SignalForge |
 | --- | --- | --- |
-| `MODELPORT_API_KEY` | ModelPort 签发给 QuantPilot 的客户端凭据 | 是，`.env.local` 或 Secret Manager |
+| `MODELPORT_API_KEY` | ModelPort 签发给 SignalForge 的客户端凭据 | 是，`.env.local` 或 Secret Manager |
 | `DEEPSEEK_ANTHROPIC_AUTH_TOKEN` | ModelPort 的 DeepSeek 上游凭据 | 否 |
 | Qwen 上游 Key（如有） | ModelPort 的本地/远端 Qwen provider | 否 |
-| `DEEPSEEK_API_KEY` | QuantPilot 官方直连 profile | 仅启用 direct 模式时 |
+| `DEEPSEEK_API_KEY` | SignalForge 官方直连 profile | 仅启用 direct 模式时 |
 | `QUANTPILOT_MEMORY_BEARER_TOKEN` | 本地单用户 Memory 调试 | 仅开发；生产禁止静态通配 token |
-| `QUANTPILOT_MEMORY_TOKEN_BROKER_CLIENT_SECRET` | QuantPilot 到可信 broker | 生产 Secret Manager |
-| `QUANTPILOT_KNOWLEDGE_OAUTH_CLIENT_SECRET` | QuantPilot 到 AKEP OAuth issuer | 生产 Secret Manager |
+| `QUANTPILOT_MEMORY_TOKEN_BROKER_CLIENT_SECRET` | SignalForge 到可信 broker | 生产 Secret Manager |
+| `QUANTPILOT_KNOWLEDGE_OAUTH_CLIENT_SECRET` | SignalForge 到 AKEP OAuth issuer | 生产 Secret Manager |
 
 密钥不得出现在 `config/llm.json`、`.env.example` 的真实值、前端请求、截图、生成 workspace、GitHub Actions 日志或故障文档中。日志只记录 provider/model、状态码、trace ID 和用量，不记录 Authorization header。
 

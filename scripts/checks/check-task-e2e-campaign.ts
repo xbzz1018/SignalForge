@@ -186,7 +186,7 @@ async function api(
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error('QuantPilot API request failed.');
+  throw lastError instanceof Error ? lastError : new Error('SignalForge API request failed.');
 }
 
 async function authenticate(context: BrowserContext): Promise<void> {
@@ -194,7 +194,7 @@ async function authenticate(context: BrowserContext): Promise<void> {
   const password = process.env.QUANTPILOT_TASK_E2E_ADMIN_PASSWORD?.trim() || 'admin';
   const target = new URL(baseUrl);
   if ((login === 'admin' || password === 'admin') && !['localhost', '127.0.0.1', '::1'].includes(target.hostname)) {
-    throw new Error('Default local E2E credentials are forbidden for a non-loopback QuantPilot URL.');
+    throw new Error('Default local E2E credentials are forbidden for a non-loopback SignalForge URL.');
   }
   const page = await context.newPage();
   try {

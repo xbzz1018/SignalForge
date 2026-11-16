@@ -1,5 +1,5 @@
 [Unit]
-Description=QuantPilot standalone web application
+Description=SignalForge standalone web application
 After=network-online.target
 Wants=network-online.target
 

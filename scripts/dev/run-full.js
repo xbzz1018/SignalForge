@@ -212,7 +212,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((error) => {
-    console.error('\n❌ Failed to launch QuantPilot development stack');
+    console.error('\n❌ Failed to launch SignalForge development stack');
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);
   });

@@ -9,6 +9,15 @@
     "query-rewrite": {
       "releases": [
         {
+          "version": "0.5.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
+        {
           "version": "0.5.1",
           "date": "2026-07-28",
           "summary": "统一采用 PI Agent 命名合同和 .pi Skill 权威源。",
@@ -74,6 +83,15 @@
     },
     "run-planner": {
       "releases": [
+        {
+          "version": "0.4.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
         {
           "version": "0.4.1",
           "date": "2026-07-28",
@@ -168,6 +186,15 @@
     "quant-data-registry": {
       "releases": [
         {
+          "version": "0.5.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
+        {
           "version": "0.5.1",
           "date": "2026-07-28",
           "summary": "统一采用 PI Agent 命名合同和 .pi Skill 权威源。",
@@ -240,6 +267,15 @@
     "quant-symbol-resolver": {
       "releases": [
         {
+          "version": "0.3.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
+        {
           "version": "0.3.1",
           "date": "2026-07-28",
           "summary": "统一采用 PI Agent 命名合同和 .pi Skill 权威源。",
@@ -310,6 +346,15 @@
     "image-extraction": {
       "releases": [
         {
+          "version": "0.4.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
+        {
           "version": "0.4.1",
           "date": "2026-07-28",
           "summary": "统一采用 PI Agent 命名合同和 .pi Skill 权威源。",
@@ -372,6 +417,15 @@
     },
     "quant-market-data": {
       "releases": [
+        {
+          "version": "0.5.3",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
         {
           "version": "0.5.2",
           "date": "2026-07-28",
@@ -446,6 +500,15 @@
     "quant-fundamentals": {
       "releases": [
         {
+          "version": "0.3.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
+        {
           "version": "0.3.1",
           "date": "2026-07-28",
           "summary": "统一采用 PI Agent 命名合同和 .pi Skill 权威源。",
@@ -517,6 +580,15 @@
     "quant-indicators": {
       "releases": [
         {
+          "version": "0.3.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
+        {
           "version": "0.3.1",
           "date": "2026-07-28",
           "summary": "统一采用 PI Agent 命名合同和 .pi Skill 权威源。",
@@ -578,6 +650,15 @@
     "quant-backtest": {
       "releases": [
         {
+          "version": "0.3.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
+        {
           "version": "0.3.1",
           "date": "2026-07-28",
           "summary": "统一采用 PI Agent 命名合同和 .pi Skill 权威源。",
@@ -629,6 +710,15 @@
     },
     "data-quality": {
       "releases": [
+        {
+          "version": "0.4.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
         {
           "version": "0.4.1",
           "date": "2026-07-28",
@@ -692,6 +782,15 @@
     "platform-ui-product-design": {
       "releases": [
         {
+          "version": "0.3.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
+        {
           "version": "0.3.1",
           "date": "2026-07-28",
           "summary": "统一采用 PI Agent 命名合同和 .pi Skill 权威源。",
@@ -745,6 +844,15 @@
     },
     "dashboard-visualization": {
       "releases": [
+        {
+          "version": "0.6.2",
+          "date": "2026-11-16",
+          "summary": "统一 SignalForge 产品名称与阶段说明。",
+          "changes": [
+            "更新 Skill 描述及参考资料中的产品名称，保留现有配置与调用合同。",
+            "重新打包并更新源文件及发布包哈希。"
+          ]
+        },
         {
           "version": "0.6.1",
           "date": "2026-07-28",

@@ -59,7 +59,7 @@ function actionsForFailedCheck(check: QuantValidationCheck): string[] {
           `${check.summary}\n${check.details ?? ''}`
         );
         return [
-        '让 app/page.tsx 使用 QuantPilot 标准数据绑定结构读取 data_file/final/dashboard-data.json。',
+        '让 app/page.tsx 使用 SignalForge 标准数据绑定结构读取 data_file/final/dashboard-data.json。',
         '保留 DATA_FILE、readDashboardData()、getBars() 或 data-source-file={DATA_FILE} 等标准入口。',
         ...(tradingPlanFailure
           ? [
@@ -284,7 +284,7 @@ export function buildQuantValidationRepairInstruction(
     .map((check) => `- ${check.id}：${completionConditionForFailedCheck(check)}`)
     .join('\n');
 
-  return `QuantPilot failure-scoped repair packet
+  return `SignalForge failure-scoped repair packet
 
 目标：只修复本轮失败项，保留已有真实数据、有效分析和无关页面内容。${original}
 
@@ -307,6 +307,6 @@ ${completionConditions || '- 报告未提供失败 ID；仅提交已能由失败
 执行契约：
 1. 使用本轮提供的 typed tools 定向读取和修改；只在需要新建失败产物时使用 write_file，否则优先 edit_file。
 2. 必须实际修改失败项关联文件，但不得顺带重写未失败模块；不得写入 mock、占位数据、凭据或密钥。
-3. 不要执行 shell、安装依赖、启动开发服务器、构建、预览或循环复验。构建、预览与自动验证由 QuantPilot 平台统一执行。
+3. 不要执行 shell、安装依赖、启动开发服务器、构建、预览或循环复验。构建、预览与自动验证由 SignalForge 平台统一执行。
 4. 完成上述失败项对应修改后，调用 submit_result，artifacts 只列出本轮实际修改的工作区相对路径；提交即结束本次物理运行，等待平台独立验证。`;
 }

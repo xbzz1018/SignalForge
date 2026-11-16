@@ -14,12 +14,12 @@ const PUBLIC_BRAND_ASSET_PATHS = new Set([
   '/favicon.png',
   '/icon.svg',
   '/manifest.webmanifest',
-  '/quantpilot-mark.svg',
-  '/QuantPilot_Icon.png',
+  '/signalforge-mark.svg',
+  '/SignalForge_Icon.png',
 ]);
 
 function isPublicBrandAssetPath(pathname: string): boolean {
-  return PUBLIC_BRAND_ASSET_PATHS.has(pathname) || /^\/icons\/quantpilot-(?:192|512)\.png$/.test(pathname);
+  return PUBLIC_BRAND_ASSET_PATHS.has(pathname) || /^\/icons\/signalforge-(?:192|512)\.png$/.test(pathname);
 }
 
 function loginRedirect(request: NextRequest): NextResponse {
@@ -65,7 +65,7 @@ export async function proxy(request: NextRequest) {
   if (!session) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json(
-        { error: 'AUTHENTICATION_REQUIRED', message: '请先登录 QuantPilot。' },
+        { error: 'AUTHENTICATION_REQUIRED', message: '请先登录 SignalForge。' },
         { status: 401 },
       );
     }

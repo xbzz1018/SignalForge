@@ -19,7 +19,7 @@ import {
   getQuantCapability,
 } from '@/lib/domains/finance/capabilities';
 import {
-  createQuantPilotDataAgentRegistry,
+  createSignalForgeDataAgentRegistry,
   getFinanceSkillCapabilityDescriptor,
   QUANTPILOT_AGENT_PROFILE_ID,
 } from '@/lib/domains/finance';
@@ -41,7 +41,7 @@ const financeAdapter: DataAgentApplicationAdapter = {
       workspaceId: input.projectId,
       projectId: input.projectId,
       projectName: input.projectName,
-      platform: 'QuantPilot',
+      platform: 'SignalForge',
       composition: application.composition,
       createdAt: now,
       updatedAt: now,
@@ -138,7 +138,7 @@ const financeAdapter: DataAgentApplicationAdapter = {
 };
 
 const applicationCatalog = new DataAgentApplicationCatalog(
-  createQuantPilotDataAgentRegistry(),
+  createSignalForgeDataAgentRegistry(),
 ).register(financeAdapter);
 
 export function getApplicationDataAgentCatalog(): DataAgentApplicationCatalog {

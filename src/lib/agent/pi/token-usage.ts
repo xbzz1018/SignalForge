@@ -29,7 +29,7 @@ export const EMPTY_USAGE: PiAgentTokenUsage = {
   cacheMissInputTokens: 0,
 };
 
-/** SDK cost fields are placeholders; QuantPilot has no provider billing receipt here. */
+/** SDK cost fields are placeholders; SignalForge has no provider billing receipt here. */
 export const EMPTY_PI_USAGE: Usage = {
   input: 0,
   output: 0,
@@ -80,7 +80,7 @@ export function tokenCount(value: number, label: string): number {
 
 /**
  * PI reports non-cached input, cache reads and cache writes separately.
- * QuantPilot's historical inputTokens is the full provider input.
+ * SignalForge's historical inputTokens is the full provider input.
  */
 type HostUsage = Usage & Pick<PiAgentTokenUsage, 'usageSource'>;
 
@@ -109,41 +109,41 @@ export function usageFromPi(usage: HostUsage): PiAgentTokenUsage {
 }
 
 export function usageToPi(usage: PiAgentTokenUsage): HostUsage {
-  const fullInput = tokenCount(usage.inputTokens, 'QuantPilot input usage');
-  const output = tokenCount(usage.outputTokens, 'QuantPilot output usage');
-  if (tokenCount(usage.totalTokens, 'QuantPilot total usage') !== fullInput + output) {
-    throw new Error('QuantPilot total usage does not match input plus output usage.');
+  const fullInput = tokenCount(usage.inputTokens, 'SignalForge input usage');
+  const output = tokenCount(usage.outputTokens, 'SignalForge output usage');
+  if (tokenCount(usage.totalTokens, 'SignalForge total usage') !== fullInput + output) {
+    throw new Error('SignalForge total usage does not match input plus output usage.');
   }
   let cacheRead =
     usage.cachedInputTokens === undefined
       ? undefined
-      : tokenCount(usage.cachedInputTokens, 'QuantPilot cached-input usage');
+      : tokenCount(usage.cachedInputTokens, 'SignalForge cached-input usage');
   let cacheMiss =
     usage.cacheMissInputTokens === undefined
       ? undefined
-      : tokenCount(usage.cacheMissInputTokens, 'QuantPilot cache-miss usage');
+      : tokenCount(usage.cacheMissInputTokens, 'SignalForge cache-miss usage');
   if (cacheRead === undefined && cacheMiss === undefined) {
     cacheRead = 0;
     cacheMiss = fullInput;
   } else if (cacheRead === undefined) {
     if (cacheMiss! > fullInput) {
-      throw new Error('QuantPilot cache-miss usage cannot exceed full input usage.');
+      throw new Error('SignalForge cache-miss usage cannot exceed full input usage.');
     }
     cacheRead = fullInput - cacheMiss!;
   } else if (cacheMiss === undefined) {
     if (cacheRead > fullInput) {
-      throw new Error('QuantPilot cached-input usage cannot exceed full input usage.');
+      throw new Error('SignalForge cached-input usage cannot exceed full input usage.');
     }
     cacheMiss = fullInput - cacheRead;
   }
   if (cacheRead === undefined || cacheMiss === undefined) {
-    throw new Error('QuantPilot usage normalization failed.');
+    throw new Error('SignalForge usage normalization failed.');
   }
   if (cacheRead + cacheMiss !== fullInput) {
-    throw new Error('QuantPilot cached and cache-miss usage must equal full input usage.');
+    throw new Error('SignalForge cached and cache-miss usage must equal full input usage.');
   }
-  if (usage.reasoningTokens !== undefined && tokenCount(usage.reasoningTokens, 'QuantPilot reasoning usage') > output) {
-    throw new Error('QuantPilot reasoning usage cannot exceed output usage.');
+  if (usage.reasoningTokens !== undefined && tokenCount(usage.reasoningTokens, 'SignalForge reasoning usage') > output) {
+    throw new Error('SignalForge reasoning usage cannot exceed output usage.');
   }
   const totalTokens = fullInput + output;
   return {

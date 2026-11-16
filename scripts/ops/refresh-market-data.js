@@ -130,7 +130,7 @@ async function waitForIngestionJob({ baseUrl, universeId, jobId, timeoutMs, poll
   await postJson(
     baseUrl,
     `/api/v1/ingestion/jobs/${encodeURIComponent(jobId)}/control`,
-    { action: 'stop', reason: 'QuantPilot market maintenance timed out.' },
+    { action: 'stop', reason: 'SignalForge market maintenance timed out.' },
     30_000,
   ).catch(() => undefined);
   throw new Error(`Market ingestion job ${jobId} timed out after ${timeoutMs}ms.`);

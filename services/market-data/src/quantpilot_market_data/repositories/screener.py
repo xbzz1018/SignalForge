@@ -1005,11 +1005,11 @@ async def screen_a_share_short_term_candidates(
     response_trade_date = resolved_trade_date
     notes = [
         (
-            "本接口通过 QuantPilot market-data API 读取 ClickHouse 分析表；"
+            "本接口通过 SignalForge market-data API 读取 ClickHouse 分析表；"
             "skills 不直接访问数据库。"
             if data_basis.startswith("clickhouse.")
             else (
-                "本接口只通过 QuantPilot market-data API 读取本地 TimescaleDB；"
+                "本接口只通过 SignalForge market-data API 读取本地 TimescaleDB；"
                 "skills 不直接访问数据库。"
             )
         ),

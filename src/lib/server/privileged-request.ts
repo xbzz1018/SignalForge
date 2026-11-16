@@ -83,7 +83,7 @@ export function assertPrivilegedMutation(request: Request): void {
   const provided = requestToken(request);
   if (expected) {
     if (!provided || !tokenMatches(expected, provided)) {
-      throw new PrivilegedRequestError('缺少有效的 QuantPilot 管理令牌。', 401);
+      throw new PrivilegedRequestError('缺少有效的 SignalForge 管理令牌。', 401);
     }
     return;
   }

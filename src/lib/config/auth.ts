@@ -1,11 +1,11 @@
 import authConfigFile from '../../../config/auth.json';
 
-export type QuantPilotAuthMode = 'disabled' | 'local';
+export type SignalForgeAuthMode = 'disabled' | 'local';
 export type AuthEnvironment = Readonly<Record<string, string | undefined>>;
 
 export interface ProjectAuthConfig {
   schemaVersion: 1;
-  mode: QuantPilotAuthMode;
+  mode: SignalForgeAuthMode;
   enabled: boolean;
   basePath: '/api/auth';
   secretEnvs: readonly ['QUANTPILOT_AUTH_SECRET', 'BETTER_AUTH_SECRET'];
@@ -47,7 +47,7 @@ export interface ProjectAuthConfig {
       login: 'admin';
       email: 'admin@quantpilot.local';
       password: 'admin';
-      name: 'QuantPilot 管理员';
+      name: 'SignalForge 管理员';
     };
   };
   publicPaths: string[];
@@ -95,7 +95,7 @@ function configInteger(
   return parsed;
 }
 
-function modeEnv(value: string | undefined, fallback: QuantPilotAuthMode): QuantPilotAuthMode {
+function modeEnv(value: string | undefined, fallback: SignalForgeAuthMode): SignalForgeAuthMode {
   const normalized = value?.trim().toLowerCase();
   if (normalized === 'local' || normalized === 'disabled') return normalized;
   return fallback;
@@ -147,9 +147,9 @@ export function getProjectAuthConfig(
     record(bootstrap?.developmentDefaults)?.login !== 'admin' ||
     record(bootstrap?.developmentDefaults)?.email !== 'admin@quantpilot.local' ||
     record(bootstrap?.developmentDefaults)?.password !== 'admin' ||
-    record(bootstrap?.developmentDefaults)?.name !== 'QuantPilot 管理员'
+    record(bootstrap?.developmentDefaults)?.name !== 'SignalForge 管理员'
   ) {
-    throw new Error('config/auth.json does not match the locked QuantPilot auth contract.');
+    throw new Error('config/auth.json does not match the locked SignalForge auth contract.');
   }
 
   const passwordMinLength = configInteger(password?.minLength, 'password.minLength', 12, 64);
@@ -286,7 +286,7 @@ export function getProjectAuthConfig(
         login: 'admin',
         email: 'admin@quantpilot.local',
         password: 'admin',
-        name: 'QuantPilot 管理员',
+        name: 'SignalForge 管理员',
       },
     },
     publicPaths: stringArray(local.publicPaths),

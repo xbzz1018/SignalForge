@@ -252,7 +252,7 @@ export async function assessPlatformPreparedQuantArtifacts(
   };
 }
 
-export async function buildQuantPilotTaskPrompt(
+export async function buildSignalForgeTaskPrompt(
   instruction: string,
   projectPath: string,
   options: {
@@ -278,7 +278,7 @@ export async function buildQuantPilotTaskPrompt(
       requestedVariantId: runPlan?.visualization?.variantId,
       dataSignals: runPlan?.visualization?.dataSignals,
     });
-    return `# QuantPilot Task Packet
+    return `# SignalForge Task Packet
 
 数据阶段：validation-repair
 权威定位：${capability.id}；标的 ${runPlan?.symbols?.join(', ') || '无显式标的'}；模板 ${runPlan?.visualization?.templateId ?? visualization.templateId} / ${runPlan?.visualization?.variantId ?? visualization.variantId}
@@ -309,7 +309,7 @@ ${instruction.trim()}`;
 - 先完成 final 数据与 evidence，再按 dashboard contract 定向编辑页面。
 - API 参数使用 query 对象；缺失数据必须保留真实缺口。`;
 
-  return `# QuantPilot Task Packet
+  return `# SignalForge Task Packet
 
 用户需求：${instruction.trim()}
 数据阶段：${prepared && options.hasAttachments ? 'attachment-enrichment' : prepared ? 'platform-prepared' : 'data-preparation'}
@@ -325,7 +325,7 @@ ${modeConstraints}
 - A 股使用红涨绿跌；宽表只在自身容器滚动，移动端不得产生页面级横向溢出。`;
 }
 
-export interface QuantPilotSystemPromptOptions {
+export interface SignalForgeSystemPromptOptions {
   phase?: PiAgentSkillPhase;
   preparedIntent?: 'standard' | 'custom' | null;
   skillManifest?: string;
@@ -344,8 +344,8 @@ function phaseContract(phase: PiAgentSkillPhase): string {
   }
 }
 
-export function buildQuantPilotSystemPrompt(
-  options: QuantPilotSystemPromptOptions = {},
+export function buildSignalForgeSystemPrompt(
+  options: SignalForgeSystemPromptOptions = {},
 ): string {
   const phase = options.phase ?? 'workspace-generation';
   const preparedCustomGuardrails = phase === 'workspace-generation' && options.preparedIntent === 'custom'
@@ -359,7 +359,7 @@ These constraints are absolute for this run and take precedence over visual skil
 - After the single successful CSS edit, call submit_result immediately. If the visual change cannot fit the bound, submit the smallest completed change instead of expanding the edit or retrying a failed payload.`
     : '';
   return `# PI Agent Kernel
-You are QuantPilot's first-party workspace agent.
+You are SignalForge's first-party workspace agent.
 
 ## Immutable execution contract
 - Use only typed tools in this workspace. No shell/subprocess, credentials, parent-platform changes, or \`.data-agent/**\` mutation.
@@ -382,7 +382,7 @@ ${phase === 'workspace-generation' && options.preparedIntent ? `Prepared route: 
 ${options.skillManifest?.trim() || '# PI Agent Skill Manifest\nNo task skill capsule was loaded.'}${preparedCustomGuardrails}`;
 }
 
-export function buildQuantPilotUserPrompt(params: {
+export function buildSignalForgeUserPrompt(params: {
   taskPacket: string;
   skillContext: string;
   initialDashboardContract: string | null;

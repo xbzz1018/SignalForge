@@ -23,7 +23,7 @@ import {
   type PersonalizationCapsule,
 } from '../../src/lib/platform/memory/types';
 import { rewriteQuantQuerySemanticsWithConfiguredProvider } from '../../src/lib/domains/finance/query-rewrite-llm';
-import { buildQuantPilotUserPrompt } from '../../src/lib/services/pi-agent-prompts';
+import { buildSignalForgeUserPrompt } from '../../src/lib/services/pi-agent-prompts';
 
 const argv = process.argv.slice(2);
 const writeMode = argv.includes('--write');
@@ -103,7 +103,7 @@ function createModelPortProvider(apiKey: string, baseUrl: string): OpenAICompati
     providerName: 'openai',
     apiKey,
     baseUrl,
-    headers: { 'X-Client-App': 'QuantPilot-Long-Term-Integration-Check/1' },
+    headers: { 'X-Client-App': 'SignalForge-Long-Term-Integration-Check/1' },
     maxRetries: 1,
     initialRetryDelayMs: 100,
     maxRetryDelayMs: 250,
@@ -117,7 +117,7 @@ async function providerToolRoundTrip(params: {
 }): Promise<ProviderRoundTrip> {
   const personalizationExpected = Boolean(params.personalization);
   const userContent = params.personalization
-    ? buildQuantPilotUserPrompt({
+    ? buildSignalForgeUserPrompt({
         taskPacket: '# Task Packet\nRun the integration acceptance protocol.',
         skillContext: '# Skill Context\nNo task skill is required.',
         personalizationContext: params.personalization.content,
@@ -224,7 +224,7 @@ async function checkDirectDeepSeek(requestedModel: string) {
   const provider = new DeepSeekProvider({
     apiKey,
     baseUrl: llm.baseUrl,
-    headers: { 'X-Client-App': 'QuantPilot-Long-Term-Integration-Check/1' },
+    headers: { 'X-Client-App': 'SignalForge-Long-Term-Integration-Check/1' },
     maxRetries: 1,
     initialRetryDelayMs: 100,
     maxRetryDelayMs: 500,
@@ -276,7 +276,7 @@ async function checkDirectDeepSeek(requestedModel: string) {
 
 async function checkQwen() {
   const llm = getProjectLlmConfig();
-  assert(llm.profileId === LOCAL_QWEN_MODEL_ID, 'QuantPilot default LLM profile is not local Qwen.');
+  assert(llm.profileId === LOCAL_QWEN_MODEL_ID, 'SignalForge default LLM profile is not local Qwen.');
   assert(llm.provider === 'openai', 'Local Qwen must use the OpenAI-compatible provider boundary.');
   const apiKey = process.env[llm.credentialEnv]?.trim();
   assert(apiKey, `${llm.credentialEnv} is not configured.`);
@@ -379,7 +379,7 @@ async function checkModelPortDeepSeek(apiKey: string) {
 
 async function checkMemoryReadOnly() {
   const config = getMemoryIntegrationConfig();
-  assert(config.enabled, 'QuantPilot personal memory integration is disabled.');
+  assert(config.enabled, 'SignalForge personal memory integration is disabled.');
   const adapter = new EvolvableMemoryHttpAdapter(config);
   const info = await adapter.discover('triad-readiness');
   const compatibilityIssues = memoryCompatibilityIssues(
@@ -419,7 +419,7 @@ async function checkMemoryClosedLoop(params: {
       eventId: 'triad-pref-v1',
       key: 'output.answer_style',
       value: '联调验收：先给结论，再列风险和证据',
-      evidenceText: 'QuantPilot 三方长期集成的隔离合成验收偏好',
+      evidenceText: 'SignalForge 三方长期集成的隔离合成验收偏好',
       confidence: 0.99,
       scope: 'project' as const,
     };

@@ -1,5 +1,5 @@
 [Unit]
-Description=QuantPilot expired auth data and audit retention cleanup
+Description=SignalForge expired auth data and audit retention cleanup
 After=network-online.target
 
 [Service]

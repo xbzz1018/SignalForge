@@ -1,4 +1,4 @@
-# QuantPilot release modes
+# SignalForge release modes
 
 ## Purpose
 

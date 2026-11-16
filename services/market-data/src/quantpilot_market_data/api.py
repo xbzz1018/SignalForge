@@ -76,8 +76,8 @@ SCREENER_CACHE_TTL_SECONDS = ttl_from_env("QUANTPILOT_SCREENER_CACHE_TTL_SECONDS
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="QuantPilot Market Data API",
-        description="QuantPilot 量化分析 Agent 的市场数据后端",
+        title="SignalForge Market Data API",
+        description="SignalForge 量化分析 Agent 的市场数据后端",
         version="0.1.0",
     )
     app.add_middleware(
