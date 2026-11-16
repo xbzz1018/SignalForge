@@ -189,6 +189,18 @@ npm run benchmark:quant:e2e -- --case stock-fundamental-maotai --repeat 3
 npm run benchmark:quant:e2e -- --model deepseek-v4-flash --case stock-fundamental-maotai
 ```
 
+标准研究请求在产品中可能进入零模型 Token 的可信模板编译路径。单独验证
+`model_custom` 用例时，需显式设置 `QUANTPILOT_EVAL_FORCE_MODEL_AGENT=1`，
+使已准备好数据的标准请求也走模型生成。Linux 示例：
+
+```bash
+QUANTPILOT_EVAL_FORCE_MODEL_AGENT=1 npm run benchmark:quant:e2e -- --model deepseek-v4-flash --case index-technical-hs300
+```
+
+该开关仅用于模型能力验收，不要作为产品默认配置；标准模板控制用例要求
+`deterministic_standard`，不能携带此开关运行。未启用时，产品可能正确交付
+标准看板，但模型身份门禁仍会拒绝把它计算为真实模型生成成绩。
+
 `benchmark:quant:contract` 是确定性契约模式。即使契约套件全部
 通过，也只证明平台产物契约，不能充当真实 Agent 成绩。真实 E2E 必须走
 `/act -> Mission -> EvidenceVerifier -> accepted receipt` 产品链路，并逐 case

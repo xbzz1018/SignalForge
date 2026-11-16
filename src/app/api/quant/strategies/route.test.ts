@@ -94,6 +94,23 @@ describe('/api/quant/strategies authorization', () => {
     mocks.releaseQuotaReservation.mockResolvedValue({ status: 'released' });
   });
 
+  it.each([null, [], 'invalid', 1])('rejects non-object requests without executing or charging: %j', async (body) => {
+    const response = await POST(request(body));
+    expect(response.status).toBe(400);
+    expect(mocks.getStrategySymbolBars).not.toHaveBeenCalled();
+    expect(mocks.enqueueStrategyParameterScan).not.toHaveBeenCalled();
+    expect(mocks.claimApiOperation).not.toHaveBeenCalled();
+    expect(mocks.reserveQuota).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed JSON without returning an internal server error', async () => {
+    const response = await POST(new NextRequest('http://localhost/api/quant/strategies', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{',
+    }));
+    expect(response.status).toBe(400);
+    expect(mocks.claimApiOperation).not.toHaveBeenCalled();
+  });
+
   it('requires data read for the dashboard and data operations', async () => {
     await GET(request());
     expect(mocks.requireAction).toHaveBeenLastCalledWith({

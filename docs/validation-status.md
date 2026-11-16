@@ -2,7 +2,27 @@
 
 [仓库首页](../README.md) · [项目案例](project-case.md) · [评测体系](evals-guide.md)
 
-本页区分代码检查、确定性合同与真实模型任务。更新日期：2026-11-16。本轮增加真实行情、PostgreSQL/TimescaleDB 与 Redis 验收，不产生新的真实模型评测成绩。
+本页区分代码检查、确定性合同与真实模型任务。更新日期：2026-11-16。本轮在真实行情、PostgreSQL/TimescaleDB 与 Redis 验收后，继续检查基础前后端，并使用官方模型 API 完成一个真实看板交付样本。
+
+## 2026-11-16 基础前后端与 API 复查
+
+修复 Windows Uvicorn 默认事件循环与 Psycopg 异步连接不兼容、生产模式 Skills 源码查看返回 403、策略和报告接口错误 JSON 处理，以及生成工作空间缺少图标导致视觉验收失败的问题。报告接口另外拒绝错误字段类型，避免在参数校验前执行任务或占用配额。Skills 源码读取继续要求管理员能力，写接口的宿主授权边界保持有效。
+
+| 验证 | 结果与范围 |
+| --- | --- |
+| Linux TypeScript 完整单元回归 | 229 文件、1489 项通过；5 文件、30 项依赖专用环境的测试跳过 |
+| Python 后端完整回归 | 269 通过、0 跳过，包含本轮独立 PostgreSQL/TimescaleDB 和 Redis 集成 |
+| 生产构建与静态检查 | Next.js build、TypeScript 和 Ruff 通过；ESLint 无错误，保留两项既有导航方式提示 |
+| Playwright 页面合同 | 18 项通过，覆盖桌面与移动端；这是受控合同测试 |
+| 真实基础浏览器验收 | 57 项通过；登录与退出、项目增删改查、20 个桌面/移动页面、模型语义解析，以及 17 组非法 JSON 与报告参数类型检查 |
+| 真实行情 HTTP | 9 项通过；ETF 历史行情、均线回测及非法窗口、费率、周期、未知/重复参数校验 |
+| 真实模型看板 | 沪深 300 技术趋势任务通过：正式 `/act`、PI Agent、构建、数据契约、双端视觉检查及 Mission accepted receipt；3 轮、cache-miss 输入 11068 Tokens、无异常工具失败，耗时 44.021 秒 |
+
+摘要及原始报告哈希见 [20261116-basic-fullstack.json](evidence/20261116-basic-fullstack.json)。原始报告、截图、日志和隔离数据库快照保存在本机 `tmp/basic-live-e2e-20261116/`、`tmp/basic-frontend-audit-20261116/` 等目录；API 密钥只注入验收进程。全部结果来自未提交工作区，不代表远端 main 或 GitHub CI 已更新。
+
+保留两次前置失败：ETF 看板因图标 404 被严格门禁拒绝；补齐图标后的指数任务完成标准模板交付，但因未进入模型路径而被模型 E2E 门禁拒绝。随后显式设置已有的 `QUANTPILOT_EVAL_FORCE_MODEL_AGENT=1`，才得到上述真实模型通过记录。未降低验收条件，也不将标准模板任务计算为模型成绩。
+
+一个真实样本不能代表完整发布回归集或稳定通过率。Windows 原生环境的生成代码隔离仍有限制，实际生成验收在 WSL2/Linux namespace 中执行；Skills 编辑、发布等生产管理写操作，以及可选 Memory、Knowledge、ModelPort 和日志服务未在本次联调范围内。
 
 ## 2026-11-16 回测与后端可靠性
 
@@ -16,7 +36,7 @@
 | 类型与代码检查 | TypeScript、修改文件 ESLint、后端及验收脚本 Ruff、架构/模块边界和工作流检查通过；模块体积存在既有提示 |
 | 生成模板 | 四类模板实际 Next.js 构建通过；修复 Windows 目录链接与跨盘临时目录问题 |
 | 真实行情及存储 | 东方财富返回股票 600519、ETF 510300、指数 000300 各 250 条历史行情；TimescaleDB 入库、故障注入回滚、HTTP 回测、账本校验、离线复算、Redis 往返均通过 |
-| 真实模型及浏览器交付 | 未执行；默认模型配置需要 `MODELPORT_API_KEY`，本次进程未配置。模型探测与固定合同测试均不能当作完整生成验收 |
+| 真实模型及浏览器交付 | 此阶段未执行，随后通过上节基础前后端复查完成一个官方模型样本；默认模型配置仍需单独配置，不能将 API 探测或固定合同视为完整生成验收 |
 
 摘要见 [20261116-backend-reliability.json](evidence/20261116-backend-reliability.json)。完整行情、回测、查询计划和报告保存在本机 `tmp/research-acceptance-20261116-verified/`，摘要保留其 SHA-256；回测响应另含引擎代码、运行时及输入/结果哈希。报告来自未提交工作区，记录基准 revision 与差异，不等于当前 main 的 CI 或生产验收。复跑方法见[后端可靠性验收](backend-reliability.md)。
 
@@ -95,4 +115,4 @@ npm run benchmark:quant:e2e -- --model deepseek-v4-flash
 
 计算用例见[前端窗口回归](../src/lib/quant/data-prefetch/technical.test.ts)、[回测正确性](../services/market-data/tests/test_backtest_correctness.py)及[离线回放](../services/market-data/tests/test_backtest_experiments.py)。确定性市场服务的回测夹具现在返回评估区间，并拒绝其固定结果不支持的参数，避免夹具被误认为通用计算引擎。详细计算口径见[请求与回测校验](research-correctness.md)，功能落点见[能力对应表](resume-implementation-map.md)。
 
-Worker 中断恢复、取消与迟到结果竞态已纳入真实 PostgreSQL 集成；真实模型驱动的完整交付仍需配置服务后验收。Memory、ModelPort 和 Loki 各有独立服务条件；关闭可选组件的诊断通过不等于完整生产联调。
+Worker 中断恢复、取消与迟到结果竞态已纳入真实 PostgreSQL 集成；真实模型驱动的交付已完成本页顶部的单样本验收，完整发布回归集仍需另跑。Memory、ModelPort 和 Loki 各有独立服务条件；关闭可选组件的诊断通过不等于完整生产联调。

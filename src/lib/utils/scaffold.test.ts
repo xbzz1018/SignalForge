@@ -138,12 +138,13 @@ describe('restoreQuantDashboardTemplate', () => {
 
     await scaffoldBasicNextApp(projectPath, 'continuous-workbench-project');
 
-    const [page, css, nextConfig, buildScript, devScript] = await Promise.all([
+    const [page, css, nextConfig, buildScript, devScript, icon] = await Promise.all([
       fs.readFile(path.join(projectPath, 'app', 'page.tsx'), 'utf8'),
       fs.readFile(path.join(projectPath, 'app', 'globals.css'), 'utf8'),
       fs.readFile(path.join(projectPath, 'next.config.js'), 'utf8'),
       fs.readFile(path.join(projectPath, 'scripts', 'run-build.js'), 'utf8'),
       fs.readFile(path.join(projectPath, 'scripts', 'run-dev.js'), 'utf8'),
+      fs.readFile(path.join(projectPath, 'app', 'icon.svg'), 'utf8'),
     ]);
     expect(page).toContain('data-visual-language="financial-workbench"');
     expect(page).not.toContain('数据信源渠道');
@@ -172,21 +173,26 @@ describe('restoreQuantDashboardTemplate', () => {
     expect(nextConfig).not.toContain('root: workspaceRoot');
     expect(buildScript).toContain("defaultBundlerArgs = hasBundlerFlag ? [] : ['--webpack']");
     expect(devScript).toContain("defaultBundlerArgs = hasBundlerFlag ? [] : ['--webpack']");
+    expect(icon).toContain('<svg');
+    expect(icon).toContain('<title>SignalForge</title>');
   });
 
   it('keeps an existing page and stylesheet during non-destructive scaffolding', async () => {
     const projectPath = await createProject();
     const page = 'export default function Page(){ return <main>custom dashboard</main> }\n';
     const css = '.custom-dashboard { color: rebeccapurple; }\n';
+    const icon = '<svg xmlns="http://www.w3.org/2000/svg"><title>Custom</title></svg>\n';
     await Promise.all([
       fs.writeFile(path.join(projectPath, 'app', 'page.tsx'), page),
       fs.writeFile(path.join(projectPath, 'app', 'globals.css'), css),
+      fs.writeFile(path.join(projectPath, 'app', 'icon.svg'), icon),
     ]);
 
     await scaffoldBasicNextApp(projectPath, 'non-destructive-project');
 
     await expect(fs.readFile(path.join(projectPath, 'app', 'page.tsx'), 'utf8')).resolves.toBe(page);
     await expect(fs.readFile(path.join(projectPath, 'app', 'globals.css'), 'utf8')).resolves.toBe(css);
+    await expect(fs.readFile(path.join(projectPath, 'app', 'icon.svg'), 'utf8')).resolves.toBe(icon);
   });
 
   it('does not rewrite an unchanged package.json during repeated scaffolding', async () => {

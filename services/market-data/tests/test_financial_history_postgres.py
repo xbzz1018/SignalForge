@@ -146,9 +146,9 @@ def test_missing_notice_future_notice_and_future_period_are_excluded() -> None:
         for index, item in enumerate(
             [
                 report("unused", 100),
-                report("unused", 100, notice=datetime.now(UTC) + timedelta(days=1)),
+                report("unused", 100, notice=database_now() + timedelta(days=1)),
                 report("unused", 100, notice=datetime(2021, 1, 1, tzinfo=UTC)).model_copy(
-                    update={"report_date": datetime.now(UTC) + timedelta(days=30)},
+                    update={"report_date": database_now() + timedelta(days=30)},
                 ),
             ]
         ):
@@ -159,7 +159,7 @@ def test_missing_notice_future_notice_and_future_period_are_excluded() -> None:
             result = await history.read_financial_snapshot(
                 symbol=symbol,
                 provider="fixture",
-                cutoff=datetime.now(UTC),
+                cutoff=database_now(),
                 limit=8,
             )
             assert result.reports == []
@@ -216,7 +216,7 @@ def test_corrupted_content_stops_reading_instead_of_returning_unverified_data() 
             await history.read_financial_snapshot(
                 symbol=symbol,
                 provider="fixture",
-                cutoff=datetime.now(UTC),
+                cutoff=database_now(),
                 limit=8,
             )
 

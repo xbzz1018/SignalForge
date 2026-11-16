@@ -240,7 +240,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
+    const rawBody: unknown = await request.json().catch(() => null);
+    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return createErrorResponse('INVALID_REQUEST', '请求体必须是有效的 JSON 对象。', 400);
+    }
+    const body = rawBody as Record<string, unknown>;
     const permissionAction = strategyPermissionAction(body.action);
     if (!permissionAction) {
       return createErrorResponse(
@@ -430,7 +434,10 @@ export async function POST(request: NextRequest) {
         201
       );
     }
-        return createSuccessResponse(buildStrategyPrompt(String(body.templateId ?? ''), body.symbol), 201);
+        return createSuccessResponse(buildStrategyPrompt(
+          String(body.templateId ?? ''),
+          typeof body.symbol === 'string' ? body.symbol : undefined,
+        ), 201);
       },
     });
   } catch (error) {

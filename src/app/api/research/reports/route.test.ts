@@ -73,6 +73,44 @@ describe('/api/research/reports authorization', () => {
     vi.unstubAllEnvs();
   });
 
+  it.each([null, [], 'invalid', 1])('rejects non-object bodies before running a report: %j', async (body) => {
+    vi.stubEnv('QUANTPILOT_AUTH_MODE', 'local');
+    const response = await POST(request(body));
+    expect(response.status).toBe(400);
+    expect(mocks.runReport).not.toHaveBeenCalled();
+    expect(mocks.sendReport).not.toHaveBeenCalled();
+    expect(mocks.claimApiOperation).not.toHaveBeenCalled();
+    expect(mocks.reserveQuota).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { action: 1 },
+    { action: 'unknown' },
+    { watchlistId: 1 },
+    { reportId: [] },
+    { idempotencyKey: {} },
+    { dryRun: 'false' },
+    { confirmed: 1 },
+  ])('rejects invalid report fields before any operation: %j', async (body) => {
+    vi.stubEnv('QUANTPILOT_AUTH_MODE', 'local');
+    const response = await POST(request(body));
+    expect(response.status).toBe(400);
+    expect(mocks.runReport).not.toHaveBeenCalled();
+    expect(mocks.sendReport).not.toHaveBeenCalled();
+    expect(mocks.claimApiOperation).not.toHaveBeenCalled();
+    expect(mocks.reserveQuota).not.toHaveBeenCalled();
+  });
+
+  it('does not turn malformed JSON into a default report run', async () => {
+    vi.stubEnv('QUANTPILOT_AUTH_MODE', 'local');
+    const response = await POST(new NextRequest('http://localhost/api/research/reports', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{',
+    }));
+    expect(response.status).toBe(400);
+    expect(mocks.runReport).not.toHaveBeenCalled();
+    expect(mocks.reserveQuota).not.toHaveBeenCalled();
+  });
+
   it('short-circuits database-backed reads and writes in offline mode', async () => {
     vi.stubEnv('QUANTPILOT_DATABASE_ENABLED', '0');
 

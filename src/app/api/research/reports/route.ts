@@ -216,7 +216,23 @@ export async function POST(request: NextRequest) {
         503,
       );
     }
-    const body = await request.json().catch(() => ({})) as {
+    const rawBody: unknown = await request.json().catch(() => null);
+    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return createErrorResponse('INVALID_REQUEST', '请求体必须是有效的 JSON 对象。', 400);
+    }
+    const fields = rawBody as Record<string, unknown>;
+    if (
+      ['action', 'watchlistId', 'reportId', 'idempotencyKey'].some(
+        (key) => fields[key] !== undefined && typeof fields[key] !== 'string',
+      ) ||
+      ['dryRun', 'confirmed'].some(
+        (key) => fields[key] !== undefined && typeof fields[key] !== 'boolean',
+      ) ||
+      (fields.action && !['run-daily-report', 'send-latest-report'].includes(String(fields.action)))
+    ) {
+      return createErrorResponse('INVALID_REQUEST', '研究报告操作或参数类型无效。', 400);
+    }
+    const body = rawBody as {
       action?: string;
       watchlistId?: string;
       reportId?: string;

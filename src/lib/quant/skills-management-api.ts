@@ -22,8 +22,12 @@ export async function postSkillsJson<T>(body: Record<string, unknown>, fallbackM
   return parseSkillsResponse<T>(response, fallbackMessage);
 }
 
-export function readSkillFile(skillId: string, filePath: string): Promise<SourceState> {
-  return postSkillsJson<SourceState>({ action: 'read-file', skillId, filePath });
+export async function readSkillFile(skillId: string, filePath: string): Promise<SourceState> {
+  const query = new URLSearchParams({ path: filePath });
+  const response = await fetch(`/api/skills/${encodeURIComponent(skillId)}/source?${query}`, {
+    cache: 'no-store',
+  });
+  return parseSkillsResponse<SourceState>(response, '读取 Skill 文件失败');
 }
 
 export function saveSkillFile(params: {

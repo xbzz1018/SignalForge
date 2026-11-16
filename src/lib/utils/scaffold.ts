@@ -645,6 +645,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   );
 
   await writeFileIfMissing(
+    path.join(projectPath, 'app/icon.svg'),
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>SignalForge</title>
+  <rect width="64" height="64" rx="14" fill="#167A6A" />
+  <path d="M14 44L26 32L35 37L50 20M40 20H50V30" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
+`
+  );
+
+  await writeFileIfMissing(
     path.join(projectPath, 'app/api/market/[...path]/route.ts'),
     `import { NextRequest, NextResponse } from 'next/server';
 

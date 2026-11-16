@@ -28,6 +28,9 @@ const config = [
     ignores: [
       '.next/**',
       '**/.venv/**',
+      '**/.pytest_cache/**',
+      '**/.ruff_cache/**',
+      '**/__pycache__/**',
       'build/**',
       'coverage/**',
       'data/**',

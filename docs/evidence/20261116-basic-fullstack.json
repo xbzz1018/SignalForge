@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-16T08:06:13.200Z",
+  "originalProjectBaseRevision": "f307bc3cfb5fdf36fecbc135b4fd9a6709aceb9f",
+  "validationCheckoutBaseRevision": "fbbc56ba9b9b7030d8bf537d1f6f1210f77ff63f",
+  "uncommittedWorkspace": true,
+  "githubCommittedOrPushed": false,
+  "changedSourceFilesSha256": {
+    "eslint.config.mjs": "792d3356cd0558402d5f00d064288c20d72e8dcff1fd312c6bb3753a304024a6",
+    "services/market-data/src/quantpilot_market_data/cli.py": "8ebb3ae5a1a3db859bdce303ff70c670175ca1d13342ee46aa3ff703686d07e7",
+    "services/market-data/tests/test_cli_environment.py": "3e6b8eb6e92d6f87595b7ab01ae72e66b3435be885c3e6d3e160ff9988e3da2c",
+    "services/market-data/tests/test_financial_history_postgres.py": "88b7e48228ef892199f39c2405969acc15271241eb2ea718f2bd74b13732bdec",
+    "src/app/api/quant/strategies/route.ts": "d0421e9f09c8bc33d0d03568c0755cf78e2c3aff0618360989814daaad851ee0",
+    "src/app/api/quant/strategies/route.test.ts": "6ddaa5345cdf25b5375c2452f5db4b6421bc11a34b86fe0596692988135eb11f",
+    "src/app/api/research/reports/route.ts": "9a113d81b1f253cf308da9fc140605c8368829e09455ec9afcd61f7bd542c559",
+    "src/app/api/research/reports/route.test.ts": "505995f1fa06e5a73fe5e64a4fbb1770c50277ebd41f9f045bf49d4824f147a4",
+    "src/app/api/skills/[skillId]/source/route.ts": "ef113e0a5fe9c33d9f4cc7d85926e0f643a426b974e09ef33efc7da66217a812",
+    "src/app/api/skills/[skillId]/source/route.test.ts": "1aca362453e166be591af60db57f56a799aa0f5d4b07a50538f26e4788a131c0",
+    "src/lib/quant/skills-management-api.ts": "acc31d2832c81040d2f31a037eeba1a43d0b05cfe621f4f7b21a14d3ac1919f7",
+    "src/lib/quant/skills-management-api.test.ts": "986beb655529dbe9869b5eb85ff41418fa1f5877d6107866786d47219e5611e7",
+    "src/lib/utils/scaffold.ts": "51a22a986d7a107389894297d3f62a9b20f08051dcc6b87403b9f994fa2d9a83",
+    "src/lib/utils/scaffold.test.ts": "a18a7802f1fd79cc08be154c82187c9cd69b4e4384e0c205732247ff9ed53738"
+  },
+  "checks": {
+    "typescriptLinux": {
+      "filesPassed": 229,
+      "filesSkipped": 5,
+      "passed": 1489,
+      "skipped": 30
+    },
+    "python": {
+      "passed": 269,
+      "skipped": 0,
+      "dependencyWarnings": 2
+    },
+    "productionBuild": {
+      "passed": true
+    },
+    "typecheck": {
+      "passed": true
+    },
+    "eslint": {
+      "errors": 0,
+      "existingWarnings": 2
+    },
+    "ruff": {
+      "passed": true
+    },
+    "playwrightPageContracts": {
+      "passed": 18,
+      "realModelEvidence": false
+    },
+    "realBrowser": {
+      "passed": 57,
+      "failed": 0,
+      "desktopAndMobilePages": 20,
+      "coverage": [
+        "login/logout",
+        "project CRUD",
+        "required dependencies readiness",
+        "Skills source read",
+        "10 malformed JSON requests",
+        "7 invalid report fields",
+        "official model query rewrite and security resolution"
+      ]
+    },
+    "realMarketHttp": {
+      "passed": 9,
+      "failed": 0
+    },
+    "liveModel": {
+      "passed": true,
+      "caseId": "index-technical-hs300",
+      "durationMs": 44021,
+      "provider": "deepseek",
+      "configuredModel": "deepseek-v4-flash",
+      "buildRevision": "fbbc56ba9b9b7030d8bf537d1f6f1210f77ff63f-dirty.5103268e82fcb225b49f",
+      "turns": 3,
+      "usage": {
+        "inputTokens": 27964,
+        "outputTokens": 3354,
+        "totalTokens": 31318,
+        "cachedInputTokens": 16896,
+        "cacheMissInputTokens": 11068,
+        "reasoningTokens": 1748
+      },
+      "unexpectedToolFailures": 0,
+      "repairAttempts": 0,
+      "missionStatus": "completed",
+      "acceptedReceiptHash": "sha256:2e471dd6909cbe8ee56f5c6f580e7273253d5cd5f1b779925b15c671ece6a647",
+      "attestationPassed": true,
+      "forceModelEvaluation": true,
+      "namespaceSandboxEnabled": true,
+      "unsandboxedExecutionAllowed": false,
+      "sampleCount": 1,
+      "fullReleaseSuiteExecuted": false
+    }
+  },
+  "retainedEarlierAttempts": [
+    {
+      "caseId": "etf-technical-300etf",
+      "passed": false,
+      "reason": "Missing generated workspace favicon caused browser 404 and strict visual/Mission rejection; fixed in scaffold."
+    },
+    {
+      "caseId": "index-technical-hs300",
+      "passed": false,
+      "reason": "Product standard compiler delivered an accepted dashboard, but strict live-model evaluation correctly rejected the deterministic execution identity."
+    }
+  ],
+  "boundaries": [
+    "Only one forced model-generation sample passed; no full release or long-run stability claim.",
+    "Live-model report predates the final unrelated research-report field validation update; its own build identity is retained.",
+    "Generated builds/previews require Linux namespace support; full unit regression ran in WSL2.",
+    "Production Skills edit/publish host authorization and optional services were not acceptance-tested.",
+    "API credential was injected into process environment and is not included in this evidence."
+  ],
+  "localRawFilesSha256": {
+    "tmp/basic-frontend-audit-20261116/report.json": "d95bf4f007e295c8988017eff66205b7839ca97c41ae5263ad8b3b425ab904a1",
+    "tmp/basic-live-e2e-20261116/report-1794815946013.json": "d44b3e5bd22ebe01dd8e2d618d9c4855299f5d3de6a578b47399d992613bb8b0",
+    "tmp/basic-market-http-20261116/report.json": "c538c1821be5d7ebe647d1008b1021dc822b0c82a395e89fec3f3ad6c707dd7d",
+    "tmp/basic-audit-python.log": "a374b4709b960d39880a12377b78230dffe60ba588890ac008830ebb3ff97418",
+    "tmp/basic-audit-vitest-linux.log": "400e71b71bc4eb7b9adbf9f0b12f1b541692a0d0ebe5c429d414387465006dfc",
+    "tmp/basic-audit-build.log": "f2fb369cc84b905606788b8adeb0c94ff95eac8e533f71eda36eaac9743a9cd9",
+    "tmp/basic-audit-typecheck.log": "2b94886e46b9a9dc0dd969ea396a7ecf7aa6a3e8ee91a58120577594c7ce854a",
+    "tmp/basic-audit-eslint.log": "8585bb66ce85e323a6258b7743318e5782f8661e29bc1d00cba83148e1843dad",
+    "tmp/basic-live-e2e-20261116/report-1794814816816.json": "672a66face3e5fd3644794994a504efb40d69c6b1988e4c756dbe962015fa1aa",
+    "tmp/basic-live-e2e-20261116/report-1794815643032.json": "deec8e833446fb4798388f471cddb1b9cac26ed8af85ac7d34db7751b31fb27a",
+    "tmp/basic-live-e2e-20261116/model-index-validation.json": "9edc7cbe85110b4469cf0fa39cedfcc842fb6c6655981f51aba3db65add85e55",
+    "tmp/basic-live-e2e-20261116/model-index-visual-validation.json": "5f6cdad6e343869558c8ec55b8d19ce473c62776a235cde99f3ca0769edbe5ac"
+  }
+}

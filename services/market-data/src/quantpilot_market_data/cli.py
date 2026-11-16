@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import sys
 from pathlib import Path
 
 import uvicorn
@@ -57,6 +59,12 @@ def load_market_environment(root: Path | None = None) -> None:
         os.environ.setdefault(key, value)
 
 
+def selector_event_loop_factory() -> asyncio.AbstractEventLoop:
+    # Uvicorn's Windows default is Proactor even when an asyncio policy was
+    # set earlier. Psycopg async connections require a selector loop.
+    return asyncio.SelectorEventLoop()
+
+
 def main() -> None:
     load_market_environment()
     host = os.getenv("QUANTPILOT_MARKET_HOST", "127.0.0.1")
@@ -65,6 +73,11 @@ def main() -> None:
         "quantpilot_market_data.api:app",
         host=host,
         port=port,
+        loop=(
+            "quantpilot_market_data.cli:selector_event_loop_factory"
+            if sys.platform == "win32"
+            else "auto"
+        ),
         reload=os.getenv("QUANTPILOT_MARKET_RELOAD", "0") == "1",
     )
 
