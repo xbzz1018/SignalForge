@@ -57,6 +57,10 @@
 
 计算口径见[研究正确性](research-correctness.md)，实现落点见[能力对应表](resume-implementation-map.md)，集成复跑见[后端可靠性](backend-reliability.md)。
 
+## 依赖复查
+
+2026-11-16，远端 CI 报告 Soup Sieve 2.9 的四项公告，仅将该传递依赖更新至 4.1.1。全部可选数据源的哈希锁定生产审计通过；更新后的本地后端回归为 261 通过、8 项集成测试跳过。[审计摘要](evidence/20261116-dependency-audit.json)保留范围和日志哈希，完整服务集成另以对应提交 CI 为准。
+
 ## 验证入口
 
 ```bash

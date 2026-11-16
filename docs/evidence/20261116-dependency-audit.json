@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "verifiedDate": "2026-11-16",
+  "trigger": {
+    "workflowRun": 43842847371,
+    "failedStep": "Backend Market Data / Production dependency audit"
+  },
+  "update": {
+    "package": "soupsieve",
+    "from": "2.9",
+    "to": "4.1.1",
+    "scope": "single transitive package in services/market-data/uv.lock"
+  },
+  "checks": {
+    "hashLockedProductionAudit": {
+      "passed": true,
+      "includesAllOptionalProviders": true,
+      "knownVulnerabilities": 0
+    },
+    "pythonRegression": {
+      "passed": 261,
+      "skipped": 8,
+      "warnings": 3,
+      "scope": "Windows Python 3.14.7; PostgreSQL/Redis integrations not started for this dependency-only rerun"
+    }
+  },
+  "localRawFilesSha256": {
+    "tmp/showcase-security-audit.log": "92a925858abe39857c6c8b5c66d7d12469c684d924c2fca8a143974c1cd4d821",
+    "tmp/showcase-security-pytest.log": "f94508badf4720a7451319a27fea7ce019ae878d90c78cb3d935d0a953110984"
+  },
+  "limits": [
+    "Audit findings can change as advisories are published.",
+    "Earlier full integration evidence is retained separately."
+  ]
+}
