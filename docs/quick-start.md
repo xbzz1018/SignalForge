@@ -2,7 +2,7 @@
 
 [仓库首页](../README.md) · [配置指南](configuration.md) · [故障排查](troubleshooting.md)
 
-以下是已记录的 WSL2 开发拓扑。生成项目的 build/preview 依赖 Linux namespace 隔离，需要在 Linux 中运行。
+使用 Ubuntu / WSL2 运行 Web、行情服务和后台任务，Docker 提供数据库与缓存。生成项目的构建与预览依赖 Linux namespace 隔离。
 
 ## 准备环境
 
@@ -17,7 +17,7 @@ npm ci
 uv sync --project services/market-data --extra baostock --extra akshare --locked
 ```
 
-`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。兼容已有部署的数据库标识、环境变量与 Python 导入名不随产品名称变更。
+`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。
 
 ## 配置与启动
 
@@ -46,7 +46,7 @@ Memory、知识服务、ClickHouse 和 Loki/Grafana/Alloy 按需接入，详见[
 2. 进入项目聊天查看计划、工具事件和生成进度。
 3. 打开预览，核对标的、数据时点和来源；检查构建与 Mission 验收结果。
 
-默认均线回测可用 `20/60`、日线、前复权、5 bps 作为研究例子。请求会冻结日期、窗口与费用，取数和验收核对同一合同；具体计算范围见[当前边界](validation-status.md#当前边界)。
+均线回测可以从“用 20/60 日均线回测 510300”开始，补充起止日期、初始资金、费用与滑点。计算时固定本次参数，输出净值、回撤和交易明细；参数与复跑方法见[策略平台](strategy-platform-guide.md)。
 
 | 页面 | 用途 |
 | --- | --- |
@@ -65,4 +65,4 @@ npm run check:market-freshness
 
 页面缺数时，先区分行情服务未启动、本地行情过期和供应商不可达。常见处理入口见[运行手册](operations-runbook.md)。
 
-代码验证命令与真实模型评测的边界见[验证记录](validation-status.md)。开发产生的 `.env.local`、数据库卷、`data/projects/`、`tmp/`、`.next/` 和虚拟环境保留在本地。
+研究项目保存在 `data/projects/`，包含对话、数据文件、页面源码与预览产物。

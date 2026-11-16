@@ -6,7 +6,7 @@
 
 [![Quality](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml) [![License](https://img.shields.io/github/license/xbzz1018/SignalForge?style=flat-square&color=087E6B)](LICENSE)
 
-[项目案例](docs/project-case.md) · [架构设计](docs/architecture.md) · [本地运行](docs/quick-start.md) · [验证记录](docs/validation-status.md)
+[项目案例](docs/project-case.md) · [架构设计](docs/architecture.md) · [本地运行](#本地运行) · [配置指南](docs/configuration.md)
 
 ![沪深 300 研究看板中的 K 线、均线、成交量与风险摘要](docs/assets/hs300-research.png)
 
@@ -101,14 +101,38 @@ flowchart TB
 
 ## 本地运行
 
-运行环境为 Node.js ≥ 22.19、Python ≥ 3.14、uv 和 Docker；完整生成与预览使用 Linux/WSL2。Web、行情服务和 Worker 运行在应用环境中，Docker 提供数据库与缓存。
+使用 Ubuntu / WSL2，准备 Node.js 24、Python 3.14、uv 和 Docker。生成项目的构建与预览依赖 Linux namespace 隔离；Docker 提供数据库与缓存。
 
-安装、模型配置与首次研究见[本地运行指南](docs/quick-start.md)；可选服务与配置项见[配置指南](docs/configuration.md)。
+```bash
+git clone https://github.com/xbzz1018/SignalForge.git
+cd SignalForge
+npm ci
+uv sync --project services/market-data --extra baostock --extra akshare --locked
+```
 
-## 验证与支持范围
+安装后，在自动创建的 `.env.local` 中填写模型凭据。使用官方 DeepSeek、暂不接入可选服务时配置：
 
-已完成前后端回归、真实行情与存储集成、浏览器检查及一个真实模型看板样本验收。测试范围、截图来源与运行记录见[验证记录](docs/validation-status.md)，持续集成状态见页首 Quality。
+```dotenv
+DEEPSEEK_API_KEY="your-official-api-key"
+QUANTPILOT_MODELPORT_ENABLED=0
+QUANTPILOT_MEMORY_ENABLED=0
+QUANTPILOT_KNOWLEDGE_ENABLED=0
+```
 
-当前对话回测采用单标的、做多或空仓模型，未模拟完整交易约束，也未接入实盘交易。后端其他预置策略与对话回测的支持范围分别记录在[研究正确性](docs/research-correctness.md)中。
+```bash
+docker compose up -d timescaledb redis
+npm run db:init
+npm run dev
+```
+
+打开 `http://localhost:3000`，在模型菜单选择 `deepseek-v4-flash` 官方直连，然后输入研究问题。配置 Key 后仍需手动选择模型。
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run dev` | 启动 Web、行情服务及配置启用的 Worker |
+| `npm run doctor:full -- --model=deepseek-v4-flash` | 检查所选模型与依赖服务 |
+| `npm run check:market-freshness` | 检查行情覆盖与数据时效 |
+
+首次研究、页面入口与可选组件见[本地运行指南](docs/quick-start.md)；端口、数据库及模型参数见[配置指南](docs/configuration.md)。
 
 专题、接口和开发资料见[文档索引](docs/README.md)。
