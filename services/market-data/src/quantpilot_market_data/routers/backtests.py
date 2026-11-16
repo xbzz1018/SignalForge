@@ -35,6 +35,7 @@ def create_backtest_router(
         end: str = "20500101",
         initial_cash: Decimal = Decimal("1"),
         fee_bps: Decimal = Decimal("5"),
+        slippage_bps: Decimal = Decimal("0"),
         start: str | None = None,
     ) -> BacktestResponse:
         try:
@@ -53,6 +54,7 @@ def create_backtest_router(
                 end=end,
                 initial_cash=initial_cash,
                 fee_bps=fee_bps,
+                slippage_bps=slippage_bps,
                 ttl_seconds=kline_cache_ttl_seconds,
                 start=start,
             )
@@ -72,6 +74,7 @@ def create_backtest_router(
         end: str = "20500101",
         initial_cash: Decimal = Decimal("1"),
         fee_bps: Decimal = Decimal("5"),
+        slippage_bps: Decimal = Decimal("0"),
         start: str | None = None,
     ) -> BacktestResponse:
         try:
@@ -87,6 +90,7 @@ def create_backtest_router(
                 end=end,
                 initial_cash=initial_cash,
                 fee_bps=fee_bps,
+                slippage_bps=slippage_bps,
                 ttl_seconds=kline_cache_ttl_seconds,
                 start=start,
             )
@@ -107,6 +111,7 @@ def strategy_backtest_parameters(request: Request) -> dict[str, str]:
         "start",
         "initial_cash",
         "fee_bps",
+        "slippage_bps",
     }
     pairs = list(request.query_params.multi_items())
     if len(pairs) != len({key for key, _ in pairs}):

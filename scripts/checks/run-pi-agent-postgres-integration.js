@@ -41,6 +41,7 @@ const vitestBin = path.join(path.dirname(vitestPackage), 'vitest.mjs');
 const testFiles = [
   'src/lib/agent/runtime/prisma-repository.integration.test.ts',
   'src/lib/services/pi-agent-tool-approval-store.integration.test.ts',
+  'src/lib/services/pi-agent-dispatch-reliability.integration.test.ts',
   'src/lib/ops/product-health.integration.test.ts',
   'src/lib/quant/market-freshness.integration.test.ts',
 ];

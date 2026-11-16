@@ -129,7 +129,7 @@ def test_decimal_parameters_are_validated_before_iterating_bars() -> None:
 
 def fee_kline() -> KlineResponse:
     return sample_kline().model_copy(update={"bars": [
-        KlineBar(date=f"2026-01-{index + 1:02d}", close=Decimal(close))
+        KlineBar(date=f"2026-01-{index + 1:02d}", open=Decimal(close), close=Decimal(close))
         for index, close in enumerate([10, 10, 10, 11, 12, 9, 8])
     ]})
 
@@ -155,5 +155,6 @@ def test_closed_trade_return_includes_entry_and_exit_fees() -> None:
     closed = [trade for trade in result.trades if trade.status == "closed"]
     assert closed
     for trade in closed:
-        expected = (trade.exit_price / trade.entry_price * Decimal("0.995") ** 2 - 1) * 100
+        expected = (trade.exit_price / trade.entry_price * Decimal("0.995")
+                    / Decimal("1.005") - 1) * 100
         assert abs(trade.return_pct - expected) < Decimal("0.0001")

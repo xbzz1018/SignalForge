@@ -48,7 +48,9 @@ class BacktestInputData(ExperimentContract):
 
 
 class BacktestEngineIdentity(ExperimentContract):
-    version: Literal["single-asset-close-v1", "single-asset-close-v2"] = "single-asset-close-v2"
+    version: Literal[
+        "single-asset-close-v1", "single-asset-close-v2", "single-asset-next-open-v3"
+    ] = "single-asset-next-open-v3"
     code_sha256: Digest
     runtime: dict[str, str]
 
@@ -56,7 +58,7 @@ class BacktestEngineIdentity(ExperimentContract):
 class BacktestExperiment(ExperimentContract):
     """Portable inputs and integrity checks; not a provider signature or PIT guarantee."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     experiment_id: Digest
     engine: BacktestEngineIdentity
     strategy_id: Label
@@ -65,6 +67,7 @@ class BacktestExperiment(ExperimentContract):
     evaluation_end: str | None = None
     initial_cash: Price = Field(gt=0)
     fee_bps: Price = Field(ge=0, le=10000)
+    slippage_bps: Price = Field(default=Decimal("0"), ge=0, lt=10000)
     data: BacktestInputData
     data_sha256: Digest
     result_sha256: Digest

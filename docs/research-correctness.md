@@ -4,10 +4,10 @@
 
 Query Rewrite 仍负责识别研究意图与证券；回测参数编译器只规范明确的窗口、费率、资金及日期写法。规划时将这些值冻结到 `finance-run-plan.json` 的 `backtest` 字段，预取和最终数据验收使用同一份合同。
 
-例如“2024 年上半年，5/20 日均线回测 510300，手续费 10 bps”会传入以下接口参数，而不是替换成默认窗口与费率：
+例如“2024 年上半年，5/20 日均线回测 510300，手续费 10 bps，滑点 5 bps”会传入以下接口参数，而不是替换成默认窗口与费率：
 
 ```text
-GET /api/v1/backtests/ma-crossover/510300?fast_window=5&slow_window=20&fee_bps=10&initial_cash=1&period=daily&adjustment=qfq&limit=250&start=2024-01-01&end=2024-06-30
+GET /api/v1/backtests/ma-crossover/510300?fast_window=5&slow_window=20&fee_bps=10&slippage_bps=5&initial_cash=1&period=daily&adjustment=qfq&limit=250&start=2024-01-01&end=2024-06-30
 ```
 
 未指定窗口、费用和资金时，合同记录默认值；未指定日期时，将上海当前日期冻结为截止日期。无法明确解释的参数进入澄清。对话回测目前只编译简单均线交叉策略，后端策略接口提供其他已登记策略；两者支持范围不同。只修改页面样式时保留原合同，明确修改参数时继承其余已冻结值。
@@ -30,11 +30,17 @@ GET /api/v1/backtests/ma-crossover/510300?fast_window=5&slow_window=20&fee_bps=1
 - RSI 的连续平盘窗口记为中性值 50，趋势过滤器未就绪时不入场。
 - 分时 Redis 缓存键包含截止时间 `end`，不同截止时间的查询不互相复用。
 
-当前仍是单标的、做多或空仓、同一根收盘价生成信号并成交的简化研究模型；没有滑点、涨跌停、停牌或退市成交模拟。保存快照不代表数据具备历史时点可得性。
+收盘信号在下一根已观测 K 线的开盘价模拟成交（`execution_timing=next_open`），买入价乘以 `1+slippage_bps/10000`，卖出价乘以 `1-slippage_bps/10000`。滑点默认为 0；自然语言请求可显式指定，后续修改手续费时保留原滑点。
+
+买入数量为可用现金除以 `成交价 × (1+费率)`，双边费用按各自成交金额计算，不透支现金。逐根记录现金、数量、市值和净值，期末信号保留为 pending，不虚构成交或强行平仓；未平仓收益按末期收盘价估值。
+
+[独立账本校验](../services/market-data/src/quantpilot_market_data/backtest_accounting.py)不调用策略信号生成器，逐笔核对信号/成交日期、开盘参考价、成交数量、费用、交易收益与资金余额，并检查逐期收益、回撤、最终净值和已实现/未实现损益。复算既检查输入与结果哈希，也重新核对账本。
+
+当前仍是单标的、做多或空仓、允许小数份额的研究模型；没有涨跌停、停牌、容量、整手、T+1 或退市成交限制。指数只作假设性研究。固定滑点是模拟参数；保存快照不代表数据具备历史时点可得性。
 
 ## 复算与执行终止
 
-新实验使用 `single-asset-close-v2`，记录评估区间、实际参数、行情、代码及运行时身份和结果哈希。保存完整回测响应后，可在匹配的实现及运行时执行：
+新实验使用 schema 2 和 `single-asset-next-open-v3`，记录评估区间、实际参数、费用、滑点、行情、代码及运行时身份和结果哈希。保存完整回测响应后，可在匹配的实现及运行时执行：
 
 ```bash
 PYTHONPATH=services/market-data/src python -m quantpilot_market_data.replay_backtest backtest.json
@@ -50,6 +56,6 @@ Skills 源文件固定使用 LF 换行，使 Windows 检出后的内容与锁定
 
 ## 验证边界
 
-后端测试使用受控行情和缓存替身，覆盖参数透传、评估区间、净收益、周期年化、缓存隔离和离线复算；前端测试覆盖请求继承、错参拒绝、指标窗口和 Agent 停止条件。它们不替代真实供应商、模型、PostgreSQL/Redis 及浏览器全流程验收。
+后端单元测试使用受控行情，覆盖参数透传、跳空成交、现金约束、费用滑点、期末挂起信号、账本篡改拒绝及离线复算；真实 PostgreSQL/Redis 集成另外验证并发、回滚与缓存版本隔离。2026-11-16 已跑通三类标的的东方财富取数、TimescaleDB 入库、HTTP 回测和离线复算；记录见[验证状态](validation-status.md)。这些结果不替代真实模型与浏览器全流程验收。
 
 生成工作空间的持久化日志需要目录同步，build/preview 需要 Linux namespace 沙箱。Windows 原生环境的目录 `fsync` 可返回 `EPERM`；不要跳过同步或放宽沙箱来把相关用例计为通过。完整验收应在 README 指定的 Linux/WSL 环境执行。

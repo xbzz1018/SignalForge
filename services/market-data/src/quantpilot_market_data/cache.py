@@ -6,7 +6,9 @@ import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from time import monotonic
 from typing import Any, Literal
+from uuid import uuid4
 
 import redis.asyncio as redis
 from redis.exceptions import RedisError
@@ -185,12 +187,14 @@ class RedisJsonCache:
         url: str | None = None,
         namespace: str | None = None,
         enabled: bool | None = None,
+        retry_seconds: float = 5.0,
     ) -> None:
         self.url = url if url is not None else os.getenv("REDIS_URL", "").strip()
         self.namespace = namespace or os.getenv("REDIS_NAMESPACE", "quantpilot")
         self.enabled = redis_enabled_from_env() if enabled is None else enabled
         self._client: redis.Redis | None = None
-        self._available = True
+        self._retry_at = 0.0
+        self._retry_seconds = max(0.1, retry_seconds)
 
     @property
     def configured(self) -> bool:
@@ -198,7 +202,13 @@ class RedisJsonCache:
 
     @property
     def available(self) -> bool:
-        return self.enabled and self.configured and self._available
+        return self.enabled and self.configured and monotonic() >= self._retry_at
+
+    def _failed(self) -> None:
+        self._retry_at = monotonic() + self._retry_seconds
+
+    def _recovered(self) -> None:
+        self._retry_at = 0.0
 
     def key(self, cache_key: str) -> str:
         if cache_key.startswith(f"{self.namespace}:"):
@@ -211,16 +221,64 @@ class RedisJsonCache:
         client = self._get_client()
         try:
             raw = await client.get(self.key(cache_key))
+            self._recovered()
         except RedisError:
-            self._available = False
+            self._failed()
             return None
         if raw is None:
             return None
         try:
-            return json.loads(raw)
+            payload = json.loads(raw)
+            if isinstance(payload, dict):
+                return payload
         except (TypeError, json.JSONDecodeError):
-            await self.delete(cache_key)
+            pass
+        # A corrupt read must not delete a valid value written concurrently.
+        try:
+            await client.eval(
+                "if redis.call('GET', KEYS[1]) == ARGV[1] then "
+                "return redis.call('DEL', KEYS[1]) end return 0",
+                1, self.key(cache_key), raw,
+            )
+        except RedisError:
+            self._failed()
+        return None
+
+    async def begin_write(self, cache_key: str, *, ttl_seconds: int) -> str | None:
+        """Fence stale refreshes; only the latest started refresh may publish."""
+        if not self.available or ttl_seconds <= 0:
             return None
+        token = uuid4().hex
+        try:
+            await self._get_client().set(
+                f"{self.key(cache_key)}:generation", token, ex=max(60, ttl_seconds),
+            )
+            self._recovered()
+            return token
+        except RedisError:
+            self._failed()
+            return None
+
+    async def write_if_current(
+        self, cache_key: str, *, token: str | None, ttl_seconds: int, payload: dict[str, Any],
+    ) -> bool:
+        if not token or not self.available or ttl_seconds <= 0:
+            return False
+        try:
+            encoded = json.dumps(payload, ensure_ascii=False, default=str, allow_nan=False)
+            result = await self._get_client().eval(
+                "if redis.call('GET', KEYS[2]) ~= ARGV[1] then return 0 end "
+                "redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3]); return 1",
+                2, self.key(cache_key), f"{self.key(cache_key)}:generation",
+                token, encoded, ttl_seconds,
+            )
+            self._recovered()
+            return bool(result)
+        except (TypeError, ValueError):
+            return False
+        except RedisError:
+            self._failed()
+            return False
 
     async def write(self, cache_key: str, *, ttl_seconds: int, payload: dict[str, Any]) -> bool:
         if not self.available or ttl_seconds <= 0:
@@ -229,31 +287,38 @@ class RedisJsonCache:
         try:
             await client.set(
                 self.key(cache_key),
-                json.dumps(payload, ensure_ascii=False, default=str, separators=(",", ":")),
+                json.dumps(payload, ensure_ascii=False, default=str,
+                           separators=(",", ":"), allow_nan=False),
                 ex=ttl_seconds,
             )
+            self._recovered()
             return True
-        except (TypeError, RedisError):
-            self._available = False
+        except (TypeError, ValueError):
+            return False
+        except RedisError:
+            self._failed()
             return False
 
     async def delete(self, cache_key: str) -> None:
         if not self.available:
             return
         try:
-            await self._get_client().delete(self.key(cache_key))
+            await self._get_client().delete(
+                self.key(cache_key), f"{self.key(cache_key)}:generation",
+            )
+            self._recovered()
         except RedisError:
-            self._available = False
+            self._failed()
 
     async def ping(self) -> bool:
         if not self.enabled or not self.configured:
             return False
         try:
             await self._get_client().ping()
-            self._available = True
+            self._recovered()
             return True
         except RedisError:
-            self._available = False
+            self._failed()
             return False
 
     async def close(self) -> None:

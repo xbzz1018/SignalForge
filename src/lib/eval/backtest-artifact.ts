@@ -43,7 +43,7 @@ export async function inspectBacktestArtifact(params: {
   const raw = record(await params.readArtifact(artifactPath));
   const experiment = record(raw?.experiment);
   const data = record(experiment?.data);
-  if (!raw || !experiment || experiment.schema_version !== 1) {
+  if (!raw || !experiment || ![1, 2].includes(experiment.schema_version as number)) {
     return ['回测归档缺少受支持的实验记录。'];
   }
   const failures: string[] = [];

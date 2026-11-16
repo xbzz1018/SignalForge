@@ -63,7 +63,8 @@ def test_net_returns_reconcile_every_equity_change_including_fees(fee):
     for trade in result.trades:
         if trade.status == "closed":
             expected = (
-                (trade.exit_price / trade.entry_price) * (1 - Decimal(fee) / 10000) ** 2 - 1
+                (trade.exit_price / trade.entry_price)
+                * (1 - Decimal(fee) / 10000) / (1 + Decimal(fee) / 10000) - 1
             ) * 100
             assert abs(trade.return_pct - expected) <= Decimal("0.00005")
             assert trade.gross_return_pct is not None
@@ -199,7 +200,8 @@ def test_flat_prices_produce_neutral_rsi_and_wait_for_trend_filter():
         parameters={'rsi_window': 3, 'trend_window': 10, 'entry_rsi': 60, 'exit_rsi': 70},
     )
     assert all(point.fast_ma == 50 for point in result.equity_curve[3:])
-    assert result.trades[0].entry_date == '2025-01-10'
+    assert result.trades[0].entry_signal_date == '2025-01-10'
+    assert result.trades[0].entry_date == '2025-01-11'
     assert result.summary.total_return_pct == 0
 
 

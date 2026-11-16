@@ -43,7 +43,8 @@ def test_routes_preserve_replayable_responses_across_cache_and_engine_changes(
         period="daily",
         adjustment="none",
         fetched_at="2026-01-01T00:00:00Z",
-        bars=[{"date": f"2025-01-{day:02d}", "close": str(20 + day)} for day in range(1, 25)],
+        bars=[{"date": f"2025-01-{day:02d}", "open": str(20 + day),
+               "close": str(20 + day)} for day in range(1, 25)],
     )
 
     async def no_local(**_kwargs):
@@ -108,6 +109,7 @@ def test_requested_interval_parameters_and_fees_reach_the_engine(monkeypatch):
         bars=[
             {
                 "date": (date(2023, 10, 1) + timedelta(days=i)).isoformat(),
+                "open": str(100 + i % 40),
                 "close": str(100 + i % 40),
             }
             for i in range(260)
@@ -143,6 +145,7 @@ def test_requested_interval_parameters_and_fees_reach_the_engine(monkeypatch):
                     "fast_window": 5,
                     "slow_window": 20,
                     "fee_bps": 10,
+                    "slippage_bps": 8,
                     "initial_cash": 25000,
                 },
             )
@@ -150,6 +153,9 @@ def test_requested_interval_parameters_and_fees_reach_the_engine(monkeypatch):
             body = response.json()
             assert body["fast_window"] == 5 and body["slow_window"] == 20
             assert Decimal(body["fee_bps"]) == 10
+            assert Decimal(body["slippage_bps"]) == 8
+            assert body["execution_timing"] == "next_open"
+            assert Decimal(body["experiment"]["slippage_bps"]) == 8
             assert body["evaluation_start"] == "2024-01-01"
             assert body["evaluation_end"] == "2024-04-01"
             assert body["summary"]["start_date"] == "2024-01-01"
@@ -166,7 +172,12 @@ def test_requested_interval_parameters_and_fees_reach_the_engine(monkeypatch):
             "period=minute5",
             "fast_window=5&fast_window=10",
             "start=2025-02-30",
+            "slippage_bps=-1",
+            "slippage_bps=10000",
+            "slippage_bps=NaN",
+            "slippage_bps=1&slippage_bps=2",
         ]:
             response = client.get(f"/api/v1/backtests/strategies/ma_crossover/510300?{query}")
-            assert response.status_code == 400, (query, response.text)
+            expected_status = 422 if query == "slippage_bps=NaN" else 400
+            assert response.status_code == expected_status, (query, response.text)
         assert len(calls) == fetch_count

@@ -48,12 +48,17 @@ def report(symbol: str, revenue: int, *, notice: datetime | None = None) -> Fina
     )
 
 
+def database_now() -> datetime:
+    with psycopg.connect(TEST_URL) as connection:
+        return connection.execute("SELECT clock_timestamp()").fetchone()[0]
+
+
 def test_revisions_are_frozen_deduplicated_and_preserve_reversions() -> None:
     async def scenario():
         symbol = f"fixture-{uuid4()}"
         a = report(symbol, 100, notice=datetime(2021, 4, 1, tzinfo=UTC))
         b = a.model_copy(update={"revenue": Decimal(200)})
-        before = datetime.now(UTC) - timedelta(seconds=1)
+        before = database_now() - timedelta(seconds=1)
         first = await history.capture_financial_versions(
             symbol=symbol, provider="fixture", reports=[a]
         )
@@ -77,7 +82,7 @@ def test_revisions_are_frozen_deduplicated_and_preserve_reversions() -> None:
         latest = await history.read_financial_snapshot(
             symbol=symbol,
             provider="fixture",
-            cutoff=datetime.now(UTC),
+            cutoff=database_now(),
             limit=8,
         )
         assert latest.reports[0].revenue == 200
@@ -91,7 +96,7 @@ def test_revisions_are_frozen_deduplicated_and_preserve_reversions() -> None:
         reverted_read = await history.read_financial_snapshot(
             symbol=symbol,
             provider="fixture",
-            cutoff=datetime.now(UTC),
+            cutoff=database_now(),
             limit=8,
         )
         assert reverted_read.reports[0].revenue == 100
@@ -104,6 +109,34 @@ def test_revisions_are_frozen_deduplicated_and_preserve_reversions() -> None:
         assert too_early.reports == []
         assert too_early.knowledge.point_in_time is True
         assert too_early.data_quality.status == "warning"
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("clock_offset", [-3600, 3600])
+def test_snapshot_cutoffs_use_database_clock_despite_worker_skew(monkeypatch, clock_offset):
+    class SkewedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.now(tz) + timedelta(seconds=clock_offset)
+
+    monkeypatch.setattr(history, "datetime", SkewedDatetime)
+
+    async def scenario():
+        symbol = f"clock-skew-{uuid4()}"
+        captured = await history.capture_financial_versions(
+            symbol=symbol, provider="fixture",
+            reports=[report(symbol, 100, notice=datetime(2021, 4, 1, tzinfo=UTC))],
+        )
+        frozen = await history.read_financial_snapshot(
+            symbol=symbol, provider="fixture", cutoff=captured.snapshot.cutoff, limit=8,
+        )
+        assert frozen.reports[0].revenue == 100
+        with pytest.raises(ValueError, match="不能晚于"):
+            await history.read_financial_snapshot(
+                symbol=symbol, provider="fixture",
+                cutoff=database_now() + timedelta(minutes=5), limit=8,
+            )
 
     asyncio.run(scenario())
 

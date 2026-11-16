@@ -107,7 +107,7 @@ def test_tampering_is_rejected_before_engine_execution(mutation, monkeypatch):
     elif mutation == "id":
         payload["experiment"]["experiment_id"] = "sha256:" + "0" * 64
     else:
-        payload["experiment"]["schema_version"] = 2
+        payload["experiment"]["schema_version"] = 99
 
     def must_not_execute(*_args, **_kwargs):
         raise AssertionError("Engine ran before integrity validation")
@@ -126,7 +126,7 @@ def test_resealed_false_results_still_fail_numerical_replay():
     record["experiment"]["experiment_id"] = digest(
         {key: value for key, value in record["experiment"].items() if key != "experiment_id"}
     )
-    with pytest.raises(ValueError, match="Replayed result differs"):
+    with pytest.raises(ValueError, match="accounting mismatch|Replayed result differs"):
         replay_backtest(record)
 
 

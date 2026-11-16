@@ -33,6 +33,8 @@ def _source_digest() -> str:
     # Bind the installed implementation and its serialization contracts, never a Git label alone.
     files = (
         "backtest.py",
+        "backtest_execution.py",
+        "backtest_accounting.py",
         "backtest_input.py",
         "backtest_parameters.py",
         "backtest_experiments.py",
@@ -47,9 +49,11 @@ def _source_digest() -> str:
 # Capture code identity when this process loads the engine. Deployments must restart it.
 _CODE_SHA256 = _source_digest()
 ASSUMPTIONS = [
-    "Single asset, long or flat; signals and fills use the same bar close.",
-    "Returns start on the next bar after entry; fees are charged on position changes.",
-    "No slippage, capacity, suspension, price-limit or delisting execution model.",
+    "Single asset, long or flat; close signals fill at the next observed bar open.",
+    "Fractional quantities; entry fees are funded from cash; fees apply to fill notional.",
+    "Adverse fixed-bps slippage adjusts buy/sell fills; it is a simulation assumption.",
+    "Unfilled final signals remain pending; open positions are marked to the last close.",
+    "No capacity, suspension, price-limit, lot-size, T+1 or delisting execution model.",
     "Annualization uses 252 daily, 52 weekly or 12 monthly bars per year; intraday is rejected.",
     "Strategy returns and closed-trade returns are net of fees; gross trade returns are separate.",
     "Pre-evaluation bars warm indicators only; the requested evaluation interval starts flat.",
@@ -104,7 +108,7 @@ def attach_experiment(
     fee_bps: Decimal,
 ) -> BacktestResponse:
     record = {
-        "schema_version": 1,
+        "schema_version": 2,
         "engine": current_engine_identity().model_dump(mode="json"),
         "strategy_id": result.strategy_id,
         "parameters": result.model_dump(mode="json")["parameters"],
@@ -112,6 +116,7 @@ def attach_experiment(
         "evaluation_end": result.evaluation_end,
         "initial_cash": str(initial_cash),
         "fee_bps": str(fee_bps),
+        "slippage_bps": str(result.slippage_bps),
         "data": data.model_dump(mode="json"),
         "data_sha256": digest(data.model_dump(mode="json")),
         "result_sha256": result_digest(result),

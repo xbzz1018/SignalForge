@@ -7,7 +7,7 @@ from quantpilot_market_data.contracts.quotes import KlineResponse
 def validate_strategy_bars(data: KlineResponse, strategy_id: str) -> None:
     if not data.bars:
         raise ValueError('回测行情不能为空。')
-    required = {'close'}
+    required = {'open', 'close'}
     if strategy_id in {
         'donchian_breakout', 'turtle_trend', 'volume_price_breakout', 'atr_trailing_breakout',
     }:

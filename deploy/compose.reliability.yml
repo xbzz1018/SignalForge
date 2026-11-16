@@ -1,0 +1,31 @@
+name: signalforge-reliability
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.27.1-pg18
+    environment:
+      POSTGRES_DB: signalforge_reliability_test
+      POSTGRES_USER: signalforge_test
+      POSTGRES_PASSWORD: signalforge_test_local
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "127.0.0.1:35434:5432"
+    volumes:
+      - ../sqls:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U signalforge_test -d signalforge_reliability_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "127.0.0.1:36381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

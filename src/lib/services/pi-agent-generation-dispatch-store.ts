@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import {
   Prisma,
   type AgentGenerationJob,
@@ -357,12 +358,18 @@ export async function enqueuePiAgentGenerationJob(input: {
   }
 
   return prisma.$transaction(async (tx) => {
+    // A missing job row cannot be locked. Serialize first enqueue on its parent.
+    await lockDispatchProject(tx, input.projectId);
     const existing = await lockJob(tx, input.projectId, input.requestId);
     if (existing) {
-      if (existing.instructionHash !== hash) {
+      if (existing.instructionHash !== hash ||
+          !isDeepStrictEqual(existing.executionEnvelope, envelope) ||
+          existing.cliPreference !== (input.cliPreference ?? null) ||
+          existing.selectedModel !== (input.selectedModel ?? null) ||
+          existing.maxAttempts !== maxAttempts) {
         throw new PiAgentGenerationDispatchError(
           "GENERATION_DISPATCH_IDEMPOTENCY_CONFLICT",
-          "The request ID is already bound to a different generation instruction.",
+          "The request ID is already bound to a different execution contract.",
           input.projectId,
           input.requestId,
         );

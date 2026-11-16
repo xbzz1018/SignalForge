@@ -7,6 +7,8 @@ export function assertConsistentSettings(question: string): void {
     [new RegExp(`(?:slow_window|慢线|长期均线)${separator}${number}`, 'gi'), m => [Number(m[1])]],
     [new RegExp(`(?:手续费|费用|费率|fee_bps)${separator}${number}(bps|bp|基点|%|‰)?`, 'gi'),
       m => [Number(m[1]) * (m[2] === '%' ? 100 : m[2] === '‰' ? 10 : 1)]],
+    [new RegExp(`(?:滑点|slippage_bps)${separator}${number}(bps|bp|基点|%|‰)?`, 'gi'),
+      m => [Number(m[1]) * (m[2] === '%' ? 100 : m[2] === '‰' ? 10 : 1)]],
     [new RegExp(`(?:初始资金|初始本金|initial_cash)${separator}${number}(万)?`, 'gi'),
       m => [Number(m[1]) * (m[2] ? 10000 : 1)]],
     [/(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线)?(?:\/|、|和|与|及|-)(?:MA)?(\d+(?:\.\d+)?)(?:日|天|周|月)?(?:均线|MA)/gi,
@@ -36,7 +38,7 @@ export function assertConsistentSettings(question: string): void {
 
 /** Never execute a numeric prefix of an unsupported amount or window expression. */
 export function assertCompleteNumericTokens(question: string): void {
-  const settings = /(?:fast_window|slow_window|快线|慢线|短期均线|长期均线|手续费|费用|费率|fee_bps|初始资金|初始本金|initial_cash)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)(?:bps|bp|基点|%|‰|万元|万|元)?/gi;
+  const settings = /(?:fast_window|slow_window|快线|慢线|短期均线|长期均线|手续费|费用|费率|fee_bps|滑点|slippage_bps|初始资金|初始本金|initial_cash)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)(?:bps|bp|基点|%|‰|万元|万|元)?/gi;
   for (const match of question.matchAll(settings)) {
     const remaining = question.slice(match.index + match[0].length);
     if (/^(?:[.,，]\d|[eE][+-]?\d|亿|千|百|美元|港元|USD|HKD)/i.test(remaining)) {

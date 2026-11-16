@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from quantpilot_market_data.backtest import build_strategy_backtest
+from quantpilot_market_data.backtest_accounting import reconcile_backtest
 from quantpilot_market_data.backtest_experiments import result_digest, verify_experiment
 from quantpilot_market_data.contracts.analysis import BacktestResponse
 from quantpilot_market_data.contracts.quotes import KlineResponse
@@ -16,12 +17,15 @@ MAX_ARTIFACT_BYTES = 8 * 1024 * 1024
 def replay_backtest(payload: object) -> BacktestResponse:
     original = BacktestResponse.model_validate(payload)
     experiment = verify_experiment(original)
+    data = KlineResponse.model_validate(experiment.data.model_dump(mode="json"))
+    reconcile_backtest(original, data)
     replay = build_strategy_backtest(
-        KlineResponse.model_validate(experiment.data.model_dump(mode="json")),
+        data,
         strategy_id=experiment.strategy_id,
         parameters=experiment.parameters,
         initial_cash=experiment.initial_cash,
         fee_bps=experiment.fee_bps,
+        slippage_bps=experiment.slippage_bps,
         start=experiment.evaluation_start,
         end=experiment.evaluation_end,
     )
@@ -51,6 +55,7 @@ def main() -> int:
                     "data_sha256": replay.experiment.data_sha256,
                     "result_sha256": replay.experiment.result_sha256,
                     "sample_count": replay.summary.sample_count,
+                    "accounting": reconcile_backtest(replay),
                 }
             )
         )

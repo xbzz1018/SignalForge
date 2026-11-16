@@ -5,6 +5,8 @@ from decimal import ROUND_HALF_UP, Decimal
 from math import sqrt
 from typing import Any
 
+from quantpilot_market_data.backtest_accounting import reconcile_backtest
+from quantpilot_market_data.backtest_execution import ExecutionLedger
 from quantpilot_market_data.backtest_experiments import attach_experiment, capture_input_data
 from quantpilot_market_data.backtest_input import validate_strategy_bars
 from quantpilot_market_data.backtest_parameters import (
@@ -22,8 +24,8 @@ from quantpilot_market_data.backtest_parameters import (
 from quantpilot_market_data.contracts.analysis import (
     BacktestEquityPoint,
     BacktestResponse,
+    BacktestSignal,
     BacktestSummary,
-    BacktestTrade,
 )
 from quantpilot_market_data.contracts.quotes import KlineResponse
 
@@ -256,6 +258,7 @@ def build_ma_crossover_backtest(
     slow_window: int = 60,
     initial_cash: Decimal | int | float | str = Decimal("1"),
     fee_bps: Decimal | int | float | str = Decimal("5"),
+    slippage_bps: Decimal | int | float | str = Decimal("0"),
     start: str | None = None,
     end: str | None = None,
 ) -> BacktestResponse:
@@ -269,6 +272,7 @@ def build_ma_crossover_backtest(
         },
         initial_cash=initial_cash,
         fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
         start=start,
         end=end,
     )
@@ -281,6 +285,7 @@ def build_strategy_backtest(
     parameters: dict[str, Any] | None = None,
     initial_cash: Decimal | int | float | str = Decimal("1"),
     fee_bps: Decimal | int | float | str = Decimal("5"),
+    slippage_bps: Decimal | int | float | str = Decimal("0"),
     start: str | None = None,
     end: str | None = None,
 ) -> BacktestResponse:
@@ -324,6 +329,9 @@ def build_strategy_backtest(
     fee = finite_decimal(fee_bps, "fee_bps")
     if not fee.is_finite() or fee < 0 or fee > 10000:
         raise ValueError("fee_bps 必须为 0 到 10000 之间的有限数值。")
+    slippage = finite_decimal(slippage_bps, "slippage_bps")
+    if not 0 <= slippage < 10000:
+        raise ValueError("slippage_bps 必须为 0 到小于 10000 的有限数值。")
 
     data = capture_input_data(kline)
     source_metadata = kline.metadata
@@ -342,7 +350,7 @@ def build_strategy_backtest(
     ):
         raise ValueError("指定回测区间内没有行情。")
 
-    fee_rate = fee / Decimal("10000")
+    ledger = ExecutionLedger(cash, fee / 10000, slippage / 10000)
     closes = [bar.close for bar in kline.bars]
     highs = [bar.high for bar in kline.bars]
     lows = [bar.low for bar in kline.bars]
@@ -351,8 +359,7 @@ def build_strategy_backtest(
     equity = cash
     peak_equity = cash
     position = 0
-    trades: list[BacktestTrade] = []
-    current_trade: BacktestTrade | None = None
+    trades = ledger.trades
     equity_curve: list[BacktestEquityPoint] = []
     strategy_returns: list[Decimal] = []
     position_days = 0
@@ -367,21 +374,35 @@ def build_strategy_backtest(
             break
         equity_before_bar = equity
         close = bar.close
+        assert close is not None and bar.open is not None
+        held_before_open = ledger.quantity > 0
+        filled_side = ledger.fill_open(bar.date, bar.open)
+        position = int(ledger.quantity > 0)
+        current_trade = ledger.current_trade
+        if filled_side == "buy":
+            entry_index = index
+            highest_close_since_entry = None
+        elif filled_side == "sell":
+            assert entry_index is not None
+            trades[-1].holding_days = index - entry_index
+            entry_index = None
+            highest_close_since_entry = None
+        equity = ledger.cash + ledger.quantity * close
+        if current_trade is not None:
+            assert entry_index is not None
+            current_trade.holding_days = index - entry_index
         previous_close = closes[index - 1] if index > 0 else None
         primary_indicator: Decimal | None = None
         secondary_indicator: Decimal | None = None
         benchmark_return = _return_pct(close, previous_close)
-        strategy_return = Decimal("0")
-        if position == 1 and benchmark_return is not None:
-            strategy_return = benchmark_return / Decimal("100")
-            equity *= Decimal("1") + strategy_return
+        if held_before_open or position == 1:
             position_days += 1
-            if close is not None:
-                highest_close_since_entry = (
-                    close
-                    if highest_close_since_entry is None
-                    else max(highest_close_since_entry, close)
-                )
+        if position == 1:
+            highest_close_since_entry = (
+                close
+                if highest_close_since_entry is None
+                else max(highest_close_since_entry, close)
+            )
 
         enter_signal = False
         exit_signal = False
@@ -637,33 +658,10 @@ def build_strategy_backtest(
                 and (close >= previous_close or holding_days >= max_holding_days or stop_triggered)
             )
 
-        if position == 0 and enter_signal and close is not None:
-            equity *= Decimal("1") - fee_rate
-            position = 1
-            entry_index = index
-            highest_close_since_entry = close
-            current_trade = BacktestTrade(entry_date=bar.date, entry_price=close, holding_days=0)
-            trades.append(current_trade)
-        elif position == 1 and exit_signal and close is not None:
-            equity *= Decimal("1") - fee_rate
-            position = 0
-            if current_trade is not None:
-                current_trade.exit_date = bar.date
-                current_trade.exit_price = close
-                current_trade.holding_days = max(
-                    0,
-                    index - _trade_entry_index(kline, current_trade.entry_date),
-                )
-                gross_return = _return_pct(close, current_trade.entry_price)
-                current_trade.gross_return_pct = _round(gross_return, 4)
-                current_trade.return_pct = _round(
-                    ((close / current_trade.entry_price) * (1 - fee_rate) ** 2 - 1) * 100,
-                    4,
-                )
-                current_trade.status = "closed"
-                current_trade = None
-            entry_index = None
-            highest_close_since_entry = None
+        if position == 0 and enter_signal and ledger.cash > 0:
+            ledger.pending = BacktestSignal(date=bar.date, side="buy")
+        elif position == 1 and exit_signal:
+            ledger.pending = BacktestSignal(date=bar.date, side="sell")
 
         peak_equity = max(peak_equity, equity)
         drawdown_pct = (
@@ -683,6 +681,9 @@ def build_strategy_backtest(
                 daily_return_pct=_round(benchmark_return, 4),
                 strategy_return_pct=_round(strategy_return_pct, 4),
                 equity=_round(equity, 6) or equity,
+                cash_balance=ledger.cash,
+                quantity=ledger.quantity,
+                market_value=ledger.quantity * close,
                 drawdown_pct=_round(drawdown_pct, 4),
             )
         )
@@ -712,6 +713,14 @@ def build_strategy_backtest(
         sample_count=len(equity_curve),
         initial_cash=cash,
         final_equity=_round(equity, 6) or equity,
+        cash_balance=ledger.cash,
+        market_value=ledger.quantity * latest_close if latest_close is not None else Decimal("0"),
+        total_fees=ledger.total_fees,
+        total_slippage=ledger.total_slippage,
+        realized_pnl=ledger.realized_pnl,
+        unrealized_pnl=(
+            ledger.unrealized_pnl(latest_close) if latest_close is not None else Decimal("0")
+        ),
         total_return_pct=_round(total_return, 4),
         benchmark_return_pct=_round(benchmark_return, 4),
         excess_return_pct=_round(
@@ -753,6 +762,8 @@ def build_strategy_backtest(
         fast_window=fast_window,
         slow_window=slow_window,
         fee_bps=fee,
+        slippage_bps=slippage,
+        execution_timing="next_open",
         parameters=params,
         evaluation_start=start_date,
         evaluation_end=end_date,
@@ -760,17 +771,13 @@ def build_strategy_backtest(
         adjustment=kline.adjustment,
         equity_curve=equity_curve,
         trades=trades,
+        fills=ledger.fills,
+        pending_signal=ledger.pending,
         summary=summary,
         as_of=kline.as_of,
         fetched_at=datetime.now(UTC),
         metadata=source_metadata,
         data_quality=kline.data_quality,
     )
+    response.metadata = {**response.metadata, "accounting": reconcile_backtest(response, kline)}
     return attach_experiment(response, data, initial_cash=cash, fee_bps=fee)
-
-
-def _trade_entry_index(kline: KlineResponse, entry_date: str) -> int:
-    for index, bar in enumerate(kline.bars):
-        if bar.date == entry_date:
-            return index
-    return 0

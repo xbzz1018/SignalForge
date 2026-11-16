@@ -705,18 +705,16 @@ describe.skipIf(!TEST_DATABASE_URL)('PrismaAgentRuntimeRepository (PostgreSQL in
       })
     );
 
-    const remainingMs = run.leaseExpiresAt!.getTime() - Date.now();
-    expect(remainingMs).toBeGreaterThan(100_000);
-    expect(remainingMs).toBeLessThan(140_000);
+    const remainingMs = run.leaseExpiresAt!.getTime() - run.lastHeartbeatAt!.getTime();
+    expect(remainingMs).toBe(120_000);
 
     const heartbeat = await skewedRepository.heartbeat({
       ...fence(run),
       now: skewedNow,
       leaseExpiresAt: new Date(skewedNow.getTime() + 180_000),
     });
-    const heartbeatRemainingMs = heartbeat.leaseExpiresAt!.getTime() - Date.now();
-    expect(heartbeatRemainingMs).toBeGreaterThan(160_000);
-    expect(heartbeatRemainingMs).toBeLessThan(200_000);
+    const heartbeatRemainingMs = heartbeat.leaseExpiresAt!.getTime() - heartbeat.lastHeartbeatAt!.getTime();
+    expect(heartbeatRemainingMs).toBe(180_000);
   });
 
   it('rejects a requestId owned by a different project', async () => {
@@ -901,7 +899,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PrismaAgentRuntimeRepository (PostgreSQL in
       effect: 'workspace_write',
       idempotency: 'reconcile_required',
     });
-    const expiredAt = new Date(Date.now() - 1_000);
+    const expiredAt = new Date(0);
     await clientA.$transaction([
       clientA.agentRun.update({
         where: { id: run.id },
@@ -938,7 +936,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PrismaAgentRuntimeRepository (PostgreSQL in
     const stale = await repositoryA.createRun(
       runInput(projectId, workspace, 'expired-owner')
     );
-    const expiredAt = new Date(Date.now() - 1_000);
+    const expiredAt = new Date(0);
     await clientA.$transaction([
       clientA.agentRun.update({
         where: { id: stale.id },
@@ -999,8 +997,11 @@ describe.skipIf(!TEST_DATABASE_URL)('PrismaAgentRuntimeRepository (PostgreSQL in
         )
       );
       await enteredCommit.promise;
+      const [databaseClock] = await clientB.$queryRaw<Array<{ now: Date }>>`
+        SELECT clock_timestamp() AS now
+      `;
       await new Promise((resolve) =>
-        setTimeout(resolve, Math.max(0, leaseExpiresAt.getTime() - Date.now() + 25))
+        setTimeout(resolve, Math.max(0, run.leaseExpiresAt!.getTime() - databaseClock.now.getTime() + 25))
       );
 
       let takeoverSettled = false;
@@ -1021,6 +1022,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PrismaAgentRuntimeRepository (PostgreSQL in
         status: 'commit_authorized',
       });
     } finally {
+      releaseCommit.resolve();
       await fs.rm(physicalWorkspace, { recursive: true, force: true });
     }
   });

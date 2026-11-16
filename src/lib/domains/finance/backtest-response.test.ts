@@ -7,6 +7,7 @@ describe('untrusted backtest response acceptance', () => {
   function validResult(): Record<string, unknown> {
     return { strategy_id: spec.strategyId, fast_window: spec.fastWindow, slow_window: spec.slowWindow,
       fee_bps: spec.feeBps, period: spec.period, adjustment: spec.adjustment,
+      slippage_bps: spec.slippageBps, execution_timing: 'next_open',
       evaluation_start: spec.startDate, evaluation_end: spec.endDate,
       parameters: { fast_window: spec.fastWindow, slow_window: spec.slowWindow, fee_bps: String(spec.feeBps) },
       equity_curve: [{ date: '2025-01-02', close: '100', equity: '1', position: 0 }],

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from quantpilot_market_data.contracts.fundamentals import (
 )
 from quantpilot_market_data.database_core import DatabaseError
 from quantpilot_market_data.providers.eastmoney import parse_financial_reports_payload
+from quantpilot_market_data.repositories import financial_history
 from quantpilot_market_data.routers.fundamentals import create_fundamentals_router
 from quantpilot_market_data.services import fundamentals
 
@@ -106,6 +108,26 @@ def test_history_routes_reject_ambiguous_or_future_cutoffs_and_require_capture_a
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    class ClockCursor:
+        async def execute(self, _query):
+            pass
+
+        async def fetchone(self):
+            return {"current_time": datetime.now(UTC)}
+
+    class ClockConnection:
+        @asynccontextmanager
+        async def cursor(self, **_kwargs):
+            yield ClockCursor()
+
+    @asynccontextmanager
+    async def connection():
+        yield ClockConnection()
+
+    async def connect():
+        return connection()
+
+    monkeypatch.setattr(financial_history, "connect", connect)
     monkeypatch.setenv("QUANTPILOT_MARKET_ADMIN_TOKEN", "pit-contract-admin-token")
     provider = Provider()
     app = FastAPI()

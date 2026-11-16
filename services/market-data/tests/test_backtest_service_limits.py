@@ -12,7 +12,8 @@ def history(count=30):
     return KlineResponse(
         symbol='fixture', secid='fixture:1', period='daily', adjustment='none',
         fetched_at='2026-01-01T00:00:00Z',
-        bars=[{'date': f'2025-01-{i + 1:02d}', 'close': i + 10} for i in range(count)],
+        bars=[{'date': f'2025-01-{i + 1:02d}', 'open': i + 10,
+               'close': i + 10} for i in range(count)],
     )
 
 

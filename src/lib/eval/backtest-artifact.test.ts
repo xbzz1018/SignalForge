@@ -59,7 +59,7 @@ describe('backtest archive inspection', () => {
     'rejects a broken archive contract: %s', async mutation => {
       const input = fixture();
       if (mutation === 'missing') input.readArtifact.mockResolvedValue(null);
-      if (mutation === 'schema') input.raw.experiment.schema_version = 2;
+      if (mutation === 'schema') input.raw.experiment.schema_version = 99;
       if (mutation === 'hash') input.raw.experiment.result_sha256 = `sha256:${'d'.repeat(64)}`;
       if (mutation === 'bars') input.raw.experiment.data.bars = [];
       if (mutation === 'result') input.raw.summary = { total_return_pct: '999' };

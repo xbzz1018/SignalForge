@@ -153,13 +153,15 @@ async def read_financial_snapshot(
 ) -> FinancialReportsResponse:
     if cutoff.tzinfo is None:
         raise ValueError("as_of 必须包含时区，例如 2026-09-06T00:00:00+08:00。")
-    if cutoff > datetime.now(UTC):
-        raise ValueError("as_of 不能晚于当前时刻。")
     try:
         async with (
             await connect() as connection,
             connection.cursor(row_factory=dict_row) as cursor,
         ):
+            # Captures use the database clock; validate their cutoffs with the same authority.
+            await cursor.execute("SELECT clock_timestamp() AS current_time")
+            if cutoff > (await cursor.fetchone())["current_time"]:
+                raise ValueError("as_of 不能晚于当前时刻。")
             await cursor.execute(
                 """SELECT * FROM (
                      SELECT DISTINCT ON (report_date)

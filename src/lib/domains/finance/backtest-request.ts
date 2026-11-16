@@ -9,6 +9,7 @@ export interface QuantBacktestRequest {
   fastWindow: number;
   slowWindow: number;
   feeBps: number;
+  slippageBps: number;
   initialCash: number;
   period: 'daily' | 'weekly' | 'monthly';
   adjustment: 'qfq' | 'hfq' | 'none';
@@ -56,7 +57,7 @@ export function compileBacktestRequest(input: {
   if (/分钟|minute\d|日内回测/.test(question)) {
     throw new Error('回测支持日线、周线和月线，请确认数据周期。');
   }
-  if (/滑点|印花税|双边手续费|买入手续费|卖出手续费|买入费率|卖出费率/.test(question)) {
+  if (/印花税|双边手续费|买入手续费|卖出手续费|买入费率|卖出费率/.test(question)) {
     throw new Error('当前回测使用统一单边手续费，请确认费用模型后再执行。');
   }
   if (/-\d+(?:\.\d+)?(?:日|天|周|月)?(?:均线)?(?:\/|、|和|与|及)\d+/.test(question)) {
@@ -94,6 +95,13 @@ export function compileBacktestRequest(input: {
   const feeBps = fee ? Number(fee[1]) * (fee[2] === '%' ? 100 : fee[2] === '‰' ? 10 : 1) : 5;
   if (!Number.isFinite(feeBps) || feeBps < 0 || feeBps > 10000) throw new Error('手续费需在 0–10000 bps 之间。');
   if (!fee) defaults.push('单边手续费 5 bps');
+  const slippage = question.match(/(?:滑点|slippage_bps)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)(bps|bp|基点|%|‰)?/i);
+  if (/滑点|slippage_bps/i.test(question) && (!slippage || !slippage[2] && !/^slippage_bps/i.test(slippage[0]))) {
+    throw new Error('请以 bps 或百分比明确滑点。');
+  }
+  const slippageBps = slippage ? Number(slippage[1]) * (slippage[2] === '%' ? 100 : slippage[2] === '‰' ? 10 : 1) : 0;
+  if (!Number.isFinite(slippageBps) || slippageBps < 0 || slippageBps >= 10000) throw new Error('滑点需在 0–10000 bps 之间，且小于 10000。');
+  if (!slippage) defaults.push('固定滑点 0 bps；下一根开盘成交');
   const cash = question.match(/(?:初始资金|初始本金|initial_cash)(?:为|是|改成|改为|设置为|[:：=])?(\d+(?:\.\d+)?)(万)?(?:元)?/i);
   if (/初始资金|初始本金|initial_cash/i.test(question) && !cash) throw new Error('请明确初始资金数值。');
   const initialCash = cash ? Number(cash[1]) * (cash[2] ? 10000 : 1) : 1;
@@ -154,7 +162,7 @@ export function compileBacktestRequest(input: {
     throw new Error('样本数量需大于慢线窗口且不超过 1500。');
   }
   return { schemaVersion: 1, strategyId: 'ma_crossover', fastWindow, slowWindow,
-    feeBps, initialCash, period, adjustment, startDate, endDate, limit, defaults };
+    feeBps, slippageBps, initialCash, period, adjustment, startDate, endDate, limit, defaults };
 }
 
 export function reviseBacktestRequest(
@@ -165,7 +173,7 @@ export function reviseBacktestRequest(
   const windowSyntax = /均线|快线|慢线|fast_window|slow_window|MA\d+/i;
   const periodSyntax = /周线|月线|日线|周K|月K|日K/i;
   const hasExecutionChange = windowSyntax.test(question) || periodSyntax.test(question) ||
-    /手续费|费率|费用|资金|本金|复权|日期|回测|fee_bps|initial_cash|\d+年|最近|过去|至|从.*到/i.test(question);
+    /手续费|费率|费用|滑点|slippage_bps|资金|本金|复权|日期|回测|fee_bps|initial_cash|\d+年|最近|过去|至|从.*到/i.test(question);
   if (!hasExecutionChange) return previous;
   const hasRange = Boolean(timeRange) || /(?:19|20)\d{2}年|\d{4}[-/]\d{1,2}[-/]\d{1,2}|最近|过去|今年|去年/.test(question);
   const supplemental = [
@@ -175,6 +183,7 @@ export function reviseBacktestRequest(
     /慢线|长期均线|slow_window/i.test(question) && !/快线|短期均线|fast_window/i.test(question)
       ? `快线${previous.fastWindow}` : '',
     !/手续费|费率|费用|fee_bps/i.test(question) ? `手续费${previous.feeBps}bps` : '',
+    !/滑点|slippage_bps/i.test(question) ? `滑点${previous.slippageBps ?? 0}bps` : '',
     !/资金|本金|initial_cash/i.test(question) ? `initial_cash=${previous.initialCash}` : '',
     !periodSyntax.test(question) ? { daily: '日线', weekly: '周线', monthly: '月线' }[previous.period] : '',
     !/复权/.test(question) ? { qfq: '前复权', hfq: '后复权', none: '不复权' }[previous.adjustment] : '',
@@ -188,6 +197,7 @@ export function backtestRequestQuery(spec: QuantBacktestRequest): string {
   const query = new URLSearchParams({
     fast_window: String(spec.fastWindow), slow_window: String(spec.slowWindow),
     fee_bps: String(spec.feeBps), initial_cash: String(spec.initialCash),
+    slippage_bps: String(spec.slippageBps ?? 0),
     period: spec.period, adjustment: spec.adjustment, limit: String(spec.limit), end: spec.endDate,
   });
   if (spec.startDate) query.set('start', spec.startDate);
@@ -200,7 +210,8 @@ export function backtestResponseMismatches(spec: QuantBacktestRequest, response:
     return Number.isFinite(Number(value)) ? Number(value) : null;
   };
   const expected = { strategy_id: spec.strategyId, fast_window: spec.fastWindow,
-    slow_window: spec.slowWindow, fee_bps: spec.feeBps, period: spec.period,
+    slow_window: spec.slowWindow, fee_bps: spec.feeBps, slippage_bps: spec.slippageBps ?? 0,
+    execution_timing: 'next_open', period: spec.period,
     adjustment: spec.adjustment, evaluation_start: spec.startDate, evaluation_end: spec.endDate };
   const mismatches = Object.entries(expected).filter(([key, value]) => {
     const actual = response[key];

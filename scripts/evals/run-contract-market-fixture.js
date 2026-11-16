@@ -291,7 +291,7 @@ function announcements(security) {
 function backtest(security, query) {
   // This fixture checks delivery contracts, never numerical strategy correctness.
   // Its fixed results must not masquerade as execution of arbitrary parameters.
-  const supported = { fast_window: '20', slow_window: '60', fee_bps: '5', initial_cash: '1', period: 'daily', adjustment: 'qfq', limit: '250' };
+  const supported = { fast_window: '20', slow_window: '60', fee_bps: '5', slippage_bps: '0', initial_cash: '1', period: 'daily', adjustment: 'qfq', limit: '250' };
   for (const [key, expected] of Object.entries(supported)) {
     const actual = query.get(key);
     if (actual !== null && actual !== expected) throw new RangeError(`unsupported contract fixture parameter: ${key}`);
@@ -326,6 +326,8 @@ function backtest(security, query) {
     fast_window: 20,
     slow_window: 60,
     fee_bps: '5.0000',
+    slippage_bps: '0',
+    execution_timing: 'next_open',
     parameters: { fast_window: 20, slow_window: 60, fee_bps: 5 },
     period: 'daily',
     adjustment: 'qfq',

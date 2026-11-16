@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { compileBacktestRequest, backtestRequestQuery, backtestResponseMismatches, reviseBacktestRequest } from './backtest-request';
 
 describe('frozen backtest execution request', () => {
+  it('freezes slippage through follow-up changes and API serialization', () => {
+    const spec = compileBacktestRequest({ question: '2025年上半年5/20均线回测滑点0.1%' });
+    expect(spec.slippageBps).toBe(10);
+    expect(new URLSearchParams(backtestRequestQuery(spec)).get('slippage_bps')).toBe('10');
+    expect(reviseBacktestRequest(spec, '手续费改为8bps').slippageBps).toBe(10);
+    expect(reviseBacktestRequest(spec, '滑点改为5bps')).toMatchObject({
+      fastWindow: 5, slowWindow: 20, slippageBps: 5,
+    });
+  });
+  it.each(['滑点-1bps回测', '滑点NaN回测', 'slippage_bps=1e2回测',
+    '滑点10000bps回测', '滑点1bps滑点2bps回测'])(
+    'refuses invalid or conflicting slippage: %s', question => {
+      expect(() => compileBacktestRequest({ question })).toThrow();
+    },
+  );
   it.each(['5、20日均线快线10回测', '5和20均线慢线30回测', 'MA5/MA20与10/30均线回测'])(
     'cross-checks alternative paired-window syntax: %s', question => {
       expect(() => compileBacktestRequest({ question })).toThrow('冲突');
@@ -112,7 +127,7 @@ describe('frozen backtest execution request', () => {
     '5/2日均线回测', '2.5/20日均线回测', '回测20日均线',
     '回测5分钟均线', 'RSI策略回测', 'MACD回测', 'KDJ回测', '5/20EMA回测',
     '均线回测手续费10', '均线回测手续费-1bps',
-    '-5/20日均线回测', '快线abc慢线20回测', '均线回测滑点1bps',
+    '-5/20日均线回测', '快线abc慢线20回测', '均线回测滑点1',
     '2025-02-30至2025-03-01均线回测', '2025-03-01至2025-01-01均线回测',
   ])('requires clarification instead of silently substituting parameters: %s', question => {
     expect(() => compileBacktestRequest({ question })).toThrow();

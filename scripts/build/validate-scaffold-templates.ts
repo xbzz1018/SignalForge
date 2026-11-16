@@ -10,7 +10,6 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import { execFileSync } from 'child_process';
 import {
   baseDashboardCssTemplate,
@@ -158,7 +157,11 @@ th { font-weight: 600; color: var(--muted); }
 
   // Reuse the platform dependency tree so the check is deterministic and offline-capable.
   try {
-    await fs.symlink(path.join(ROOT, 'node_modules'), path.join(projectDir, 'node_modules'), 'dir');
+    await fs.symlink(
+      path.join(ROOT, 'node_modules'),
+      path.join(projectDir, 'node_modules'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
     execFileSync(
       process.execPath,
       [path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next'), 'build', '--webpack'],
@@ -178,7 +181,10 @@ async function main() {
   const entries = extractTemplates();
   console.log(`Found ${entries.length} templates to validate: ${entries.map((e) => e.name).join(', ')}`);
 
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qp-template-check-'));
+  // Keep generated projects on the dependency tree's drive (Webpack uses relative entries).
+  const scratchDir = path.join(ROOT, 'tmp');
+  await fs.mkdir(scratchDir, { recursive: true });
+  const tmpDir = await fs.mkdtemp(path.join(scratchDir, 'qp-template-check-'));
   console.log(`Working in ${tmpDir}`);
 
   let failed = 0;

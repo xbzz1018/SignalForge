@@ -425,7 +425,7 @@ function BacktestPanel({ backtest }: { backtest: JsonRecord | null }) {
         <div>
           <h2>回测复盘</h2>
           <p>
-            {strategyName || strategyId || '策略名称缺失'}{strategyId ? '（' + strategyId + '）' : ''} · 参数窗口 {String(backtest.fast_window ?? '-')} / {String(backtest.slow_window ?? '-')} · 费用 {formatNumber(backtest.fee_bps)} bps
+            {strategyName || strategyId || '策略名称缺失'}{strategyId ? '（' + strategyId + '）' : ''} · 参数窗口 {String(backtest.fast_window ?? '-')} / {String(backtest.slow_window ?? '-')} · 费用 {formatNumber(backtest.fee_bps)} bps · 固定滑点 {formatNumber(backtest.slippage_bps)} bps · {backtest.execution_timing === 'next_open' ? '收盘信号，下一根开盘模拟成交' : '成交时点未核实'}
           </p>
         </div>
         <span>策略名称来源：回测数据 · {points.length} 个交易日</span>

@@ -22,6 +22,7 @@ export async function fetchBacktest(params: {
   assertMarketApiEnabled();
   const query = new URLSearchParams({
     fee_bps: String(params.parameters.fee_bps ?? 5),
+    slippage_bps: String(params.parameters.slippage_bps ?? 0),
     period: 'daily',
     adjustment: 'qfq',
     limit: String(params.limit ?? 1260),

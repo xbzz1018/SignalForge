@@ -74,12 +74,20 @@ class BacktestEquityPoint(BaseModel):
         default=None, description="扣除交易费用后的当期策略收益率，单位：%"
     )
     equity: Decimal = Field(description="策略净值")
+    cash_balance: Decimal = Decimal("0")
+    quantity: Decimal = Decimal("0")
+    market_value: Decimal = Decimal("0")
     drawdown_pct: Decimal | None = Field(default=None, description="策略净值回撤，单位：%")
 
 
 class BacktestTrade(BaseModel):
     entry_date: str
     entry_price: Decimal
+    entry_signal_date: str | None = None
+    exit_signal_date: str | None = None
+    quantity: Decimal = Decimal("0")
+    entry_fee: Decimal = Decimal("0")
+    exit_fee: Decimal = Decimal("0")
     exit_date: str | None = None
     exit_price: Decimal | None = None
     return_pct: Decimal | None = Field(
@@ -92,12 +100,37 @@ class BacktestTrade(BaseModel):
     status: Literal["open", "closed"] = "open"
 
 
+class BacktestSignal(BaseModel):
+    date: str
+    side: Literal["buy", "sell"]
+
+
+class BacktestFill(BaseModel):
+    signal_date: str
+    date: str
+    side: Literal["buy", "sell"]
+    reference_price: Decimal
+    price: Decimal
+    quantity: Decimal
+    notional: Decimal
+    fee: Decimal
+    slippage_cost: Decimal
+    cash_after: Decimal
+    quantity_after: Decimal
+
+
 class BacktestSummary(BaseModel):
     start_date: str | None = None
     end_date: str | None = None
     sample_count: int = 0
     initial_cash: Decimal
     final_equity: Decimal
+    cash_balance: Decimal = Decimal("0")
+    market_value: Decimal = Decimal("0")
+    total_fees: Decimal = Decimal("0")
+    total_slippage: Decimal = Decimal("0")
+    realized_pnl: Decimal = Decimal("0")
+    unrealized_pnl: Decimal = Decimal("0")
     total_return_pct: Decimal | None = None
     benchmark_return_pct: Decimal | None = None
     excess_return_pct: Decimal | None = None
@@ -127,12 +160,16 @@ class BacktestResponse(BaseModel):
     fast_window: int
     slow_window: int
     fee_bps: Decimal
+    slippage_bps: Decimal = Decimal("0")
+    execution_timing: Literal["same_close", "next_open"] = "same_close"
     parameters: dict[str, Any] = Field(default_factory=dict, description="策略参数快照")
     period: KlinePeriod
     adjustment: Adjustment
     side: StrategySide = "long"
     equity_curve: list[BacktestEquityPoint]
     trades: list[BacktestTrade]
+    fills: list[BacktestFill] = Field(default_factory=list)
+    pending_signal: BacktestSignal | None = None
     summary: BacktestSummary
     as_of: datetime | str | None = None
     fetched_at: datetime

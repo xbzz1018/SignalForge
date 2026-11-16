@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "started_at": "2026-11-16T07:02:43.138669+00:00",
+  "revision": "f6edae9b5f12dd1e46fefd4cf10acf74dc785b6c",
+  "tracked_diff_sha256": "4fc05c52d7123d3b9a62bfc4c8311f65ad3d7950b5be56ed1db0ead63d6e7c57",
+  "changed_source_files_sha256": {
+    ".github/workflows/quality.yml": "abf98566ec9337abd748ecc8951c9aa74ef19eb61e0337d5f5e78edb9a5d8ec6",
+    "deploy/compose.reliability.yml": "4ac77b92f83d5f7feb29ac806fcec8ef0631fcbbabf9494635571b8a15e4625e",
+    "scripts/build/validate-scaffold-templates.ts": "1883abb7091c5f283b8b0798f6c7b3f3937a4211a22b02bff3d8f9de881f2ade",
+    "scripts/checks/check-github-workflows.js": "f81ced8f1cf5049fd0919e49c204a522cda4100f1e688a7ce831d70a71fb22c4",
+    "scripts/checks/run-pi-agent-postgres-integration.js": "157af77e974a1ac27455300aee47c3c82b7223b9712644f36deb7afac10d5c90",
+    "scripts/checks/verify-research-backend.py": "74f81c98b4758a29053f1e2bf379e2ecc6689d94698fa1f0e884a7863302144b",
+    "scripts/evals/run-contract-market-fixture.js": "e41653b4f2cf4f25420c2d3ec029ba0f4acb18b2d50b2c78a4fe98025baa18e2",
+    "services/market-data/src/quantpilot_market_data/backtest.py": "1e623ec0b3b26af3f832a7a0539ac117b794e13f364ca701356bb4fff3c57ca4",
+    "services/market-data/src/quantpilot_market_data/backtest_accounting.py": "47a8c510c2a21977f846fd9f51e886a4b8daf1c0f8bd3c8c205d508a87aeb8cb",
+    "services/market-data/src/quantpilot_market_data/backtest_execution.py": "813701807e8078d176de0a50b5fc4cefaeac487fcfacf2683b4c4df630bd59c0",
+    "services/market-data/src/quantpilot_market_data/backtest_experiments.py": "1113912c741ca8337892adec73623ec945cca6ad13dcb95e193d8d5544cd0dbb",
+    "services/market-data/src/quantpilot_market_data/backtest_input.py": "8302cdfc64f765b54c4f706a0c322ff2f1c4dce87c68f0e61921f9447984863b",
+    "services/market-data/src/quantpilot_market_data/cache.py": "404e5f5cf56a30e80a6de6a898892beda31997cf746188249846c19cbe13aacb",
+    "services/market-data/src/quantpilot_market_data/contracts/analysis.py": "d74de531e1cb0766acfa1885b75d9f0a33b3c1b2493e2ee42b7fd9c42cb86e50",
+    "services/market-data/src/quantpilot_market_data/contracts/experiments.py": "af2efc4447e10a23909a018ea925c0852374324ba89093896ed4537c47da2a07",
+    "services/market-data/src/quantpilot_market_data/replay_backtest.py": "f4dc726878de2948fe5cbf7122a5b974c1b623c7a97ffe303d2b96ee5748bf6c",
+    "services/market-data/src/quantpilot_market_data/repositories/financial_history.py": "4d702fddab895a8babc3574c0095fff56c2d143a92441bb2adefe0beaad3318a",
+    "services/market-data/src/quantpilot_market_data/routers/backtests.py": "16b8e2714e8e65fad9107d2a60e8bc796fc18126ac212999871c0f460c6f274e",
+    "services/market-data/src/quantpilot_market_data/services/backtests.py": "ceef11e0fb5fae1357ad626e942034e1b5a9dc5378e59a11f4ba1ca532623e8d",
+    "services/market-data/src/quantpilot_market_data/services/quotes.py": "4894a532bcba2fdde2f86100f9c52eece5f210d026f1d5cbfd6384849508edb7",
+    "services/market-data/tests/test_backtest.py": "32b28f53d57e91cdcb9bb1ffce6d47124d55f3513d4e7bbcdd4491bf76af8a07",
+    "services/market-data/tests/test_backtest_correctness.py": "408708eb211a41a50d1b9486e4a64b371dc6228fc2bab6ae47c4d84bc5c15b78",
+    "services/market-data/tests/test_backtest_execution.py": "77e7bd0c2a229d677d71e59103b684408d951967d75231dd0fab71d2565ce835",
+    "services/market-data/tests/test_backtest_experiments.py": "ca57b9a4254e0e26f7d481fee24d4e594785c3d89104a88c01f0cd45cbdc7524",
+    "services/market-data/tests/test_backtest_routes.py": "86f3c36963ff300e251e3a38a65de891db8a5b1b5c3bb72a5c5deccee6c7e119",
+    "services/market-data/tests/test_backtest_service_limits.py": "64c9a895721cdb1a62aeaf1ec6e2195637bc09e4877ba7aab86ab208a3189c9f",
+    "services/market-data/tests/test_cache_redis_integration.py": "13b31b62c3af90c70143b07cc7546a44303030643f90f1dfbb0097f4177ca1dd",
+    "services/market-data/tests/test_cache_resilience.py": "25cd42cf1fec1ac4ee7d0dc367273a66e408addcf464e22d773f5d8185c6d4e9",
+    "services/market-data/tests/test_financial_history.py": "8b1ffc4f193130e8510e8a999c6e0d9538c277ca831e6d377eca66692bc97bf2",
+    "services/market-data/tests/test_financial_history_postgres.py": "a1d62f8b73ed9af9b73097ac0161b146ea101a702999a99d7777f3589e26bb1c",
+    "services/market-data/tests/test_quotes_service.py": "c9598035f19a5000c8ee13f15decdcf7120910f8b23ab3e8e65e4ef22142e334",
+    "src/lib/agent/runtime/prisma-repository.integration.test.ts": "f513bb378a129258e8dea89a882d5dff4668ec42e49eb613e97c630b148a5a05",
+    "src/lib/domains/finance/backtest-request.test.ts": "dc64073f1e3736c15bafc342c4608454135798099bdb3a00cf2e6c31775ee6f4",
+    "src/lib/domains/finance/backtest-request.ts": "4e4fe97fe2933b164b91d5e22cc0656510852bcd3a0b9d12dfc74261483afc8f",
+    "src/lib/domains/finance/backtest-response.test.ts": "9a7462b419cab4e0329e823c02a6ecdcbb5ef3bdd309d6eaf8b3c30032b6d1c4",
+    "src/lib/domains/finance/backtest-syntax.ts": "d8979955a8d0c59a86257d51433bf493c8b1d6480df9d41a54184fb2c2e342e7",
+    "src/lib/eval/backtest-artifact.test.ts": "647ae1450fec582cea6ee1de6dfe47f8c4063d3fa3ce2ee30be06bfea5454490",
+    "src/lib/eval/backtest-artifact.ts": "5b0db9015f9ca018d8c3ab01ba3cc04fef0be29aa11df105380d7d27f44136c9",
+    "src/lib/quant/data-prefetch/market.test.ts": "e6846561d28de1e9829063c16035ed2743eb7ae973ee9a0de8a6edfcca427e1b",
+    "src/lib/quant/strategy-market-api.ts": "248d170c5632531559b0d3f9e01a587ff6a7994856145aa4358946c4c0350cd7",
+    "src/lib/services/pi-agent-dispatch-reliability.integration.test.ts": "0a5fb8dff4b21fe68c134174bd6bf7c590cdc9f1650b8ad46a1a6afb9bbf36d6",
+    "src/lib/services/pi-agent-generation-dispatch-store.ts": "577c51d6614e0926a35559bb697708811fbe535467bf6a714707e30bac506071",
+    "src/lib/utils/scaffold-base-templates.ts": "6cddda5806e658212fffd916bb8d2b8aebb6e04a9d92e3b048214bcd651ae751"
+  },
+  "timescaledb_version": "2.27.1",
+  "cases": [
+    {
+      "symbol": "600519",
+      "status": "passed",
+      "provider_attempts": [
+        {
+          "provider": "eastmoney",
+          "status": "passed"
+        }
+      ],
+      "source": "eastmoney",
+      "stored_rows": 250,
+      "first_date": "2024-12-23",
+      "last_date": "2025-12-31",
+      "asset_type": "stock",
+      "experiment_id": "sha256:f390dcdfa0b18adc3b20fbc86589d3656256e3b4d7856c4f09dbc5224a77b140",
+      "engine_code_sha256": "sha256:0f0ab3d4ccc49ed6dec3e2508be50088aebe39d5ab265a3ecaccb2a9e61b884a",
+      "accounting": {
+        "status": "verified",
+        "fills": 15,
+        "closed_trades": 7,
+        "final_equity": "94313.209443",
+        "total_fees": "1508.829424624868405902273345",
+        "total_slippage": "754.3902781173598885082102747"
+      },
+      "repository_rollback": "passed",
+      "redis_round_trip": "passed",
+      "offline_replay": "passed"
+    },
+    {
+      "symbol": "510300",
+      "status": "passed",
+      "provider_attempts": [
+        {
+          "provider": "eastmoney",
+          "status": "passed"
+        }
+      ],
+      "source": "eastmoney",
+      "stored_rows": 250,
+      "first_date": "2024-12-23",
+      "last_date": "2025-12-31",
+      "asset_type": "etf",
+      "experiment_id": "sha256:b82ae495b5eedf10fd2ce7dcd47fb24501ab720d513265453c69ccb4b6e82c21",
+      "engine_code_sha256": "sha256:0f0ab3d4ccc49ed6dec3e2508be50088aebe39d5ab265a3ecaccb2a9e61b884a",
+      "accounting": {
+        "status": "verified",
+        "fills": 15,
+        "closed_trades": 7,
+        "final_equity": "116741.537014",
+        "total_fees": "1608.388394639533160182862331",
+        "total_slippage": "804.1698004593153548035599121"
+      },
+      "repository_rollback": "passed",
+      "redis_round_trip": "passed",
+      "offline_replay": "passed"
+    },
+    {
+      "symbol": "000300",
+      "status": "passed",
+      "provider_attempts": [
+        {
+          "provider": "eastmoney",
+          "status": "passed"
+        }
+      ],
+      "source": "eastmoney",
+      "stored_rows": 250,
+      "first_date": "2024-12-23",
+      "last_date": "2025-12-31",
+      "asset_type": "index",
+      "experiment_id": "sha256:9656fa75e26b8edebf8ce943cdcd9a8cc395bed35020ba6cb6b7ae22d7ca68c2",
+      "engine_code_sha256": "sha256:0f0ab3d4ccc49ed6dec3e2508be50088aebe39d5ab265a3ecaccb2a9e61b884a",
+      "accounting": {
+        "status": "verified",
+        "fills": 17,
+        "closed_trades": 8,
+        "final_equity": "109100.317047",
+        "total_fees": "1759.309308862424975762472657",
+        "total_slippage": "879.6303141661182450170415234"
+      },
+      "repository_rollback": "passed",
+      "redis_round_trip": "passed",
+      "offline_replay": "passed"
+    }
+  ],
+  "model": {
+    "profile": "local_qwen:qwen3.5-9b-q5km",
+    "status": "blocked",
+    "reason": "credential_missing"
+  },
+  "completed_at": "2026-11-16T07:02:46.082428+00:00",
+  "backend_status": "passed",
+  "full_agent_delivery": "not_run",
+  "artifact_directory": "tmp/research-acceptance-20261116-verified",
+  "artifacts_sha256": {
+    "000300-backtest.json": "d54af0714606710ddce045602a2f3fcd0ada4cf94a8a490dc037f3b20b7dc616",
+    "000300-market.json": "36b907968d6534c8eb525a671345b320b020afc214e7de434953f335d21a353f",
+    "000300-query-plan.json": "acd406047b29ee8984e31d037cb7c5c27b8569e73608dfd9e4f48a84b3e34b11",
+    "510300-backtest.json": "1ef7ea7397a2f68ad8bbec0a15df85d69eb35766bdd851526405895923f3c472",
+    "510300-market.json": "4ecbe47db626183ff46440735791c854f69b9e656651ee963a2a3219e6c4f21e",
+    "510300-query-plan.json": "4422f054de47b01c5d1ad7761f0e6713f96a6c6dd3ee16edcc356a564ec0cc56",
+    "600519-backtest.json": "b3f889530e66cdd0291b17b11ac42a07925aea802402e8b9a218367b1193f37e",
+    "600519-market.json": "0857b9792573cc24f11239494289c66226803033785c51f8701061d585cedd72",
+    "600519-query-plan.json": "0c23964b0c2e3fdb30183b3908084d93b6c873f38fe777f9d38229ae2404a71c",
+    "report.json": "0d0849beb29cb067d8981d784dc1f47b60d0e9871124de4910a1aebb09a8c79c"
+  },
+  "local_verification": {
+    "backend_pytest": {
+      "passed": 265,
+      "skipped": 0,
+      "scope": "complete backend suite"
+    },
+    "postgres_tasks": {
+      "passed": 29,
+      "files": 5,
+      "scope": "real PostgreSQL integration"
+    },
+    "typescript": {
+      "passed": 105,
+      "files": 8,
+      "scope": "targeted affected contracts"
+    },
+    "scaffold_builds": {
+      "passed": 4,
+      "failed": 0
+    },
+    "checks": [
+      "TypeScript",
+      "modified-files ESLint",
+      "backend and runner Ruff",
+      "backend architecture",
+      "module boundaries",
+      "GitHub workflow contracts"
+    ],
+    "note": "Local observed results; not a remote CI result or signed attestation."
+  }
+}

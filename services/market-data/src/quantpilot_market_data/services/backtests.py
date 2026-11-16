@@ -136,7 +136,9 @@ async def get_ma_crossover_backtest(
     fee_bps: Decimal,
     ttl_seconds: int,
     start: str | None = None,
+    slippage_bps: Decimal = Decimal("0"),
 ) -> BacktestResponse:
+    slippage_bps = _slippage(slippage_bps)
     parameters = normalize_strategy_parameters(
         "ma_crossover",
         {"fast_window": fast_window, "slow_window": slow_window},
@@ -167,6 +169,7 @@ async def get_ma_crossover_backtest(
             slow_window=normalized_slow,
             initial_cash=initial_cash,
             fee_bps=fee_bps,
+            slippage_bps=slippage_bps,
             start=start_date,
             end=end_date,
         )
@@ -185,6 +188,7 @@ async def get_ma_crossover_backtest(
             "start": start_date,
             "initial_cash": str(initial_cash),
             "fee_bps": str(fee_bps),
+            "slippage_bps": str(slippage_bps),
         },
     )
     cached = _read_cached_backtest(cache, cache_key)
@@ -208,6 +212,7 @@ async def get_ma_crossover_backtest(
         slow_window=normalized_slow,
         initial_cash=initial_cash,
         fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
         start=start_date,
         end=end_date,
     )
@@ -229,7 +234,9 @@ async def get_strategy_backtest(
     fee_bps: Decimal,
     ttl_seconds: int,
     start: str | None = None,
+    slippage_bps: Decimal = Decimal("0"),
 ) -> BacktestResponse:
+    slippage_bps = _slippage(slippage_bps)
     strategy_id = canonical_strategy_id(strategy_id)
     parameters = normalize_strategy_parameters(strategy_id, parameters, fee_bps)
     normalized_limit, start_date, end_date = _history_request(
@@ -256,6 +263,7 @@ async def get_strategy_backtest(
             parameters=parameters,
             initial_cash=initial_cash,
             fee_bps=fee_bps,
+            slippage_bps=slippage_bps,
             start=start_date,
             end=end_date,
         )
@@ -274,6 +282,7 @@ async def get_strategy_backtest(
             "start": start_date,
             "initial_cash": str(initial_cash),
             "fee_bps": str(fee_bps),
+            "slippage_bps": str(slippage_bps),
         },
     )
     cached = _read_cached_backtest(cache, cache_key)
@@ -297,7 +306,15 @@ async def get_strategy_backtest(
         parameters=parameters,
         initial_cash=initial_cash,
         fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
         start=start_date,
         end=end_date,
     )
     return cache_response(cache, cache_key, ttl_seconds, response, BacktestResponse)
+
+
+def _slippage(value: Decimal) -> Decimal:
+    value = finite_decimal(value, "slippage_bps")
+    if not 0 <= value < 10000:
+        raise ValueError("slippage_bps 必须为 0 到小于 10000 的有限数值。")
+    return value

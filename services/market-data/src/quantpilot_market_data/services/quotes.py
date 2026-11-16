@@ -184,6 +184,7 @@ async def get_intraday_history_quote(
             expires_at=expires_at,
         )
 
+    write_token = await intraday_redis_cache.begin_write(cache_key, ttl_seconds=ttl_seconds)
     try:
         response = await fetch_intraday_kline_with_retry(
             client,
@@ -210,8 +211,9 @@ async def get_intraday_history_quote(
         ttl_seconds=ttl_seconds,
         expires_at=expires_at,
     )
-    written = await intraday_redis_cache.write(
+    written = await intraday_redis_cache.write_if_current(
         cache_key,
+        token=write_token,
         ttl_seconds=ttl_seconds,
         payload=response_with_metadata.model_dump(mode="json"),
     )

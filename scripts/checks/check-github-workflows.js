@@ -44,13 +44,18 @@ if (nativeTimescaleServices.length !== 2) {
   );
 }
 const nativeRedisServices = quality.match(/^\s{6}redis:\s*$/gm) ?? [];
-if (nativeRedisServices.length !== 2) {
+if (nativeRedisServices.length !== 3) {
   failures.push(
-    `.github/workflows/quality.yml: native Redis service must be declared twice, found ${nativeRedisServices.length}`,
+    `.github/workflows/quality.yml: native Redis service must be declared three times, found ${nativeRedisServices.length}`,
   );
 }
 if ((quality.match(/35433:5432/g) ?? []).length !== 2 || (quality.match(/36380:6379/g) ?? []).length !== 2) {
   failures.push('.github/workflows/quality.yml: native service ports must match DATABASE_URL and REDIS_URL');
+}
+const marketBackend = quality.split(/^  backend-market-data:\s*$/m)[1]?.split(/^  [a-zA-Z0-9_-]+:\s*$/m)[0] ?? '';
+if (!/MARKET_TEST_REDIS_URL:\s*redis:\/\/127\.0\.0\.1:36381\/0/.test(marketBackend) ||
+    !/36381:6379/.test(marketBackend)) {
+  failures.push('.github/workflows/quality.yml: backend Redis integration must use its isolated service');
 }
 if (!/QUANTPILOT_AUTH_ADMIN_EMAIL:\s*auth-smoke-admin@quantpilot\.local/.test(quality)) {
   failures.push('.github/workflows/quality.yml: authenticated smoke must use an explicit CI administrator');

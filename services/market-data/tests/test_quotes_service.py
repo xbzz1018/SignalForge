@@ -100,6 +100,17 @@ def test_history_refresh_bypasses_file_cache(monkeypatch) -> None:
 class MemoryRedis:
     def __init__(self):
         self.entries = {}
+        self.tokens = {}
+
+    async def begin_write(self, key, *, ttl_seconds):
+        token = object()
+        self.tokens[key] = token
+        return token
+
+    async def write_if_current(self, key, *, token, ttl_seconds, payload):
+        if self.tokens.get(key) is not token:
+            return False
+        return await self.write(key, ttl_seconds=ttl_seconds, payload=payload)
 
     async def read(self, key):
         return self.entries.get(key)
@@ -159,6 +170,12 @@ def test_intraday_cache_separates_historical_cutoffs_and_reuses_identical_querie
     requests = []
 
     class MemoryRedis:
+        async def begin_write(self, key, *, ttl_seconds):
+            return "test-token"
+
+        async def write_if_current(self, key, *, token, ttl_seconds, payload):
+            return await self.write(key, ttl_seconds=ttl_seconds, payload=payload)
+
         async def read(self, key):
             return stored.get(key)
 

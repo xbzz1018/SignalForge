@@ -24,6 +24,7 @@ describe('backtest experiment artifacts', () => {
       return new Response(JSON.stringify({
         symbol: '510300', strategy_id: 'ma_crossover', fast_window: mismatch ? 20 : Number(query.get('fast_window')),
         slow_window: Number(query.get('slow_window')), fee_bps: query.get('fee_bps'),
+        slippage_bps: query.get('slippage_bps'), execution_timing: 'next_open',
         parameters: { fast_window: Number(query.get('fast_window')), slow_window: Number(query.get('slow_window')), fee_bps: query.get('fee_bps') },
         period: query.get('period'), adjustment: query.get('adjustment'),
         evaluation_start: query.get('start'), evaluation_end: query.get('end'), equity_curve: curve,
@@ -50,6 +51,7 @@ describe('backtest experiment artifacts', () => {
     const artifact = {
       symbol: '510300',
       strategy_id: 'ma_crossover', fast_window: 20, slow_window: 60, fee_bps: '5',
+      slippage_bps: '0', execution_timing: 'next_open',
       parameters: { fast_window: 20, slow_window: 60, fee_bps: '5' },
       period: 'daily', adjustment: 'qfq', evaluation_start: null, evaluation_end: '2026-01-02',
       equity_curve: equityCurve,
