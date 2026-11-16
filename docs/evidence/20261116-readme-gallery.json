@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-16T10:17:33.392Z",
+  "product": "SignalForge",
+  "scope": "Skills market overview screenshot only; no financial computation or model delivery is claimed.",
+  "runtime": {
+    "buildId": "6ZAztsmSsuzkoFsje-Ac4",
+    "authMode": "disabled",
+    "databaseEnabled": false,
+    "marketApiEnabled": false,
+    "modelCalls": 0
+  },
+  "screenshot": {
+    "route": "/skills",
+    "sourceFile": "tmp/readme-gallery-20261116/skills-market.png",
+    "sourceSha256": "fbdd4a92cdc4ac042d198bda91b58e17ea0cc3523885f5dd8155c2cc9ea261ce",
+    "sourceDimensions": {
+      "width": 1440,
+      "height": 1000
+    },
+    "crop": {
+      "left": 0,
+      "top": 0,
+      "width": 1440,
+      "height": 654
+    },
+    "outputFile": "docs/assets/skills-market.png",
+    "outputSha256": "063a4b942b65beeed506e840a4c544b01b0e2eb25616fab38866f11f38dbdbdf",
+    "processing": "Crop only; no labels, values or status changed."
+  },
+  "checks": {
+    "status": 200,
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "size": {
+      "width": 1440,
+      "scrollWidth": 1440
+    },
+    "oldBrandVisible": false,
+    "errors": [],
+    "failedResponses": [],
+    "failedRequests": []
+  },
+  "rawReportSha256": "9c660f2a3a0557dd01a5e88f1df6111c11cc11e14e33ae1a5b027522ab26b75d",
+  "excludedCandidates": [
+    {
+      "route": "/strategy-platform",
+      "reason": "Database and market service disabled in this UI-only environment; failed API requests and missing data. Screenshot not published."
+    }
+  ],
+  "limits": [
+    "Skill registry health describes package integrity and metadata, not model success rate.",
+    "The database-disabled screenshot does not validate persistence, backtests, market providers or editing and publishing skills.",
+    "Financial result screenshot and model-run evidence remain separate historical records."
+  ]
+}
