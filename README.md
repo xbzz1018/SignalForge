@@ -76,4 +76,4 @@ uv sync --project services/market-data --extra baostock --extra akshare --locked
 | 行情、指标与回测 | [Python market-data](services/market-data/)、[策略与回测指南](docs/strategy-platform-guide.md) |
 | 持久任务与完成判定 | [队列](src/lib/quant/generation-queue.ts)、[Mission store](src/lib/services/pi-agent-mission-store.ts)、[证据核验](src/lib/agent/mission/evidence-verifier.ts) |
 
-更多页面入口、部署、评测与排障见[技术文档总览](docs/README.md)。源码中的 `QuantPilot`、数据库标识和环境变量沿用内部名称。
+更多页面入口、部署、评测与排障见[技术文档总览](docs/README.md)。
