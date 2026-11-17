@@ -8,9 +8,20 @@
 
 [项目案例](docs/project-case.md) · [架构设计](docs/architecture.md) · [本地运行](#本地运行) · [配置指南](docs/configuration.md)
 
+<!-- portfolio-preview:start -->
+[浏览项目与交互示例](https://kukup.xbzz.cloud/projects/signalforge)
+
+![项目首页与功能入口](https://kukup.xbzz.cloud/images/signal-home.webp?v=4f6cac16d5a8)
+
+<sub>项目首页 · 示例资料与展示配色。点击上方链接，从首页继续浏览各项功能。</sub>
+<!-- portfolio-preview:end -->
+
+<details>
+<summary>研究看板</summary>
+
 ![沪深 300 研究看板中的 K 线、均线、成交量与风险摘要](docs/assets/hs300-research.png)
 
-<sub>沪深 300 趋势研究看板：K 线、均线、成交量与风险摘要（页面节选）。</sub>
+</details>
 
 ## 研究场景
 
