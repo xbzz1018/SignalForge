@@ -18,7 +18,7 @@ npm run db:init
 npm run obs:up
 cd services/market-data
 uv sync --extra baostock --extra akshare
-uv run quantpilot-market-api
+uv run signalforge-market-api
 ```
 
 另开一个终端回到项目根目录，仅启动前端：
@@ -38,7 +38,7 @@ curl http://127.0.0.1:8000/api/v1/foundation/status
 如果只想看页面结构，可以用降级模式；涉及真实行情、补数、策略平台时不要长期保持 offline：
 
 ```bash
-QUANTPILOT_DEGRADATION_MODE=offline npm run dev
+SIGNALFORGE_DEGRADATION_MODE=offline npm run dev
 ```
 
 ## ModelPort、Memory 与 AKEP 日常检查
@@ -103,7 +103,7 @@ npm run check:task-e2e -- --campaign=20260719a --only=C18,C26,C27 --retry-failed
 
 ```bash
 web_pgid="$(ps -eo pgid=,cmd= | awk '/npm run dev --port 3000/ {print $1; exit}')"
-api_pgid="$(ps -eo pgid=,cmd= | awk '/uv run quantpilot-market-api/ {print $1; exit}')"
+api_pgid="$(ps -eo pgid=,cmd= | awk '/uv run signalforge-market-api/ {print $1; exit}')"
 [ -n "$web_pgid" ] && kill -TERM -- "-$web_pgid"
 [ -n "$api_pgid" ] && kill -TERM -- "-$api_pgid"
 sleep 2
@@ -113,7 +113,7 @@ sleep 2
 
 ```bash
 mkdir -p tmp/runtime
-setsid bash -c 'cd services/market-data && exec env QUANTPILOT_MARKET_HOST=127.0.0.1 QUANTPILOT_MARKET_PORT=8000 uv run quantpilot-market-api' > tmp/runtime/market-api.log 2>&1 < /dev/null &
+setsid bash -c 'cd services/market-data && exec env SIGNALFORGE_MARKET_HOST=127.0.0.1 SIGNALFORGE_MARKET_PORT=8000 uv run signalforge-market-api' > tmp/runtime/market-api.log 2>&1 < /dev/null &
 setsid bash -c 'exec npm run dev -- --port 3000' > tmp/runtime/web.log 2>&1 < /dev/null &
 ```
 
@@ -191,7 +191,7 @@ npm run market:maintain:dry-run
 npm run market:maintain
 ```
 
-生产环境由 `deploy/systemd/quantpilot-market-maintenance.timer` 在工作日收盘后触发；服务失败必须通过 systemd/journal 监控进入值班告警。`QUANTPILOT_MARKET_FRESHNESS_MIN_SYMBOLS` 同时约束维护后的覆盖率，不能只用最新日期判断成功。
+生产环境由 `deploy/systemd/signalforge-market-maintenance.timer` 在工作日收盘后触发；服务失败必须通过 systemd/journal 监控进入值班告警。`SIGNALFORGE_MARKET_FRESHNESS_MIN_SYMBOLS` 同时约束维护后的覆盖率，不能只用最新日期判断成功。
 
 快速 `doctor` 会把过期数据报告为 warning；上面的独立门禁会返回非零退出码，适合部署或定时任务。
 
@@ -271,7 +271,7 @@ curl -X POST 'http://127.0.0.1:8000/api/v1/research/universes/a-share-sample-res
 排查顺序：
 
 1. `curl http://127.0.0.1:8000/api/v1/research/sector-capital-flow`
-2. `npm run redis:cli` 后执行 `KEYS quantpilot:*sector*`
+2. `npm run redis:cli` 后执行 `KEYS signalforge:*sector*`
 3. 检查 market-data 日志是否全量扫描 5000+ 标的。
 4. 缩小日期窗口或增加摘要缓存。
 

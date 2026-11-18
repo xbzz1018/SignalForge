@@ -35,8 +35,7 @@ describe('strategy market transport', () => {
       error = value;
     });
     await vi.advanceTimersByTimeAsync(101);
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toContain('timeout after 100ms');
+    expect(error).toMatchObject({ code: 'MARKET_API_TIMEOUT' });
     await pending;
   });
 
@@ -44,8 +43,28 @@ describe('strategy market transport', () => {
     config.enabled = false;
     const fetcher = vi.fn();
     vi.stubGlobal('fetch', fetcher);
-    await expect(fetchMarketApiJson('/anything')).rejects.toThrow('停用');
+    await expect(fetchMarketApiJson('/anything')).rejects.toMatchObject({ code: 'MARKET_API_DISABLED' });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, 1000])('preserves caller cancellation with timeout %s', async (timeoutMs) => {
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>().mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetcher);
+    const pending = fetchMarketApiJson('/anything', { timeoutMs, init: { signal: controller.signal } });
+    const reason = new DOMException('caller canceled', 'AbortError');
+    controller.abort(reason);
+    await expect(pending).rejects.toBe(reason);
+  });
+
+  it('does not include an upstream error body in the failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('invalid internal connection details', { status: 500 })));
+    await expect(fetchMarketApiJson('/anything')).rejects.toMatchObject({
+      code: 'MARKET_API_UPSTREAM_ERROR',
+      message: 'market API returned HTTP 500',
+    });
   });
 
   it('preserves backtest fees, strategy identity and supplied parameter overrides', async () => {
@@ -69,7 +88,7 @@ describe('strategy market transport', () => {
   });
 
   it('retains administrator authorization and control payloads across the new client boundary', async () => {
-    vi.stubEnv('QUANTPILOT_MARKET_ADMIN_TOKEN', 'unit-fixture-admin');
+    vi.stubEnv('SIGNALFORGE_MARKET_ADMIN_TOKEN', 'unit-fixture-admin');
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(Response.json({ job_id: 'job/1', action: 'pause', status: 'paused' }));
@@ -77,7 +96,7 @@ describe('strategy market transport', () => {
     await controlStrategyIngestionJob({ jobId: 'job/1', action: 'pause', reason: 'review' });
     const [url, init] = fetcher.mock.calls[0];
     expect(String(url)).toContain('/job%2F1/control');
-    expect(init).toMatchObject({ method: 'POST', headers: { 'X-QuantPilot-Admin-Token': 'unit-fixture-admin' } });
+    expect(init).toMatchObject({ method: 'POST', headers: { 'X-SignalForge-Admin-Token': 'unit-fixture-admin' } });
     expect(JSON.parse(String(init?.body))).toEqual({ action: 'pause', reason: 'review' });
   });
 });

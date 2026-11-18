@@ -35,7 +35,7 @@ import { streamManager } from "@/lib/services/stream";
 import { markUserRequestAsFailed } from "@/lib/services/user-requests";
 import { runValidationAfterExecution } from "@/lib/quant/generation-validation";
 import {
-  QUANTPILOT_AGENT_PROFILE_ID,
+  SIGNALFORGE_AGENT_PROFILE_ID,
 } from "@/lib/domains/finance/agent-profile";
 import { getApplicationDataAgentCatalog } from "@/lib/quant/data-agent-application";
 
@@ -194,7 +194,7 @@ export function createFinanceGenerationEnvelope(
   },
 ): DataAgentGenerationEnvelope<FinanceGenerationPayload> {
   const application = getApplicationDataAgentCatalog().resolve(
-    QUANTPILOT_AGENT_PROFILE_ID,
+    SIGNALFORGE_AGENT_PROFILE_ID,
     input.capabilityId,
   );
   const integrationScope = getProjectIntegrationScope(input.projectId);
@@ -225,7 +225,7 @@ export function parseFinanceGenerationEnvelope(
     envelope.composition.capability.id,
   );
   if (
-    application.profile.id !== QUANTPILOT_AGENT_PROFILE_ID ||
+    application.profile.id !== SIGNALFORGE_AGENT_PROFILE_ID ||
     application.composition.sha256 !== envelope.composition.sha256 ||
     application.composition.profile.version !== envelope.composition.profile.version ||
     application.composition.deliveryPack.id !== envelope.composition.deliveryPack.id ||
@@ -496,7 +496,7 @@ async function executeFinanceGeneration(
 }
 
 export const FINANCE_GENERATION_HANDLER: DataAgentGenerationHandler = {
-  profileId: QUANTPILOT_AGENT_PROFILE_ID,
+  profileId: SIGNALFORGE_AGENT_PROFILE_ID,
   async execute(job) {
     const envelope = job.executionEnvelope as DataAgentGenerationEnvelope;
     const payload = parseFinanceGenerationEnvelope(envelope);

@@ -6,14 +6,14 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from quantpilot_market_data.api import create_app
-from quantpilot_market_data.contracts.fundamentals import (
+from signalforge_market_data.api import create_app
+from signalforge_market_data.contracts.fundamentals import (
     AnnouncementItem,
     AnnouncementResponse,
     FinancialReportItem,
     FinancialReportsResponse,
 )
-from quantpilot_market_data.contracts.quotes import KlineBar, KlineResponse, RealtimeQuote
+from signalforge_market_data.contracts.quotes import KlineBar, KlineResponse, RealtimeQuote
 
 
 def _quote() -> RealtimeQuote:
@@ -112,14 +112,14 @@ def test_analysis_context_shares_dependencies_and_returns_ready_contract(
         calls["announcements"] += 1
         return _announcements()
 
-    monkeypatch.setattr("quantpilot_market_data.services.context.get_realtime_quote", fake_quote)
-    monkeypatch.setattr("quantpilot_market_data.services.context.get_history_quote", fake_history)
+    monkeypatch.setattr("signalforge_market_data.services.context.get_realtime_quote", fake_quote)
+    monkeypatch.setattr("signalforge_market_data.services.context.get_history_quote", fake_history)
     monkeypatch.setattr(
-        "quantpilot_market_data.services.context.get_financial_reports",
+        "signalforge_market_data.services.context.get_financial_reports",
         fake_financials,
     )
     monkeypatch.setattr(
-        "quantpilot_market_data.services.context.get_announcements",
+        "signalforge_market_data.services.context.get_announcements",
         fake_announcements,
     )
 
@@ -145,9 +145,9 @@ def test_analysis_context_isolates_dependency_failure(
     async def failing_history(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
         raise RuntimeError("history provider timeout")
 
-    monkeypatch.setattr("quantpilot_market_data.services.context.get_realtime_quote", fake_quote)
+    monkeypatch.setattr("signalforge_market_data.services.context.get_realtime_quote", fake_quote)
     monkeypatch.setattr(
-        "quantpilot_market_data.services.context.get_history_quote",
+        "signalforge_market_data.services.context.get_history_quote",
         failing_history,
     )
 
@@ -183,7 +183,7 @@ def test_registry_advertises_analysis_context_contract() -> None:
 
     assert response.status_code == 200
     providers = {provider["id"]: provider for provider in response.json()["providers"]}
-    assert providers["quantpilot-analysis-context"]["status"] == "available"
-    assert providers["quantpilot-analysis-context"]["endpoints"] == [
+    assert providers["signalforge-analysis-context"]["status"] == "available"
+    assert providers["signalforge-analysis-context"]["endpoints"] == [
         "/api/v1/analysis/context/{symbol}"
     ]

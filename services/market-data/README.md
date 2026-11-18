@@ -48,7 +48,7 @@ uv sync --extra baostock --extra akshare
 启动服务：
 
 ```bash
-uv run quantpilot-market-api
+uv run signalforge-market-api
 ```
 
 默认地址：
@@ -61,34 +61,34 @@ http://127.0.0.1:8000
 
 ```bash
 # 服务监听地址
-export QUANTPILOT_MARKET_HOST=127.0.0.1
-export QUANTPILOT_MARKET_PORT=8000
+export SIGNALFORGE_MARKET_HOST=127.0.0.1
+export SIGNALFORGE_MARKET_PORT=8000
 # strict 模式或非 loopback 监听时必填；配置后本机写接口也必须携带令牌
-export QUANTPILOT_MARKET_ADMIN_TOKEN=replace-with-a-long-random-token
+export SIGNALFORGE_MARKET_ADMIN_TOKEN=replace-with-a-long-random-token
 
 # 东方财富主备域名，按顺序失败重试
 export EASTMONEY_BASE_URLS=https://push2.eastmoney.com,https://push2delay.eastmoney.com
 
-# 本地缓存；默认开启，默认目录为 ~/.cache/quantpilot/market_data
-export QUANTPILOT_MARKET_CACHE_ENABLED=1
-export QUANTPILOT_MARKET_CACHE_DIR=/tmp/quantpilot-market-cache
-export QUANTPILOT_QUOTE_CACHE_TTL_SECONDS=5
-export QUANTPILOT_KLINE_CACHE_TTL_SECONDS=1800
-export QUANTPILOT_FINANCIAL_CACHE_TTL_SECONDS=21600
-export QUANTPILOT_ANNOUNCEMENT_CACHE_TTL_SECONDS=600
-export QUANTPILOT_SCREENER_CACHE_TTL_SECONDS=60
+# 本地缓存；默认开启，默认目录为 ~/.cache/signalforge/market_data
+export SIGNALFORGE_MARKET_CACHE_ENABLED=1
+export SIGNALFORGE_MARKET_CACHE_DIR=/tmp/signalforge-market-cache
+export SIGNALFORGE_QUOTE_CACHE_TTL_SECONDS=5
+export SIGNALFORGE_KLINE_CACHE_TTL_SECONDS=1800
+export SIGNALFORGE_FINANCIAL_CACHE_TTL_SECONDS=21600
+export SIGNALFORGE_ANNOUNCEMENT_CACHE_TTL_SECONDS=600
+export SIGNALFORGE_SCREENER_CACHE_TTL_SECONDS=60
 
 # Redis 跨进程短期缓存；默认由根目录 docker-compose 拉起
 export REDIS_URL=redis://127.0.0.1:6379/0
-export REDIS_NAMESPACE=quantpilot
-export QUANTPILOT_REDIS_CACHE_ENABLED=1
+export REDIS_NAMESPACE=signalforge
+export SIGNALFORGE_REDIS_CACHE_ENABLED=1
 
 # ClickHouse 分析加速层；默认关闭，启用后仍以 TimescaleDB 为事实主库
-export QUANTPILOT_CLICKHOUSE_ENABLED=1
+export SIGNALFORGE_CLICKHOUSE_ENABLED=1
 export CLICKHOUSE_URL=http://127.0.0.1:8123
-export CLICKHOUSE_DB=quantpilot
-export CLICKHOUSE_USER=quantpilot
-export CLICKHOUSE_PASSWORD=quantpilot_dev_password
+export CLICKHOUSE_DB=signalforge
+export CLICKHOUSE_USER=signalforge
+export CLICKHOUSE_PASSWORD=signalforge_dev_password
 ```
 
 ## 接口
@@ -172,7 +172,7 @@ curl 'http://127.0.0.1:8000/api/v1/quotes/history/600519?period=daily&adjustment
 
 说明：日/周/月 K 线、技术指标和回测统一先读 `quant.stock_bars`；只有覆盖不足或显式 `refresh=true` 才访问外部历史源。响应的 `metadata.data_basis`、`coverage` 和 `freshness` 会说明实际口径。实时快照隔离写入 `quant.realtime_quote_snapshots`，不会覆盖正式复权日线。
 
-所有补数、同步、质量扫描等写接口接受 `Authorization: Bearer ...` 或 `X-QuantPilot-Admin-Token`。本机非 strict 且未配置令牌时保持开发兼容；strict 或非 loopback 监听未配置令牌时写接口关闭。
+所有补数、同步、质量扫描等写接口接受 `Authorization: Bearer ...` 或 `X-SignalForge-Admin-Token`。本机非 strict 且未配置令牌时保持开发兼容；strict 或非 loopback 监听未配置令牌时写接口关闭。
 
 ### 历史 K 线字段补数
 
@@ -240,7 +240,7 @@ curl --get 'http://127.0.0.1:8000/api/v1/fundamentals/financials/600519' \
   --data-urlencode 'as_of=2026-09-06T00:00:00+08:00' --data-urlencode 'limit=8'
 ```
 
-先执行新增的 `sqls/010-financial-report-versions.sql`，再由管理员调用 `POST /api/v1/fundamentals/financials/{symbol}/capture?limit=40` 采集最新源数据（使用现有 `X-QuantPilot-Admin-Token`，不在命令历史中写入明文凭据）。重复内容复用版本，修订只追加。历史查询只返回截止时点前已经观测且已经公告的版本，并校验 `knowledge.data_version` 对应的内容。未积累的历史返回空样本，数据库故障返回 503，不会调用最新源或缓存补齐。未传 `as_of` 时仍返回最新数据，并标记 `knowledge.point_in_time=false`。
+先执行新增的 `sqls/010-financial-report-versions.sql`，再由管理员调用 `POST /api/v1/fundamentals/financials/{symbol}/capture?limit=40` 采集最新源数据（使用现有 `X-SignalForge-Admin-Token`，不在命令历史中写入明文凭据）。重复内容复用版本，修订只追加。历史查询只返回截止时点前已经观测且已经公告的版本，并校验 `knowledge.data_version` 对应的内容。未积累的历史返回空样本，数据库故障返回 503，不会调用最新源或缓存补齐。未传 `as_of` 时仍返回最新数据，并标记 `knowledge.point_in_time=false`。
 
 这不是历史财报回填：首次采集以前的版本尚不可知；自动采集调度、研究计划的点时参数传递，以及复权/行业/退市证券历史仍待接入。字段与时间口径见 [财报点时版本](../../docs/data-dictionary.md#财报点时版本)。
 
@@ -258,15 +258,15 @@ curl 'http://127.0.0.1:8000/api/v1/events/announcements/600519?limit=20'
 
 ## 代码结构
 
-- `quantpilot_market_data/cache.py`：本地 JSON 缓存、Redis JSON 缓存、TTL 和 fetch 元信息。
-- `quantpilot_market_data/providers/eastmoney.py`：东方财富数据源客户端。
-- `quantpilot_market_data/providers/baostock.py`：Baostock A 股历史字段补数 provider。
-- `quantpilot_market_data/providers/akshare.py`：AKShare 可选补数字段 provider。
-- `quantpilot_market_data/database_core.py`：数据库连接、日期和序列化等共享基础函数。
-- `quantpilot_market_data/repositories/`：TimescaleDB/PostgreSQL 查询、事务、批量写入与分页；不存在聚合 `database.py` 兼容入口。
-- `quantpilot_market_data/contracts/`：行情数据模型。
-- `quantpilot_market_data/api.py`：FastAPI HTTP 服务。
-- `quantpilot_market_data/cli.py`：启动入口。
+- `signalforge_market_data/cache.py`：本地 JSON 缓存、Redis JSON 缓存、TTL 和 fetch 元信息。
+- `signalforge_market_data/providers/eastmoney.py`：东方财富数据源客户端。
+- `signalforge_market_data/providers/baostock.py`：Baostock A 股历史字段补数 provider。
+- `signalforge_market_data/providers/akshare.py`：AKShare 可选补数字段 provider。
+- `signalforge_market_data/database_core.py`：数据库连接、日期和序列化等共享基础函数。
+- `signalforge_market_data/repositories/`：TimescaleDB/PostgreSQL 查询、事务、批量写入与分页；不存在聚合 `database.py` 兼容入口。
+- `signalforge_market_data/contracts/`：行情数据模型。
+- `signalforge_market_data/api.py`：FastAPI HTTP 服务。
+- `signalforge_market_data/cli.py`：启动入口。
 
 ## 说明
 

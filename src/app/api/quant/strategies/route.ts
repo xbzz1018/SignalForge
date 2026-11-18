@@ -22,6 +22,7 @@ import {
   type ApiOperationHandle,
 } from '@/lib/server/api-idempotency';
 import { strategyPermissionAction } from './permission';
+import { MarketApiError } from '@/lib/quant/strategy-market-api';
 import {
   addStrategyUniverseMember,
   controlStrategyIngestionJob,
@@ -220,6 +221,23 @@ async function executeStrategyOperation(params: {
   return response;
 }
 
+function strategyErrorResponse(error: unknown, message: string) {
+  if (error instanceof AuthorizationError) return authErrorResponse(error);
+  const quotaResponse = quotaErrorResponse(error);
+  if (quotaResponse) return quotaResponse;
+  if (error instanceof MarketApiError) {
+    switch (error.code) {
+      case 'MARKET_API_DISABLED':
+        return createErrorResponse(error.code, '行情服务暂未启用。', 503);
+      case 'MARKET_API_TIMEOUT':
+        return createErrorResponse(error.code, '行情服务响应超时，请稍后重试。', 504);
+      case 'MARKET_API_UPSTREAM_ERROR':
+        return createErrorResponse(error.code, '行情服务未返回有效结果，请稍后重试。', 502);
+    }
+  }
+  return handleApiError(error, 'StrategyPlatform', message);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const context = await requireAction({ headers: request.headers, action: 'quant.data.read' });
@@ -231,10 +249,7 @@ export async function GET(request: NextRequest) {
       execute: async () => createSuccessResponse(await getStrategyDashboardData()),
     });
   } catch (error) {
-    if (error instanceof AuthorizationError) return authErrorResponse(error);
-    const quotaResponse = quotaErrorResponse(error);
-    if (quotaResponse) return quotaResponse;
-    return handleApiError(error, 'StrategyPlatform', 'Failed to fetch strategies');
+    return strategyErrorResponse(error, 'Failed to fetch strategies');
   }
 }
 
@@ -300,6 +315,8 @@ export async function POST(request: NextRequest) {
           page: typeof body.page === 'number' ? body.page : undefined,
           pageSize: typeof body.pageSize === 'number' ? body.pageSize : undefined,
           keyword: typeof body.keyword === 'string' ? body.keyword : undefined,
+          timeoutMs: 12_000,
+          signal: request.signal,
         })
       );
     }
@@ -312,6 +329,7 @@ export async function POST(request: NextRequest) {
           provider: typeof body.provider === 'string' ? body.provider : undefined,
           limit: typeof body.limit === 'number' ? body.limit : undefined,
           includeMetadata: body.includeMetadata === true,
+          signal: request.signal,
         })
       );
     }
@@ -441,10 +459,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    if (error instanceof AuthorizationError) return authErrorResponse(error);
-    const quotaResponse = quotaErrorResponse(error);
-    if (quotaResponse) return quotaResponse;
-    return handleApiError(error, 'StrategyPlatform', 'Failed to build strategy prompt');
+    return strategyErrorResponse(error, 'Failed to execute strategy operation');
   }
 }
 

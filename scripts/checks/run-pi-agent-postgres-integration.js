@@ -36,8 +36,7 @@ if (provision.signal || provision.status !== 0) {
   process.exit(1);
 }
 
-const vitestPackage = require.resolve('vitest/package.json');
-const vitestBin = path.join(path.dirname(vitestPackage), 'vitest.mjs');
+const testRunner = path.join(__dirname, '..', 'testing', 'run-vitest.js');
 const testFiles = [
   'src/lib/agent/runtime/prisma-repository.integration.test.ts',
   'src/lib/services/pi-agent-tool-approval-store.integration.test.ts',
@@ -45,7 +44,7 @@ const testFiles = [
   'src/lib/ops/product-health.integration.test.ts',
   'src/lib/quant/market-freshness.integration.test.ts',
 ];
-const result = spawnSync(process.execPath, [vitestBin, 'run', ...testFiles], {
+const result = spawnSync(process.execPath, [testRunner, ...testFiles], {
   cwd: process.cwd(),
   env: { ...process.env, DATABASE_URL: databaseUrl },
   stdio: 'inherit',

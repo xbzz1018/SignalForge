@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 
 from redis.exceptions import ConnectionError
 
-from quantpilot_market_data import cache as cache_module
-from quantpilot_market_data.cache import RedisJsonCache
+from signalforge_market_data import cache as cache_module
+from signalforge_market_data.cache import RedisJsonCache
 
 
 def test_redis_recovers_after_cooldown_without_requiring_a_readiness_probe(monkeypatch):

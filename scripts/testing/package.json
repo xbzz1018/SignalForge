@@ -1,0 +1,8 @@
+{
+  "name": "signalforge-test-tools",
+  "private": true,
+  "dependencies": {
+    "@vitest/coverage-v8": "4.1.12",
+    "vitest": "4.1.12"
+  }
+}

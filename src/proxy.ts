@@ -42,7 +42,7 @@ function isSameOriginMutation(request: NextRequest): boolean {
     const requestOrigin = host ? `${protocol}://${host}` : request.nextUrl.origin;
     return origin === request.nextUrl.origin || origin === requestOrigin;
   }
-  return request.headers.get('x-quantpilot-request') === 'same-origin';
+  return request.headers.get('x-signalforge-request') === 'same-origin';
 }
 
 export async function proxy(request: NextRequest) {
@@ -120,6 +120,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|generated/quantpilot-tailwind.css).*)',
+    '/((?!_next/static|_next/image|favicon.ico|generated/signalforge-tailwind.css).*)',
   ],
 };

@@ -40,7 +40,7 @@ function AboutTab() {
       <div className="text-center">
         <div className="flex flex-wrap justify-center gap-3">
           <a
-            href="https://github.com/xbzz1018/SignalForge"
+            href="https://github.com/xbzz1018/SignalForge-Python"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-border/70 bg-card px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary/35 hover:bg-primary/5"
@@ -50,7 +50,7 @@ function AboutTab() {
 
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          开源基础见 <a href="https://github.com/tiammomo/QuantPilot" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">上游项目</a>，许可证与原作者声明保留在仓库中。
+          开源基础见 <a href="https://github.com/tiammomo/SignalForge" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">上游项目</a>，许可证与原作者声明保留在仓库中。
         </p>
       </div>
     </div>

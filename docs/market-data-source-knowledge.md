@@ -93,7 +93,7 @@ flowchart TD
 ```bash
 cd services/market-data
 uv sync --extra baostock --extra akshare
-uv run quantpilot-market-api
+uv run signalforge-market-api
 ```
 
 ```bash

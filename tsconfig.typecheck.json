@@ -7,10 +7,12 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "vitest.config.mts",
     ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
+    "scripts/testing/node_modules",
     "data/projects",
     "tmp",
     ".next/dev"

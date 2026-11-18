@@ -53,7 +53,7 @@ function parseArgs(argv) {
 }
 
 function requestHeaders() {
-  const token = process.env.QUANTPILOT_MARKET_ADMIN_TOKEN?.trim();
+  const token = process.env.SIGNALFORGE_MARKET_ADMIN_TOKEN?.trim();
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -138,17 +138,17 @@ async function waitForIngestionJob({ baseUrl, universeId, jobId, timeoutMs, poll
 
 async function runMaintenance(options = {}) {
   const today = options.today ?? shanghaiDate();
-  const baseUrl = process.env.QUANTPILOT_MARKET_API_URL?.trim() || 'http://127.0.0.1:8000';
-  const universeId = process.env.QUANTPILOT_MARKET_MAINTENANCE_UNIVERSE_ID?.trim()
+  const baseUrl = process.env.SIGNALFORGE_MARKET_API_URL?.trim() || 'http://127.0.0.1:8000';
+  const universeId = process.env.SIGNALFORGE_MARKET_MAINTENANCE_UNIVERSE_ID?.trim()
     || 'a-share-sample-research-pool';
-  const calendarLookbackDays = positiveInteger('QUANTPILOT_MARKET_CALENDAR_LOOKBACK_DAYS', 30);
-  const historyLookbackDays = positiveInteger('QUANTPILOT_MARKET_HISTORY_LOOKBACK_DAYS', 14);
+  const calendarLookbackDays = positiveInteger('SIGNALFORGE_MARKET_CALENDAR_LOOKBACK_DAYS', 30);
+  const historyLookbackDays = positiveInteger('SIGNALFORGE_MARKET_HISTORY_LOOKBACK_DAYS', 14);
   const requestDelaySeconds = nonNegativeNumber(
-    'QUANTPILOT_MARKET_MAINTENANCE_REQUEST_DELAY_SECONDS',
+    'SIGNALFORGE_MARKET_MAINTENANCE_REQUEST_DELAY_SECONDS',
     0.2,
   );
   const batchDelaySeconds = nonNegativeNumber(
-    'QUANTPILOT_MARKET_MAINTENANCE_BATCH_DELAY_SECONDS',
+    'SIGNALFORGE_MARKET_MAINTENANCE_BATCH_DELAY_SECONDS',
     0.7,
   );
   const calendarBody = {
@@ -169,8 +169,8 @@ async function runMaintenance(options = {}) {
     allow_fallback: false,
     request_delay_seconds: requestDelaySeconds,
     batch_delay_seconds: batchDelaySeconds,
-    batch_size: positiveInteger('QUANTPILOT_MARKET_MAINTENANCE_BATCH_SIZE', 25, { max: 200 }),
-    max_retries: positiveInteger('QUANTPILOT_MARKET_MAINTENANCE_MAX_RETRIES', 3, { max: 10 }),
+    batch_size: positiveInteger('SIGNALFORGE_MARKET_MAINTENANCE_BATCH_SIZE', 25, { max: 200 }),
+    max_retries: positiveInteger('SIGNALFORGE_MARKET_MAINTENANCE_MAX_RETRIES', 3, { max: 10 }),
     include_valuation_factors: false,
   };
 
@@ -183,7 +183,7 @@ async function runMaintenance(options = {}) {
     baseUrl,
     '/api/v1/foundation/trading-calendar/refresh',
     calendarBody,
-    positiveInteger('QUANTPILOT_MARKET_CALENDAR_TIMEOUT_MS', 120_000, { max: 900_000 }),
+    positiveInteger('SIGNALFORGE_MARKET_CALENDAR_TIMEOUT_MS', 120_000, { max: 900_000 }),
   );
   console.log(
     `[market-maintenance] calendar ready: written=${calendar.written_days ?? '-'}, open=${calendar.open_days ?? '-'}`,
@@ -192,12 +192,12 @@ async function runMaintenance(options = {}) {
   let ingestion = null;
   if (!options.calendarOnly) {
     const ingestionTimeoutMs = positiveInteger(
-      'QUANTPILOT_MARKET_INGESTION_TIMEOUT_MS',
+      'SIGNALFORGE_MARKET_INGESTION_TIMEOUT_MS',
       1_800_000,
       { max: 7_200_000 },
     );
     const pollIntervalMs = positiveInteger(
-      'QUANTPILOT_MARKET_MAINTENANCE_POLL_INTERVAL_MS',
+      'SIGNALFORGE_MARKET_MAINTENANCE_POLL_INTERVAL_MS',
       2_000,
       { max: 60_000 },
     );
@@ -246,7 +246,7 @@ async function runMaintenance(options = {}) {
   }
 
   if (!options.skipFreshness && !options.calendarOnly) {
-    const minimumSymbols = positiveInteger('QUANTPILOT_MARKET_FRESHNESS_MIN_SYMBOLS', 250);
+    const minimumSymbols = positiveInteger('SIGNALFORGE_MARKET_FRESHNESS_MIN_SYMBOLS', 250);
     const gate = spawnSync(
       process.execPath,
       ['scripts/checks/check-market-data-freshness.js', '--min-symbols', String(minimumSymbols)],

@@ -764,7 +764,7 @@ wheels = [
 ]
 
 [[package]]
-name = "quantpilot-market-data"
+name = "signalforge-market-data"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

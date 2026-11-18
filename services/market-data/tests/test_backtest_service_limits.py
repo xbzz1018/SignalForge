@@ -3,9 +3,9 @@ from decimal import Decimal
 
 import pytest
 
-from quantpilot_market_data.cache import MarketDataCache
-from quantpilot_market_data.contracts.quotes import KlineResponse
-from quantpilot_market_data.services import backtests
+from signalforge_market_data.cache import MarketDataCache
+from signalforge_market_data.contracts.quotes import KlineResponse
+from signalforge_market_data.services import backtests
 
 
 def history(count=30):

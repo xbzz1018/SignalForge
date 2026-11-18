@@ -10,11 +10,11 @@ import {
 } from './notification-adapters';
 
 const MARKET_API_BASE_URL =
-  process.env.QUANTPILOT_MARKET_API_URL ||
-  process.env.QUANTPILOT_MARKET_API_BASE_URL ||
+  process.env.SIGNALFORGE_MARKET_API_URL ||
+  process.env.SIGNALFORGE_MARKET_API_BASE_URL ||
   'http://127.0.0.1:8000';
 
-const DEFAULT_WATCHLIST_ID = 'daily-quantpilot-core';
+const DEFAULT_WATCHLIST_ID = 'daily-signalforge-core';
 const DEFAULT_CHANNEL_ID = 'dry-run-wxwork-research';
 const DEFAULT_UNIVERSE_ID = 'a-share-sample-research-pool';
 
@@ -548,7 +548,7 @@ export async function ensureResearchAutomationSeed() {
       config: {
         mode: 'dry_run',
         adapter: 'wxwork-webhook',
-        webhookEnv: 'QUANTPILOT_WXWORK_RESEARCH_WEBHOOK',
+        webhookEnv: 'SIGNALFORGE_WXWORK_RESEARCH_WEBHOOK',
         secretConfigured: false,
       },
       isDryRun: true,

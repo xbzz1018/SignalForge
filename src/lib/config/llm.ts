@@ -123,23 +123,23 @@ export function getProjectLlmConfig(requestedModel?: string | null): ProjectLlmC
     credentialEnv: profile.credentialEnv as ProjectLlmConfig['credentialEnv'],
     agent: {
       enabled: envFlag(
-        'QUANTPILOT_LLM_AGENT_ENABLED',
+        'SIGNALFORGE_LLM_AGENT_ENABLED',
         typeof agent?.enabled === 'boolean' ? agent.enabled : true,
       ),
     },
     queryRewrite: {
       enabled: envFlag(
-        'QUANTPILOT_LLM_QUERY_REWRITE_ENABLED',
+        'SIGNALFORGE_LLM_QUERY_REWRITE_ENABLED',
         typeof rewrite?.enabled === 'boolean' ? rewrite.enabled : true,
       ),
       timeoutMs: boundedInteger(
-        process.env.QUANTPILOT_QUERY_REWRITE_LLM_TIMEOUT_MS,
+        process.env.SIGNALFORGE_QUERY_REWRITE_LLM_TIMEOUT_MS,
         defaultTimeoutMs,
         500,
         15_000,
       ),
       maxRetries: boundedInteger(
-        process.env.QUANTPILOT_QUERY_REWRITE_LLM_MAX_RETRIES,
+        process.env.SIGNALFORGE_QUERY_REWRITE_LLM_MAX_RETRIES,
         defaultMaxRetries,
         0,
         1,

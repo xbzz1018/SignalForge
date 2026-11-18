@@ -7,7 +7,7 @@ const { spawn } = require('node:child_process');
 
 const root = process.cwd();
 const standalone = path.join(root, '.next', 'standalone');
-const port = Number(process.env.QUANTPILOT_STANDALONE_SMOKE_PORT)
+const port = Number(process.env.SIGNALFORGE_STANDALONE_SMOKE_PORT)
   || 39_000 + (process.pid % 1_000);
 const baseUrl = `http://127.0.0.1:${port}`;
 
@@ -16,7 +16,7 @@ function assertArtifact() {
     'server.js',
     '.next/server',
     '.next/static',
-    'public/generated/quantpilot-tailwind.css',
+    'public/generated/signalforge-tailwind.css',
     '.pi/skills.registry.json',
     '.pi/skills.lock.json',
     '.pi/skills.changelog.json',
@@ -83,7 +83,7 @@ async function main() {
       NODE_ENV: 'production',
       HOSTNAME: '127.0.0.1',
       PORT: String(port),
-      QUANTPILOT_AUTH_MODE: 'disabled',
+      SIGNALFORGE_AUTH_MODE: 'disabled',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -97,7 +97,7 @@ async function main() {
   try {
     const health = await waitForHealth(child, output);
     const payload = await health.json();
-    if (payload?.ok !== true || payload?.service !== 'quantpilot-web') {
+    if (payload?.ok !== true || payload?.service !== 'signalforge-web') {
       throw new Error('standalone liveness response has an invalid contract');
     }
     for (const header of [
@@ -108,7 +108,7 @@ async function main() {
     ]) {
       if (!health.headers.get(header)) throw new Error(`security header missing: ${header}`);
     }
-    const css = await fetch(`${baseUrl}/generated/quantpilot-tailwind.css`, { signal: AbortSignal.timeout(5_000) });
+    const css = await fetch(`${baseUrl}/generated/signalforge-tailwind.css`, { signal: AbortSignal.timeout(5_000) });
     const cssBytes = (await css.arrayBuffer()).byteLength;
     if (!css.ok || cssBytes === 0) {
       throw new Error(`standalone stable CSS request failed with HTTP ${css.status}`);

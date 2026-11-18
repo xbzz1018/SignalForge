@@ -7,15 +7,15 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from quantpilot_market_data.api import create_app
-from quantpilot_market_data.contracts.foundation import (
+from signalforge_market_data.api import create_app
+from signalforge_market_data.contracts.foundation import (
     TradingCalendarDay,
     TradingCalendarRefreshRequest,
     TradingCalendarRefreshResponse,
 )
-from quantpilot_market_data.repositories import foundation as foundation_repository
-from quantpilot_market_data.routers import foundation as foundation_router
-from quantpilot_market_data.services import foundation as foundation_service
+from signalforge_market_data.repositories import foundation as foundation_repository
+from signalforge_market_data.routers import foundation as foundation_router
+from signalforge_market_data.services import foundation as foundation_service
 
 
 def calendar_day(value: date, *, is_open: bool) -> TradingCalendarDay:
@@ -187,9 +187,9 @@ def test_refresh_calendar_admin_route(
             last_date=date(2026, 7, 13),
         )
 
-    monkeypatch.setenv("QUANTPILOT_MARKET_HOST", "127.0.0.1")
-    monkeypatch.setenv("QUANTPILOT_DEGRADATION_MODE", "auto")
-    monkeypatch.delenv("QUANTPILOT_MARKET_ADMIN_TOKEN", raising=False)
+    monkeypatch.setenv("SIGNALFORGE_MARKET_HOST", "127.0.0.1")
+    monkeypatch.setenv("SIGNALFORGE_DEGRADATION_MODE", "auto")
+    monkeypatch.delenv("SIGNALFORGE_MARKET_ADMIN_TOKEN", raising=False)
     monkeypatch.setattr(foundation_router, "refresh_trading_calendar", fake_refresh)
 
     with TestClient(create_app()) as client:
@@ -212,9 +212,9 @@ def test_refresh_calendar_admin_route(
 
 
 def test_refresh_calendar_route_validates_range(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("QUANTPILOT_MARKET_HOST", "127.0.0.1")
-    monkeypatch.setenv("QUANTPILOT_DEGRADATION_MODE", "auto")
-    monkeypatch.delenv("QUANTPILOT_MARKET_ADMIN_TOKEN", raising=False)
+    monkeypatch.setenv("SIGNALFORGE_MARKET_HOST", "127.0.0.1")
+    monkeypatch.setenv("SIGNALFORGE_DEGRADATION_MODE", "auto")
+    monkeypatch.delenv("SIGNALFORGE_MARKET_ADMIN_TOKEN", raising=False)
 
     with TestClient(create_app()) as client:
         response = client.post(

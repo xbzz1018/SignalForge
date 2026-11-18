@@ -34,7 +34,7 @@ GET /api/v1/backtests/ma-crossover/510300?fast_window=5&slow_window=20&fee_bps=1
 
 买入数量为可用现金除以 `成交价 × (1+费率)`，双边费用按各自成交金额计算，不透支现金。逐根记录现金、数量、市值和净值，期末信号保留为 pending，不虚构成交或强行平仓；未平仓收益按末期收盘价估值。
 
-[独立账本校验](../services/market-data/src/quantpilot_market_data/backtest_accounting.py)不调用策略信号生成器，逐笔核对信号/成交日期、开盘参考价、成交数量、费用、交易收益与资金余额，并检查逐期收益、回撤、最终净值和已实现/未实现损益。复算既检查输入与结果哈希，也重新核对账本。
+[独立账本校验](../services/market-data/src/signalforge_market_data/backtest_accounting.py)不调用策略信号生成器，逐笔核对信号/成交日期、开盘参考价、成交数量、费用、交易收益与资金余额，并检查逐期收益、回撤、最终净值和已实现/未实现损益。复算既检查输入与结果哈希，也重新核对账本。
 
 当前仍是单标的、做多或空仓、允许小数份额的研究模型；没有涨跌停、停牌、容量、整手、T+1 或退市成交限制。指数只作假设性研究。固定滑点是模拟参数；保存快照不代表数据具备历史时点可得性。
 
@@ -43,8 +43,10 @@ GET /api/v1/backtests/ma-crossover/510300?fast_window=5&slow_window=20&fee_bps=1
 新实验使用 schema 2 和 `single-asset-next-open-v3`，记录评估区间、实际参数、费用、滑点、行情、代码及运行时身份和结果哈希。保存完整回测响应后，可在匹配的实现及运行时执行：
 
 ```bash
-PYTHONPATH=services/market-data/src python -m quantpilot_market_data.replay_backtest backtest.json
+PYTHONPATH=services/market-data/src python -m signalforge_market_data.replay_backtest backtest.json
 ```
+
+品牌迁移前保存的实验仍可查看。离线复算需要切换到实验记录对应的原提交和运行时，因为引擎指纹绑定源码内容，包名修改也会改变指纹。
 
 旧版本实验需要原记录对应的实现及运行时，不能将升级后的不同计算结果视为一致。缓存中的旧身份或损坏记录会失效并重新计算。
 

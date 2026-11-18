@@ -79,7 +79,7 @@ SignalForge 的主平台、市场数据后端、评测平台、策略平台和�
 
 2026-09-06 联调继续修复了行情新鲜度查询：未来日历不能覆盖历史休市日的判断，未来日期的行情不能成为当前覆盖率样本；新增 PostgreSQL 回归验证两个场景。认证烟测改为独立用户与项目，不再借用业务项目、恢复管理员密码或清空共享审计/限流记录。Prisma 间接依赖和桌面构建工具链的已知漏洞已修复，全量 npm 审计通过；验证与取数职责拆分、聊天编辑器解耦在接续批次推进。
 
-生成评测进一步发现并修复了沙箱启动问题：沙箱 PATH 只使用实际挂载的 Node 目录和系统工具，修复版本管理器软链接不可见导致的 npm 启动失败；先建立私有 `/tmp`，再挂载工作空间，支持临时目录中的工作空间。真实 namespace 回归验证 npm 可运行、宿主文件和凭据仍不可见。Linux 本机可运行 `QUANTPILOT_TEST_GENERATED_SANDBOX=1 npx vitest run src/lib/security/generated-project-sandbox.test.ts`。运行诊断的 HTTP 探测也增加了总时限，防止不可达端口或持续发送数据的响应阻塞整个 doctor。
+生成评测进一步发现并修复了沙箱启动问题：沙箱 PATH 只使用实际挂载的 Node 目录和系统工具，修复版本管理器软链接不可见导致的 npm 启动失败；先建立私有 `/tmp`，再挂载工作空间，支持临时目录中的工作空间。真实 namespace 回归验证 npm 可运行、宿主文件和凭据仍不可见。Linux 本机可运行 `SIGNALFORGE_TEST_GENERATED_SANDBOX=1 npm run test:unit -- src/lib/security/generated-project-sandbox.test.ts`。运行诊断的 HTTP 探测也增加了总时限，防止不可达端口或持续发送数据的响应阻塞整个 doctor。
 
 本轮验收：完整发布质量门通过，前端 1,250 项、隔离 PostgreSQL 集成 26 项、Python 114 项、桌面/移动端浏览器 4 项及认证生命周期烟测通过；16 个合约评测全部通过，平均分 92。CI 的 PostgreSQL 集成数据库已与合约评测数据库分离，真实 TimescaleDB 容器复测通过。六个基础组件通过本地 Docker 安装；默认股票池 300 个标的补数成功，最新交易日 2026-09-04 覆盖 298 个标的，达到原有 250 个门槛，并同步到 ClickHouse 分析投影。ClickHouse 空表的最新日期改为 `null`，不再显示 1970 年。此次是合约与真实基础设施验收；当前环境缺少模型凭据，未重新执行真实 LLM Mission E2E，也尚未覆盖完整历史数据与 point-in-time 研究。
 

@@ -11,7 +11,7 @@ import type {
   EvalSemanticReviewDimension,
 } from './evaluators';
 
-export const AGENT_REVIEW_PROMPT_VERSION = 'quantpilot-agent-review-prompt-v1';
+export const AGENT_REVIEW_PROMPT_VERSION = 'signalforge-agent-review-prompt-v1';
 const REVIEW_DIMENSION_IDS = [
   'intentCoverage',
   'businessCompleteness',
@@ -168,7 +168,7 @@ export async function reviewAgentWorkspace(input: {
     temperature: 0,
     maxTokens: 2_000,
     reasoning: { enabled: false },
-    metadata: { purpose: 'quantpilot-agent-evaluation' },
+    metadata: { purpose: 'signalforge-agent-evaluation' },
   })) {
     if (event.type === 'text_delta') text += event.delta;
     if (event.type === 'usage') usage = event.usage;

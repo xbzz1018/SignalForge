@@ -66,7 +66,7 @@ SignalForge 可以理解成四条主线叠在一起：
 | 首页任务怎么创建 | `src/app/page.tsx` | `src/components/task/`、`src/lib/services/project.ts` |
 | 项目聊天怎么运行 Agent | `src/app/[project_id]/chat/` | `src/lib/services/cli/`、`src/lib/domains/finance/workspace.ts` |
 | 策略平台怎么取数据 | `src/app/strategy-platform/StrategyPlatformClient.tsx` | `src/lib/quant/strategies.ts`、`services/market-data/` |
-| 市场数据怎么入库 | `services/market-data/src/quantpilot_market_data/services/` | `repositories/`、`database_core.py`、`providers/`、`sqls/` |
+| 市场数据怎么入库 | `services/market-data/src/signalforge_market_data/services/` | `repositories/`、`database_core.py`、`providers/`、`sqls/` |
 | Skills 怎么配置到工作空间 | `src/lib/agent/skills/compiler.ts`、`src/lib/services/project.ts` | 仓库 registry/lock 与 SHA-256 完整性校验、workspace `.pi/skills/`；Agent 执行阶段只读编译 |
 | 验证怎么判断失败 | `src/lib/quant/validation.ts` | `artifact-contracts.ts`、`visual-validation.ts` |
 | 运行治理中心怎么聚合健康 | `src/app/ops-platform/` | `src/lib/ops/`、`src/lib/quant/workspace-health.ts` |

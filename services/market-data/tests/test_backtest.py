@@ -4,8 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from quantpilot_market_data.backtest import STRATEGY_NAMES, build_strategy_backtest
-from quantpilot_market_data.contracts.quotes import KlineBar, KlineResponse
+from signalforge_market_data.backtest import STRATEGY_NAMES, build_strategy_backtest
+from signalforge_market_data.contracts.quotes import KlineBar, KlineResponse
 
 
 def sample_kline() -> KlineResponse:

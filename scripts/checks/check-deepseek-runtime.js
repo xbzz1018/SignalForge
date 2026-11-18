@@ -45,7 +45,7 @@ function selectedProfile() {
   } catch {
     return { requestedModel: optionValue('model') || '', profileId: null, profile: null, explicit: true };
   }
-  const requestedModel = optionValue('model') || readEnvValue('QUANTPILOT_EVAL_MODEL').trim() || null;
+  const requestedModel = optionValue('model') || readEnvValue('SIGNALFORGE_EVAL_MODEL').trim() || null;
   const defaultProfileId = typeof config.defaultProfileId === 'string' ? config.defaultProfileId : null;
   const requested = requestedModel || defaultProfileId;
   const entries = config.profiles && typeof config.profiles === 'object'
@@ -80,7 +80,7 @@ async function checkSelectedProvider() {
 
   const profile = selection.profile;
   const credentialEnv = typeof profile.credentialEnv === 'string' ? profile.credentialEnv : '';
-  const modelPortEnabled = envFlag('QUANTPILOT_MODELPORT_ENABLED', true);
+  const modelPortEnabled = envFlag('SIGNALFORGE_MODELPORT_ENABLED', true);
   const apiKey = readEnvValue(credentialEnv).trim();
   const isDirectDeepSeek = profile.provider === 'deepseek' && credentialEnv === 'DEEPSEEK_API_KEY';
   if (isDirectDeepSeek) {
@@ -92,7 +92,7 @@ async function checkSelectedProvider() {
     console.log('✅ DEEPSEEK_API_KEY 已配置（仅检查存在性，不输出值）');
     console.log(modelPortEnabled
       ? 'ℹ️ ModelPort：当前模型未选择 ModelPort 路由'
-      : 'ℹ️ ModelPort：已按 QUANTPILOT_MODELPORT_ENABLED=0 停用');
+      : 'ℹ️ ModelPort：已按 SIGNALFORGE_MODELPORT_ENABLED=0 停用');
     return;
   }
 
@@ -100,12 +100,12 @@ async function checkSelectedProvider() {
     throw new Error(`模型凭据边界不受支持：${credentialEnv || '(empty)'}`);
   }
   if (!modelPortEnabled) {
-    console.log(`ℹ️ ModelPort：${selection.requestedModel} profile 已按 QUANTPILOT_MODELPORT_ENABLED=0 停用`);
+    console.log(`ℹ️ ModelPort：${selection.requestedModel} profile 已按 SIGNALFORGE_MODELPORT_ENABLED=0 停用`);
     console.log('ℹ️ 未检查 MODELPORT_API_KEY 或 ModelPort livez；显式选择 deepseek-v4-flash 可使用官方直连。');
     return;
   }
   if (!apiKey) throw new Error('MODELPORT_API_KEY 未配置，无法运行当前模型。');
-  const baseUrl = (readEnvValue('QUANTPILOT_MODELPORT_URL') || profile.baseUrl || '').replace(/\/$/, '');
+  const baseUrl = (readEnvValue('SIGNALFORGE_MODELPORT_URL') || profile.baseUrl || '').replace(/\/$/, '');
   if (!baseUrl) throw new Error('ModelPort Base URL 未配置。');
   const response = await fetch(`${baseUrl}/livez`, {
     signal: AbortSignal.timeout(2_500),

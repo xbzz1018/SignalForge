@@ -66,31 +66,31 @@ function envFlag(key, fallback) {
 }
 
 function degradationConfig() {
-  const modeValue = readEnvValue('QUANTPILOT_DEGRADATION_MODE').trim().toLowerCase();
+  const modeValue = readEnvValue('SIGNALFORGE_DEGRADATION_MODE').trim().toLowerCase();
   const mode = modeValue === 'strict' || modeValue === 'offline' ? modeValue : 'auto';
   const offline = mode === 'offline';
   const strict = mode === 'strict';
   return {
     mode,
     database: {
-      enabled: offline ? false : envFlag('QUANTPILOT_DATABASE_ENABLED', true),
-      required: offline ? false : envFlag('QUANTPILOT_DATABASE_REQUIRED', true),
+      enabled: offline ? false : envFlag('SIGNALFORGE_DATABASE_ENABLED', true),
+      required: offline ? false : envFlag('SIGNALFORGE_DATABASE_REQUIRED', true),
     },
     marketApi: {
-      enabled: offline ? false : envFlag('QUANTPILOT_MARKET_API_ENABLED', true),
-      required: !offline && envFlag('QUANTPILOT_MARKET_API_REQUIRED', strict),
+      enabled: offline ? false : envFlag('SIGNALFORGE_MARKET_API_ENABLED', true),
+      required: !offline && envFlag('SIGNALFORGE_MARKET_API_REQUIRED', strict),
     },
     memory: {
-      enabled: offline ? false : envFlag('QUANTPILOT_MEMORY_ENABLED', true),
-      required: !offline && envFlag('QUANTPILOT_MEMORY_REQUIRED', false),
+      enabled: offline ? false : envFlag('SIGNALFORGE_MEMORY_ENABLED', true),
+      required: !offline && envFlag('SIGNALFORGE_MEMORY_REQUIRED', false),
     },
     observability: {
-      enabled: offline ? false : envFlag('QUANTPILOT_OBSERVABILITY_ENABLED', true),
-      required: !offline && envFlag('QUANTPILOT_OBSERVABILITY_REQUIRED', strict),
+      enabled: offline ? false : envFlag('SIGNALFORGE_OBSERVABILITY_ENABLED', true),
+      required: !offline && envFlag('SIGNALFORGE_OBSERVABILITY_REQUIRED', strict),
     },
     modelPort: {
-      enabled: offline ? false : envFlag('QUANTPILOT_MODELPORT_ENABLED', true),
-      required: !offline && envFlag('QUANTPILOT_MODELPORT_REQUIRED', strict),
+      enabled: offline ? false : envFlag('SIGNALFORGE_MODELPORT_ENABLED', true),
+      required: !offline && envFlag('SIGNALFORGE_MODELPORT_REQUIRED', strict),
     },
   };
 }
@@ -125,7 +125,7 @@ function optionValue(name) {
 
 function selectedModelProfile() {
   const config = readJson(path.join(ROOT, 'config', 'llm.json'));
-  const requestedModel = optionValue('model') || readEnvValue('QUANTPILOT_EVAL_MODEL').trim() || null;
+  const requestedModel = optionValue('model') || readEnvValue('SIGNALFORGE_EVAL_MODEL').trim() || null;
   const defaultProfileId = typeof config?.defaultProfileId === 'string'
     ? config.defaultProfileId
     : null;
@@ -167,7 +167,7 @@ async function checkModelProviders(degradation) {
   const profile = selection.profile;
   const credentialEnv = typeof profile.credentialEnv === 'string' ? profile.credentialEnv : '';
   const isDirectDeepSeek = profile.provider === 'deepseek' && credentialEnv === 'DEEPSEEK_API_KEY';
-  const modelPortBaseUrl = (readEnvValue('QUANTPILOT_MODELPORT_URL') || 'http://127.0.0.1:38082')
+  const modelPortBaseUrl = (readEnvValue('SIGNALFORGE_MODELPORT_URL') || 'http://127.0.0.1:38082')
     .replace(/\/$/, '');
 
   const deepSeekApiKey = readEnvValue('DEEPSEEK_API_KEY');
@@ -194,7 +194,7 @@ async function checkModelProviders(degradation) {
       'disabled',
       degradation.modelPort.enabled
         ? `当前选择 ${selection.requestedModel}，未使用 ModelPort。`
-        : '已按 QUANTPILOT_MODELPORT_ENABLED=0 停用。',
+        : '已按 SIGNALFORGE_MODELPORT_ENABLED=0 停用。',
       ['本地 Qwen/ModelPort profile 保留；选择对应模型并配置客户端 Key 后才会启用。'],
     );
     return;
@@ -205,7 +205,7 @@ async function checkModelProviders(degradation) {
       'ModelPort Provider',
       'disabled',
       `当前选择 ${selection.requestedModel}，ModelPort 已按配置停用。`,
-      ['本地 Qwen/ModelPort profile 保留；设置 QUANTPILOT_MODELPORT_ENABLED=1 后才会检查服务。'],
+      ['本地 Qwen/ModelPort profile 保留；设置 SIGNALFORGE_MODELPORT_ENABLED=1 后才会检查服务。'],
     );
     return;
   }
@@ -303,7 +303,7 @@ function summarizeCommandFailure(result) {
 }
 
 function latestBenchmarkReport() {
-  const reportsDir = path.join(ROOT, 'tmp', 'quantpilot-benchmark-reports');
+  const reportsDir = path.join(ROOT, 'tmp', 'signalforge-benchmark-reports');
   if (!fs.existsSync(reportsDir)) return null;
   const files = fs
     .readdirSync(reportsDir)
@@ -333,7 +333,7 @@ async function main() {
   const degradation = degradationConfig();
 
   const packageJson = readJson(path.join(ROOT, 'package.json'));
-  addCheck('项目配置', packageJson?.name === 'quantpilot' ? 'ok' : 'fail', packageJson ? `${packageJson.name}@${packageJson.version}` : '无法读取 package.json。');
+  addCheck('项目配置', packageJson?.name === 'signalforge' ? 'ok' : 'fail', packageJson ? `${packageJson.name}@${packageJson.version}` : '无法读取 package.json。');
   addCheck(
     '降级配置',
     'ok',
@@ -381,14 +381,14 @@ async function main() {
       '量化数据后端 :8000',
       backend.ok ? 'ok' : unavailableStatus(degradation.marketApi),
       backend.ok ? `HTTP ${backend.statusCode}` : '未连接，已使用数据源注册表/本地数据兜底。',
-      backend.ok ? [] : ['进入 services/market-data 后运行 uv run quantpilot-market-api。']
+      backend.ok ? [] : ['进入 services/market-data 后运行 uv run signalforge-market-api。']
     );
   } else {
     addCheck('量化数据后端 :8000', 'disabled', '已按降级配置停用。', ['策略平台和业务知识中心会优先展示本地/内置兜底数据。']);
   }
 
   if (degradation.memory.enabled) {
-    const memoryBaseUrl = (readEnvValue('QUANTPILOT_MEMORY_API_URL') || 'http://127.0.0.1:38089')
+    const memoryBaseUrl = (readEnvValue('SIGNALFORGE_MEMORY_API_URL') || 'http://127.0.0.1:38089')
       .replace(/\/$/, '');
     const [discovery, ready] = await Promise.all([
       requestJson(`${memoryBaseUrl}/`, 2500),
@@ -482,7 +482,7 @@ async function main() {
       failed ? [`失败用例：${failed}`] : []
     );
   } else {
-    addCheck('最近评测报告', 'warn', '未找到 tmp/quantpilot-benchmark-reports/report-*.json。', ['运行 npm run benchmark:quant:contract 可生成报告。']);
+    addCheck('最近评测报告', 'warn', '未找到 tmp/signalforge-benchmark-reports/report-*.json。', ['运行 npm run benchmark:quant:contract 可生成报告。']);
   }
 
   if (FULL_CHECKS) {

@@ -68,7 +68,7 @@ async function createBaseProject(projectPath) {
 }
 
 async function main() {
-  const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'quantpilot-artifact-policy-'));
+  const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-artifact-policy-'));
 
   try {
     await createBaseProject(projectPath);

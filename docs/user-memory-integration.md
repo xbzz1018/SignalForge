@@ -32,20 +32,20 @@ SignalForge 当前把 Memory 作为可选外部服务使用。聊天执行、项
 Memory 是可选组件，不是模型调用、行情读取或 workspace 生成的前置条件。如果当前不需要个性化、还没有部署 Memory，或希望先独立验收 SignalForge 与 ModelPort，只需设置：
 
 ```dotenv
-QUANTPILOT_MEMORY_ENABLED=0
+SIGNALFORGE_MEMORY_ENABLED=0
 ```
 
-关闭后 SignalForge 不发起 Memory discovery、recall 或 outcome 请求，不需要 `QUANTPILOT_MEMORY_API_URL`、Bearer Token 或 Token Broker。聊天个性化状态为 `disabled`，账号记忆管理、偏好召回和本轮偏好反馈不可用；模型、LLM Query Rewrite、市场数据、工作空间生成、自动验证和预览继续正常工作。
+关闭后 SignalForge 不发起 Memory discovery、recall 或 outcome 请求，不需要 `SIGNALFORGE_MEMORY_API_URL`、Bearer Token 或 Token Broker。聊天个性化状态为 `disabled`，账号记忆管理、偏好召回和本轮偏好反馈不可用；模型、LLM Query Rewrite、市场数据、工作空间生成、自动验证和预览继续正常工作。
 
 不要用下面两种配置表达“关闭”：
 
 ```dotenv
 # 仍会使用 Memory，只是在故障时允许核心任务继续
-QUANTPILOT_MEMORY_ENABLED=1
-QUANTPILOT_MEMORY_REQUIRED=0
+SIGNALFORGE_MEMORY_ENABLED=1
+SIGNALFORGE_MEMORY_REQUIRED=0
 
 # 会同时绕过多项可选外部组件，不只是 Memory
-QUANTPILOT_DEGRADATION_MODE=offline
+SIGNALFORGE_DEGRADATION_MODE=offline
 ```
 
 模型 Provider 与 Memory 可以任意组合；例如官方 DeepSeek 直连并不要求启用 Memory。完整组合表见 [配置、模型接入与可选组件指南](configuration.md#memory-接入方式)。
@@ -211,35 +211,35 @@ curl -fsS http://127.0.0.1:38089/readyz
 在 SignalForge 的 `.env.local` 配置：
 
 ```dotenv
-QUANTPILOT_MEMORY_ENABLED=1
-QUANTPILOT_MEMORY_REQUIRED=0
-QUANTPILOT_MEMORY_REQUIRE_PRODUCTION_READY=0
-QUANTPILOT_MEMORY_API_URL=http://127.0.0.1:38089
-QUANTPILOT_MEMORY_TENANT_ID=quantpilot-local
-QUANTPILOT_MEMORY_TIMEOUT_MS=5000
-QUANTPILOT_MEMORY_RECALL_LIMIT=6
-QUANTPILOT_MEMORY_MAX_CONTEXT_CHARACTERS=2000
-QUANTPILOT_MEMORY_BEARER_TOKEN=
-QUANTPILOT_MEMORY_TOKEN_BROKER_URL=
-QUANTPILOT_MEMORY_TOKEN_BROKER_CLIENT_ID=
-QUANTPILOT_MEMORY_TOKEN_BROKER_CLIENT_SECRET=
-QUANTPILOT_MEMORY_TOKEN_AUDIENCE=evolvable-memory-api
+SIGNALFORGE_MEMORY_ENABLED=1
+SIGNALFORGE_MEMORY_REQUIRED=0
+SIGNALFORGE_MEMORY_REQUIRE_PRODUCTION_READY=0
+SIGNALFORGE_MEMORY_API_URL=http://127.0.0.1:38089
+SIGNALFORGE_MEMORY_TENANT_ID=signalforge-local
+SIGNALFORGE_MEMORY_TIMEOUT_MS=5000
+SIGNALFORGE_MEMORY_RECALL_LIMIT=6
+SIGNALFORGE_MEMORY_MAX_CONTEXT_CHARACTERS=2000
+SIGNALFORGE_MEMORY_BEARER_TOKEN=
+SIGNALFORGE_MEMORY_TOKEN_BROKER_URL=
+SIGNALFORGE_MEMORY_TOKEN_BROKER_CLIENT_ID=
+SIGNALFORGE_MEMORY_TOKEN_BROKER_CLIENT_SECRET=
+SIGNALFORGE_MEMORY_TOKEN_AUDIENCE=evolvable-memory-api
 ```
 
 | 变量 | 建议与含义 |
 | --- | --- |
-| `QUANTPILOT_MEMORY_ENABLED` | `1` 启用；`offline` 降级模式会覆盖并禁用外部集成 |
-| `QUANTPILOT_MEMORY_REQUIRED` | 本地推荐 `0`；召回失败时继续核心任务。只有业务明确要求 fail-closed 时才设为 `1` |
-| `QUANTPILOT_MEMORY_REQUIRE_PRODUCTION_READY` | 生产默认开启；拒绝连接仍有隐私、身份或审计阻塞项的实例 |
-| `QUANTPILOT_MEMORY_API_URL` | HTTP(S) 服务根地址，不允许在 URL 中嵌入凭据 |
-| `QUANTPILOT_MEMORY_TENANT_ID` | SignalForge 这一消费应用独占的稳定 tenant，最长 128 字符；其他产品不得复用 |
-| `QUANTPILOT_MEMORY_TIMEOUT_MS` | 单次外部请求超时，范围 100–30000 ms |
-| `QUANTPILOT_MEMORY_RECALL_LIMIT` | 单轮最多召回条数，范围 1–100 |
-| `QUANTPILOT_MEMORY_MAX_CONTEXT_CHARACTERS` | 进入 Agent 前的 projection 字符预算 |
-| `QUANTPILOT_MEMORY_BEARER_TOKEN` | 只用于本地或单 subject 调试；多用户生产静态 token 会被配置校验拒绝 |
-| `QUANTPILOT_MEMORY_TOKEN_BROKER_*` | 生产身份服务入口和客户端凭据；按 tenant/subject/purpose 换取 60–3600 秒短期 token |
-| `QUANTPILOT_MEMORY_PRODUCTION_PROBE_SUBJECT_ID` | 非人类生产探针 subject；必须有有效 `personalization` ProcessingGrant，仅用于真实授权读路径门禁 |
-| `QUANTPILOT_MEMORY_TOKEN_AUDIENCE` | Memory JWT audience，必须与 Memory 的 `EMF_AUTH_JWT_AUDIENCE` 一致 |
+| `SIGNALFORGE_MEMORY_ENABLED` | `1` 启用；`offline` 降级模式会覆盖并禁用外部集成 |
+| `SIGNALFORGE_MEMORY_REQUIRED` | 本地推荐 `0`；召回失败时继续核心任务。只有业务明确要求 fail-closed 时才设为 `1` |
+| `SIGNALFORGE_MEMORY_REQUIRE_PRODUCTION_READY` | 生产默认开启；拒绝连接仍有隐私、身份或审计阻塞项的实例 |
+| `SIGNALFORGE_MEMORY_API_URL` | HTTP(S) 服务根地址，不允许在 URL 中嵌入凭据 |
+| `SIGNALFORGE_MEMORY_TENANT_ID` | SignalForge 这一消费应用独占的稳定 tenant，最长 128 字符；其他产品不得复用 |
+| `SIGNALFORGE_MEMORY_TIMEOUT_MS` | 单次外部请求超时，范围 100–30000 ms |
+| `SIGNALFORGE_MEMORY_RECALL_LIMIT` | 单轮最多召回条数，范围 1–100 |
+| `SIGNALFORGE_MEMORY_MAX_CONTEXT_CHARACTERS` | 进入 Agent 前的 projection 字符预算 |
+| `SIGNALFORGE_MEMORY_BEARER_TOKEN` | 只用于本地或单 subject 调试；多用户生产静态 token 会被配置校验拒绝 |
+| `SIGNALFORGE_MEMORY_TOKEN_BROKER_*` | 生产身份服务入口和客户端凭据；按 tenant/subject/purpose 换取 60–3600 秒短期 token |
+| `SIGNALFORGE_MEMORY_PRODUCTION_PROBE_SUBJECT_ID` | 非人类生产探针 subject；必须有有效 `personalization` ProcessingGrant，仅用于真实授权读路径门禁 |
+| `SIGNALFORGE_MEMORY_TOKEN_AUDIENCE` | Memory JWT audience，必须与 Memory 的 `EMF_AUTH_JWT_AUDIENCE` 一致 |
 
 部署 SignalForge 本地归因表，然后重启 Web 进程使环境变量生效：
 
@@ -324,7 +324,7 @@ const preferences = await fetch(
 console.table(preferences.data);
 ```
 
-该列表只返回 `context.product=quantpilot` 且键前缀通过白名单的偏好。读取不会增加信念、支持度或效用。
+该列表只返回 `context.product=signalforge` 且键前缀通过白名单的偏好。读取不会增加信念、支持度或效用。
 
 ### 3. 发起下一轮聊天
 
@@ -470,7 +470,7 @@ npm run check:integrations -- \
   --other-project=project-existing-b
 ```
 
-写模式只使用 `quantpilot-long-term-integration-check-v1` 合成 subject 和 `output.answer_style` 合成项目偏好，不读写真实用户偏好。它会留下可审计的合成 preference、recall、归因和 Outcome；因此只在发布验收、契约升级或故障恢复后显式运行，不放进高频探活。
+写模式只使用 `signalforge-long-term-integration-check-v1` 合成 subject 和 `output.answer_style` 合成项目偏好，不读写真实用户偏好。它会留下可审计的合成 preference、recall、归因和 Outcome；因此只在发布验收、契约升级或故障恢复后显式运行，不放进高频探活。
 
 验收成功必须同时满足：
 
@@ -491,7 +491,7 @@ npm run check:integrations -- \
 | `/readyz` 返回 `not_ready` | PostgreSQL、持久审计、治理、Milvus required 投影或 JWT/JWKS 未就绪 | 查看 Memory Compose 状态和后端日志；按根路径 blocker 恢复对应依赖 |
 | `/api/ready` 顶层为 true，但 memory 为 failed | Memory 是 optional，核心服务允许降级 | 继续检查 `components[].memory`，不要把顶层 true 当成集成成功 |
 | 新增/列表 API 返回 502 | 网络、超时、无效 JSON或外部契约错误 | 查 SignalForge 日志中的安全错误码和 `x-request-id`，再查 Memory 日志 |
-| 聊天为 `empty` | 没有匹配偏好，或 product/project/key 被二次过滤 | 检查 `context.product=quantpilot`、项目 scope 和允许的键前缀 |
+| 聊天为 `empty` | 没有匹配偏好，或 product/project/key 被二次过滤 | 检查 `context.product=signalforge`、项目 scope 和允许的键前缀 |
 | 聊天为 `opted_out` | 当前账号未启用或已经暂停个性化 | 登录后打开 `/account/memory` 检查账号控制；不要在服务端绕过用户选择 |
 | 聊天为 `unavailable` | optional Memory 超时、断连或响应不合法 | 先检查 root/readyz；核心任务不会因为该状态失败 |
 | Outcome 返回 `MEMORY_REVISION_NOT_EXPOSED` | revision 没有在指定 request 中进入 Agent | 先读取 `memory/uses/:requestId`，只反馈其中的 revision |
@@ -508,7 +508,7 @@ npm run check:integrations -- \
 ```bash
 npm run prisma:deploy
 npm run type-check
-npx vitest run src/lib/platform/memory src/lib/services/pi-agent-prompts.test.ts
+npm run test:unit -- src/lib/platform/memory src/lib/services/pi-agent-prompts.test.ts
 npm run check:integrations
 npm run check:service-catalog
 npm run check:docs

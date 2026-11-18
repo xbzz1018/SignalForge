@@ -70,7 +70,7 @@ describe('POST /api/projects quota orchestration', () => {
   });
 
   it('returns a bounded database-unavailable response in offline mode', async () => {
-    vi.stubEnv('QUANTPILOT_DATABASE_ENABLED', '0');
+    vi.stubEnv('SIGNALFORGE_DATABASE_ENABLED', '0');
 
     const response = await POST(request());
 

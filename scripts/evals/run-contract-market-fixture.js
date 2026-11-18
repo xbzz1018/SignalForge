@@ -2,8 +2,8 @@
 
 const http = require('http');
 
-const port = Number.parseInt(process.env.PORT || process.env.QUANTPILOT_CONTRACT_MARKET_PORT || '8000', 10);
-const host = process.env.QUANTPILOT_CONTRACT_MARKET_HOST || '127.0.0.1';
+const port = Number.parseInt(process.env.PORT || process.env.SIGNALFORGE_CONTRACT_MARKET_PORT || '8000', 10);
+const host = process.env.SIGNALFORGE_CONTRACT_MARKET_HOST || '127.0.0.1';
 const now = new Date().toISOString();
 const asOf = now.slice(0, 10);
 
@@ -28,6 +28,7 @@ const exactAliases = new Map([
   ...securities.flatMap((security) => [
     [security.symbol, security.symbol],
     [security.name, security.symbol],
+    [identity(security).secid, security.symbol],
   ]),
 ]);
 

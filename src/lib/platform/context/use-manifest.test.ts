@@ -12,7 +12,7 @@ const temporaryDirectories: string[] = [];
 function scope(projectId = 'project-a') {
   return createProjectIntegrationScope({
     projectId,
-    memory: { tenantId: 'tenant-quantpilot' },
+    memory: { tenantId: 'tenant-signalforge' },
     knowledge: {
       spaces: ['https://knowledge.example/spaces/shared'],
       projectSpacesEnabled: true,
@@ -22,7 +22,7 @@ function scope(projectId = 'project-a') {
 }
 
 async function workspace(): Promise<string> {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'quantpilot-context-use-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-context-use-'));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -182,7 +182,7 @@ describe('context use manifest', () => {
 
     const changedScope = createProjectIntegrationScope({
       projectId: 'project-a',
-      memory: { tenantId: 'tenant-quantpilot' },
+      memory: { tenantId: 'tenant-signalforge' },
       knowledge: {
         spaces: ['https://knowledge.example/spaces/different-shared-space'],
         projectSpacesEnabled: true,

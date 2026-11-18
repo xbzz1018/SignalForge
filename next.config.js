@@ -1,7 +1,7 @@
-const isStandaloneBuild = process.env.QUANTPILOT_STANDALONE_BUILD === '1';
-const enableHsts = /^(?:1|true|yes|on)$/i.test(process.env.QUANTPILOT_SECURITY_HSTS || '');
+const isStandaloneBuild = process.env.SIGNALFORGE_STANDALONE_BUILD === '1';
+const enableHsts = /^(?:1|true|yes|on)$/i.test(process.env.SIGNALFORGE_SECURITY_HSTS || '');
 const projectRoot = __dirname;
-const skipRouteOutputTracing = process.env.QUANTPILOT_SKIP_ROUTE_TRACING !== '0' && !isStandaloneBuild;
+const skipRouteOutputTracing = process.env.SIGNALFORGE_SKIP_ROUTE_TRACING !== '0' && !isStandaloneBuild;
 const tracingExcludes = [
   './.env',
   './.env.*',

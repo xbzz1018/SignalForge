@@ -59,7 +59,7 @@ flowchart LR
 在与记录匹配的 market-data 代码和运行环境中执行：
 
 ```bash
-uv run --project services/market-data python -m quantpilot_market_data.replay_backtest \
+uv run --project services/market-data python -m signalforge_market_data.replay_backtest \
   "/path/to/workspace/data_file/raw/RUN_ID/SYMBOL/backtest-ma-crossover-EXPERIMENT_HASH.json"
 ```
 

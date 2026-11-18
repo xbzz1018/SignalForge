@@ -46,13 +46,13 @@ jobs:
     timeout-minutes: 90
     env:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-      DATABASE_URL: postgresql://quantpilot:quantpilot_dev_password@127.0.0.1:35433/quantpilot?schema=public
+      DATABASE_URL: postgresql://signalforge:signalforge_dev_password@127.0.0.1:35433/signalforge?schema=public
       REDIS_URL: redis://127.0.0.1:36380/0
-      QUANTPILOT_MARKET_API_URL: http://127.0.0.1:8000
+      SIGNALFORGE_MARKET_API_URL: http://127.0.0.1:8000
       PROJECTS_DIR: ./tmp/e2e-projects
-      QUANTPILOT_EVAL_MODE: e2e
-      QUANTPILOT_EVAL_TRIGGER: nightly
-      QUANTPILOT_EVAL_MODEL: deepseek-v4-flash
+      SIGNALFORGE_EVAL_MODE: e2e
+      SIGNALFORGE_EVAL_TRIGGER: nightly
+      SIGNALFORGE_EVAL_MODEL: deepseek-v4-flash
       PI_AGENT_MAX_TURNS: '3'
       PI_AGENT_TIMEOUT_MS: '900000'
       PI_AGENT_BUILD_REVISION: ${{ github.sha }}
@@ -120,9 +120,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
           path: |
-            tmp/quantpilot-benchmark-reports/
-            tmp/quantpilot-benchmark-screenshots/
-            tmp/quantpilot-eval-mutations/
+            tmp/signalforge-benchmark-reports/
+            tmp/signalforge-benchmark-screenshots/
+            tmp/signalforge-eval-mutations/
             tmp/eval-market.log
 
       - name: Stop infrastructure

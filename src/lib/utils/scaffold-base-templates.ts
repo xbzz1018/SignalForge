@@ -2524,8 +2524,8 @@ function resolvePort(preferredPort) {
     PORT: String(port),
     WEB_PORT: String(port),
     NEXT_PUBLIC_APP_URL: url,
-    QUANTPILOT_WORKSPACE_ROOT:
-      process.env.QUANTPILOT_WORKSPACE_ROOT || path.resolve(projectRoot, '../../..'),
+    SIGNALFORGE_WORKSPACE_ROOT:
+      process.env.SIGNALFORGE_WORKSPACE_ROOT || path.resolve(projectRoot, '../../..'),
     NEXT_TELEMETRY_DISABLED: '1',
   };
 

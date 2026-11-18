@@ -115,7 +115,7 @@ describe('validation repair ownership', () => {
   });
 
   it('rebuilds an invalid run plan with the parent request before Agent repair', async () => {
-    const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'quantpilot-platform-repair-'));
+    const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-platform-repair-'));
     temporaryProjects.push(projectPath);
     const originalInstruction = '比较贵州茅台 600519 与宁德时代 300750 的表现并生成看板';
     const queryRewrite = await rewriteQuantQuery(originalInstruction, {

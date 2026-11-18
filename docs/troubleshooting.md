@@ -51,15 +51,15 @@ npm run doctor:full
 如果本机没有启动部分组件，可通过 `.env` 控制降级：
 
 ```bash
-QUANTPILOT_DEGRADATION_MODE=offline npm run doctor
+SIGNALFORGE_DEGRADATION_MODE=offline npm run doctor
 ```
 
-`offline` 会跳过市场数据后端、Memory、Loki/Grafana/Alloy 和 Redis 等可选外部探测；`auto` 适合本地开发；`strict` 适合 CI 或生产巡检。只想关闭 Memory 时使用 `QUANTPILOT_MEMORY_ENABLED=0`，不要切换整个系统到 `offline`。
+`offline` 会跳过市场数据后端、Memory、Loki/Grafana/Alloy 和 Redis 等可选外部探测；`auto` 适合本地开发；`strict` 适合 CI 或生产巡检。只想关闭 Memory 时使用 `SIGNALFORGE_MEMORY_ENABLED=0`，不要切换整个系统到 `offline`。
 
 前端开发启动还有一个恢复保护：如果曾经用降级方式启动，但下一次启动时数据库、market-data、Redis 或 Loki 已经恢复，`npm run dev` 会在本次进程里切回 `auto` 和启用状态。只有确实要保留降级时才加：
 
 ```bash
-QUANTPILOT_AUTO_RESTORE_DEGRADATION=0 npm run dev
+SIGNALFORGE_AUTO_RESTORE_DEGRADATION=0 npm run dev
 ```
 
 ## 3000 端口被占用
@@ -91,7 +91,7 @@ http://localhost:3000
 npm run dev -> scripts/dev/run-full.js -> scripts/dev/run-web.js -> npx next dev
 ```
 
-启动器只负责环境、端口、稳定 CSS、Prisma 检查和 Next dev 缓存保护；不再接入 `next-rspack`，也不再读取 `QUANTPILOT_BUNDLER` 做 bundler 切换。
+启动器只负责环境、端口、稳定 CSS、Prisma 检查和 Next dev 缓存保护；不再接入 `next-rspack`，也不再读取 `SIGNALFORGE_BUNDLER` 做 bundler 切换。
 
 如果启动日志看起来混乱，先确认依赖和缓存：
 
@@ -101,7 +101,7 @@ rm -rf .next/dev/cache/webpack .next/dev/lock
 npm run dev
 ```
 
-如果日志里仍出现 `next-rspack`、`QUANTPILOT_DISABLE_RSPACK` 或 Rspack panic，说明本机依赖或旧启动进程没有清干净。先停止旧进程，再确认 `package.json` 中没有 `next-rspack` 依赖。
+如果日志里仍出现 `next-rspack`、`SIGNALFORGE_DISABLE_RSPACK` 或 Rspack panic，说明本机依赖或旧启动进程没有清干净。先停止旧进程，再确认 `package.json` 中没有 `next-rspack` 依赖。
 
 依赖更新后先确认 `npm ci` 成功，再执行 `npm run security:audit:production`。审计失败时查看包名、版本和修复范围，按[依赖维护记录](validation-status.md#依赖维护记录)处理，不跳过审计或自动执行 `--force`。
 
@@ -116,13 +116,13 @@ curl http://127.0.0.1:8000/health
 ```bash
 cd services/market-data
 uv sync --extra baostock --extra akshare
-uv run quantpilot-market-api
+uv run signalforge-market-api
 ```
 
 如果只是浏览平台页面而不需要实时行情，可临时关闭市场数据后端探测：
 
 ```bash
-QUANTPILOT_MARKET_API_ENABLED=0 npm run doctor
+SIGNALFORGE_MARKET_API_ENABLED=0 npm run doctor
 ```
 
 ## Loki / Grafana 不可用
@@ -322,7 +322,7 @@ Loki 可用时优先在运行治理中心日志页查集中日志；Loki 不可�
 
 ## Memory 已启动但聊天没有个性化
 
-如果 `QUANTPILOT_MEMORY_ENABLED=0`，`personalization.status=disabled` 是正常结果，不需要启动 Memory 或继续排查 URL/token。`REQUIRED=0` 则不是关闭：服务健康时仍会召回，异常时状态为 `unavailable` 并允许核心任务继续。
+如果 `SIGNALFORGE_MEMORY_ENABLED=0`，`personalization.status=disabled` 是正常结果，不需要启动 Memory 或继续排查 URL/token。`REQUIRED=0` 则不是关闭：服务健康时仍会召回，异常时状态为 `unavailable` 并允许核心任务继续。
 
 先把“服务存活”“契约兼容”和“有匹配偏好”分开检查：
 
@@ -335,4 +335,4 @@ npm run doctor
 
 根路径必须包含 `api_contract=evolvable-memory-http/v1`，`/readyz` 必须是 `ready`，SignalForge readiness 中的 `memory` 组件必须是 `ok`。根路径返回 200 但没有 `api_contract`，通常说明旧进程或旧镜像未重启；重新构建或重启 Memory 后再验证。
 
-服务健康但消息 metadata 为 `personalization.status=empty` 时，检查是否真的写入了允许的 `analysis.*`、`output.*` 或 `research.*` 键，`context.product` 是否为 `quantpilot`，项目级偏好的 `project_id` 是否与当前项目一致。`prepared` 表示候选偏好已通过过滤，但只有最终回复显示“本轮实际使用了 N 条个人偏好”才证明 capsule 真正进入 Agent；澄清、拒绝和平台直出不会产生可反馈归因。`unavailable` 表示可选集成已降级，核心任务会继续；具体 API 示例、状态解释和 Outcome 归因规则见[用户记忆服务接入、使用与效果验证](user-memory-integration.md)。
+服务健康但消息 metadata 为 `personalization.status=empty` 时，检查是否真的写入了允许的 `analysis.*`、`output.*` 或 `research.*` 键，`context.product` 是否为 `signalforge`，项目级偏好的 `project_id` 是否与当前项目一致。`prepared` 表示候选偏好已通过过滤，但只有最终回复显示“本轮实际使用了 N 条个人偏好”才证明 capsule 真正进入 Agent；澄清、拒绝和平台直出不会产生可反馈归因。`unavailable` 表示可选集成已降级，核心任务会继续；具体 API 示例、状态解释和 Outcome 归因规则见[用户记忆服务接入、使用与效果验证](user-memory-integration.md)。

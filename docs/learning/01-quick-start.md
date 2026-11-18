@@ -33,7 +33,7 @@ npm ci
 npm run ensure:env
 ```
 
-`ensure:env` 会创建或维护忽略的 `.env` 与 `.env.local`。不要把完整 `.env.example` 复制到 `.env.local`；只在后者添加当前模式所需的 `MODELPORT_API_KEY`，或者官方直连的 `DEEPSEEK_API_KEY`。不启用 Memory 时再添加 `QUANTPILOT_MEMORY_ENABLED=0`。完整组合与文件优先级见[配置、模型接入与可选组件指南](../configuration.md)。真实密钥只放本地或 Secret Manager，不提交到 Git。
+`ensure:env` 会创建或维护忽略的 `.env` 与 `.env.local`。不要把完整 `.env.example` 复制到 `.env.local`；只在后者添加当前模式所需的 `MODELPORT_API_KEY`，或者官方直连的 `DEEPSEEK_API_KEY`。不启用 Memory 时再添加 `SIGNALFORGE_MEMORY_ENABLED=0`。完整组合与文件优先级见[配置、模型接入与可选组件指南](../configuration.md)。真实密钥只放本地或 Secret Manager，不提交到 Git。
 
 依赖版本以仓库锁文件为准；更新 Next.js 等依赖后重新安装，审计与验证范围见[依赖维护记录](../validation-status.md#依赖维护记录)。
 
@@ -69,7 +69,7 @@ npm run doctor
 ```bash
 cd services/market-data
 uv sync --locked --extra baostock --extra akshare
-uv run quantpilot-market-api
+uv run signalforge-market-api
 ```
 
 健康检查：
@@ -94,12 +94,12 @@ npm run dev
 | 环境同步 | 确保 `.env`、`.env.local`、`data/` 和 `data/projects/` 存在 |
 | 端口选择 | 优先使用 `3000`，占用时在 `3000-3099` 内寻找可用端口 |
 | URL 写入 | 同步 `PORT`、`WEB_PORT` 和 `NEXT_PUBLIC_APP_URL` |
-| 样式准备 | 生成 `public/generated/quantpilot-tailwind.css` |
+| 样式准备 | 生成 `public/generated/signalforge-tailwind.css` |
 | 组件恢复探测 | 数据库、market-data、Redis、Loki 恢复后，把本次进程切回 `auto` |
 | 数据库检查 | 必要时运行 Prisma schema 同步 |
 | Next 启动保护 | 清理过期 `.next/dev/lock` 和开发缓存，再启动 `npx next dev` |
 
-当前前端已经移除 `next-rspack`，也不再通过 `QUANTPILOT_BUNDLER` 在 Rspack/Turbopack/webpack 之间切换。日常只需要运行 `npm run dev`；Next.js 16 会使用自己的默认开发链路。
+当前前端已经移除 `next-rspack`，也不再通过 `SIGNALFORGE_BUNDLER` 在 Rspack/Turbopack/webpack 之间切换。日常只需要运行 `npm run dev`；Next.js 16 会使用自己的默认开发链路。
 
 默认访问：
 
@@ -158,6 +158,6 @@ uv run pytest
 
 - `docker compose up` 成功不代表数据库 schema 已经齐全，仍需要 `npm run db:init`。
 - `localhost:3000` 是主前端，生成工作空间预览端口从 `4100` 开始，宿主机 Loki 默认为 `33100`。
-- 前端启动模式已经收敛为 Next.js 默认链路，不要再设置 `QUANTPILOT_BUNDLER` 或排查 `next-rspack`。
+- 前端启动模式已经收敛为 Next.js 默认链路，不要再设置 `SIGNALFORGE_BUNDLER` 或排查 `next-rspack`。
 - Redis 缓存可以删除重建，不能把它当作唯一数据来源。
-- 离线演示可以用 `QUANTPILOT_DEGRADATION_MODE=offline`，但正式检查应回到 `auto` 或 `strict`。
+- 离线演示可以用 `SIGNALFORGE_DEGRADATION_MODE=offline`，但正式检查应回到 `auto` 或 `strict`。

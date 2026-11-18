@@ -8,9 +8,9 @@
 | --- | --- |
 | 任务幂等 | [dispatch store](../src/lib/services/pi-agent-generation-dispatch-store.ts)先锁项目行，再查任务；不存在的任务不能靠行锁串行化。同一请求须保持指令、执行参数、模型、CLI 和重试上限一致。任务和 Outbox 同事务写入。 |
 | 接管与并发 | 过期租约经恢复流程重试，新 owner 获得更高 fencing token；旧 owner 的心跳及完成被拒绝。恢复要求重新规划，不承诺从任意工具指令断点继续。[真实 PostgreSQL 测试](../src/lib/services/pi-agent-dispatch-reliability.integration.test.ts)覆盖并发、冲突与接管。 |
-| 缓存恢复 | [RedisJsonCache](../services/market-data/src/quantpilot_market_data/cache.py)连接错误后冷却五秒重试；无法序列化的单条结果不会使健康连接永久失效。 |
+| 缓存恢复 | [RedisJsonCache](../services/market-data/src/signalforge_market_data/cache.py)连接错误后冷却五秒重试；无法序列化的单条结果不会使健康连接永久失效。 |
 | 刷新竞态 | 刷新前写唯一 generation，Lua 在写缓存时检查 generation；只有最近发起的刷新可发布。删除缓存同时删除 generation；损坏 JSON 使用比较后删除，避免删除并发替换后的正常值。此机制用于分时缓存。 |
-| 事务与索引 | [行情 upsert](../services/market-data/src/quantpilot_market_data/repositories/upserts.py)把行情和同步状态写入同一事务。验收在行情写入后注入失败并核对回滚；保存按证券、周期、复权和时间排序的 EXPLAIN JSON，不据小样本声称查询性能提升。 |
+| 事务与索引 | [行情 upsert](../services/market-data/src/signalforge_market_data/repositories/upserts.py)把行情和同步状态写入同一事务。验收在行情写入后注入失败并核对回滚；保存按证券、周期、复权和时间排序的 EXPLAIN JSON，不据小样本声称查询性能提升。 |
 | 时钟一致性 | 财报版本的观测时间及查询截止时点校验均以数据库时钟为准，避免应用时钟漂移拒绝刚保存的快照。 |
 
 ## 在隔离服务中复跑

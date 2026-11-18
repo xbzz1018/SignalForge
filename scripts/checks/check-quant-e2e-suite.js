@@ -15,13 +15,8 @@ function main() {
   );
   if (!runRuntimeControls) return;
 
-  const executable = path.join(
-    root,
-    'node_modules',
-    '.bin',
-    process.platform === 'win32' ? 'vitest.cmd' : 'vitest',
-  );
-  const result = spawnSync(executable, ['run', ...suite.runtimeTestFiles], {
+  const runner = path.join(root, 'scripts', 'testing', 'run-vitest.js');
+  const result = spawnSync(process.execPath, [runner, ...suite.runtimeTestFiles], {
     cwd: root,
     env: process.env,
     shell: false,

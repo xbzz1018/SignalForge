@@ -2,26 +2,19 @@
 
 **智能量化投研与策略分析工作台**
 
-面向股票、指数与 ETF 的量化研究工作台，支持通过对话查询行情、回测均线策略，并生成报告与交互看板。每次研究保留数据来源、计算参数和运行记录。
+面向股票、指数与 ETF 的量化研究工作台。通过对话查行情、回测策略并生成研究报告或交互看板。结果保留行情来源、回测参数和运行记录。
 
-[![Quality](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml) [![License](https://img.shields.io/github/license/xbzz1018/SignalForge?style=flat-square&color=087E6B)](LICENSE)
+本仓库为 **Python / FastAPI** 后端与 **TypeScript / Next.js** 前端实现，可独立运行。
+
+[![Quality](https://github.com/xbzz1018/SignalForge-Python/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/xbzz1018/SignalForge-Python/actions/workflows/quality.yml) [![License](https://img.shields.io/github/license/xbzz1018/SignalForge-Python?style=flat-square&color=087E6B)](LICENSE)
 
 [项目案例](docs/project-case.md) · [架构设计](docs/architecture.md) · [本地运行](#本地运行) · [配置指南](docs/configuration.md)
 
-<!-- portfolio-preview:start -->
-[浏览项目与交互示例](https://kukup.xbzz.cloud/projects/signalforge)
-
-![项目首页与功能入口](https://kukup.xbzz.cloud/images/signal-home.webp?v=4f6cac16d5a8)
-
-<sub>项目首页 · 示例资料与展示配色。点击上方链接，从首页继续浏览各项功能。</sub>
-<!-- portfolio-preview:end -->
-
-<details>
-<summary>研究看板</summary>
+[查看交互示例](https://kukup.xbzz.cloud/projects/signalforge)
 
 ![沪深 300 研究看板中的 K 线、均线、成交量与风险摘要](docs/assets/hs300-research.png)
 
-</details>
+<sub>沪深 300 研究看板节选：日线、均线、成交量和风险摘要。[案例与数据说明](docs/project-case.md)</sub>
 
 ## 研究场景
 
@@ -107,7 +100,7 @@ flowchart TB
 | 研究执行 | PI Agent、Skills；工具循环与上下文控制 | [PI Runtime](src/lib/agent/pi/)、[Skills](.pi/skills.registry.json) |
 | 领域计划 | 证券核对、请求解析与研究计划 | [Finance Domain](src/lib/domains/finance/) |
 | 数据与计算 | Python、FastAPI；行情、指标与回测 | [market-data](services/market-data/) |
-| 持久化 | PostgreSQL、TimescaleDB、Redis；任务、行情与缓存 | [任务队列](src/lib/quant/generation-queue.ts)、[数据仓储](services/market-data/src/quantpilot_market_data/repositories/) |
+| 持久化 | PostgreSQL、TimescaleDB、Redis；任务、行情与缓存 | [任务队列](src/lib/quant/generation-queue.ts)、[数据仓储](services/market-data/src/signalforge_market_data/repositories/) |
 | 质量检查 | pytest、Playwright；后端计算与页面核心流程 | [后端测试](services/market-data/tests/)、[页面测试](tests/e2e/) |
 
 ## 本地运行
@@ -115,8 +108,8 @@ flowchart TB
 使用 Ubuntu / WSL2，准备 Node.js 24、Python 3.14、uv 和 Docker。生成项目的构建与预览依赖 Linux namespace 隔离；Docker 提供数据库与缓存。
 
 ```bash
-git clone https://github.com/xbzz1018/SignalForge.git
-cd SignalForge
+git clone https://github.com/xbzz1018/SignalForge-Python.git
+cd SignalForge-Python
 npm ci
 uv sync --project services/market-data --extra baostock --extra akshare --locked
 ```
@@ -125,9 +118,9 @@ uv sync --project services/market-data --extra baostock --extra akshare --locked
 
 ```dotenv
 DEEPSEEK_API_KEY="your-official-api-key"
-QUANTPILOT_MODELPORT_ENABLED=0
-QUANTPILOT_MEMORY_ENABLED=0
-QUANTPILOT_KNOWLEDGE_ENABLED=0
+SIGNALFORGE_MODELPORT_ENABLED=0
+SIGNALFORGE_MEMORY_ENABLED=0
+SIGNALFORGE_KNOWLEDGE_ENABLED=0
 ```
 
 ```bash

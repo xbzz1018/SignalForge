@@ -1,5 +1,5 @@
 [project]
-name = "quantpilot-market-data"
+name = "signalforge-market-data"
 version = "0.1.0"
 description = "SignalForge 市场数据后端模块，提供东方财富实时行情能力"
 readme = "README.md"
@@ -28,7 +28,7 @@ tushare = [
 ]
 
 [project.scripts]
-quantpilot-market-api = "quantpilot_market_data.cli:main"
+signalforge-market-api = "signalforge_market_data.cli:main"
 
 [dependency-groups]
 dev = [

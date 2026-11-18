@@ -355,7 +355,7 @@ export function rankQuantSymbolCandidates(
 }
 
 async function defaultSymbolResolver(query: string, count: number): Promise<unknown> {
-  const baseUrl = (process.env.QUANTPILOT_MARKET_API_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
+  const baseUrl = (process.env.SIGNALFORGE_MARKET_API_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
   const url = new URL('/api/v1/symbols/resolve', baseUrl);
   url.searchParams.set('query', query);
   url.searchParams.set('count', String(count));
@@ -451,7 +451,10 @@ async function resolveTargetSet(params: {
   );
   const uniqueResolved = resolvedSymbols.filter(
     (item, index, items) =>
-      items.findIndex((candidate) => candidate.symbol === item.symbol) === index,
+      items.findIndex((candidate) =>
+        (candidate.secid ?? `${candidate.market}:${candidate.symbol}`) ===
+        (item.secid ?? `${item.market}:${item.symbol}`),
+      ) === index,
   );
   const effectiveUnresolvedTargets = unresolvedTargets.filter(
     (target) => !targetIsCoveredByResolvedSymbol(target, uniqueResolved),

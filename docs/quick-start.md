@@ -11,13 +11,13 @@
 - 可用的模型服务端凭据。下面以仓库配置中已有的 DeepSeek 官方直连 profile 为例。
 
 ```bash
-git clone https://github.com/xbzz1018/SignalForge.git
-cd SignalForge
+git clone https://github.com/xbzz1018/SignalForge-Python.git
+cd SignalForge-Python
 npm ci
 uv sync --project services/market-data --extra baostock --extra akshare --locked
 ```
 
-`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。
+`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。 开发安装会另外安装 `scripts/testing` 内的测试工具。生产安装使用 `npm ci --omit=dev`，不安装测试工具。
 
 ## 配置与启动
 
@@ -25,9 +25,9 @@ uv sync --project services/market-data --extra baostock --extra akshare --locked
 
 ```dotenv
 DEEPSEEK_API_KEY="your-official-api-key"
-QUANTPILOT_MODELPORT_ENABLED=0
-QUANTPILOT_MEMORY_ENABLED=0
-QUANTPILOT_KNOWLEDGE_ENABLED=0
+SIGNALFORGE_MODELPORT_ENABLED=0
+SIGNALFORGE_MEMORY_ENABLED=0
+SIGNALFORGE_KNOWLEDGE_ENABLED=0
 ```
 
 ```bash

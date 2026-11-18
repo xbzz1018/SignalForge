@@ -203,7 +203,7 @@ Workspace 的可见回答由平台确定性投影为五个阶段：理解问题�
 
 PI Agent 本身没有 Shell 工具，但生成项目仍需要由平台执行 build 和 preview。Linux 上，这些命令默认进入 user、mount、network 和 PID namespace：只读挂载当前生成工作空间、共享 `node_modules` 和 Node runtime，仅开放工作空间 `.next` 写入；宿主项目其余目录、用户主目录和平台密钥不会挂载，进程环境也会按白名单重建。执行前的 artifact policy 会先拒绝子进程、动态执行、任意网络客户端、宿主绝对路径等高风险代码，策略不通过时不会启动 build 或 preview。
 
-network namespace 内只启用 loopback，不存在宿主或外网路由。preview 由平台在宿主 `127.0.0.1` 监听受控端口，再经 `/tmp/qp-preview/<runtime-id>/p.sock` 转发到隔离网络中的 Next.js；固定的同目录 `m.sock` 只向沙箱提供配置的无凭据 market-data host/port，以支持标准 `/api/market/**` 只读路由，目标不能由生成代码选择。短运行时目录规避 Linux Unix Socket 路径长度上限，只绑定当前预览的两个 socket，不暴露宿主 `/tmp`，并随预览生命周期清理。build 不创建任何桥接，preview 也不能访问 ModelPort、数据库、Memory、AKEP 或通用外网。生产环境仍应保留容器/主机防火墙作为纵深防御。非 Linux 平台默认拒绝执行生成代码；只有已经处于外部隔离环境的本地开发机，才可显式设置 `QUANTPILOT_ALLOW_UNSANDBOXED_GENERATED_CODE=1` 作为不安全覆盖，生产环境不得开启。
+network namespace 内只启用 loopback，不存在宿主或外网路由。preview 由平台在宿主 `127.0.0.1` 监听受控端口，再经 `/tmp/qp-preview/<runtime-id>/p.sock` 转发到隔离网络中的 Next.js；固定的同目录 `m.sock` 只向沙箱提供配置的无凭据 market-data host/port，以支持标准 `/api/market/**` 只读路由，目标不能由生成代码选择。短运行时目录规避 Linux Unix Socket 路径长度上限，只绑定当前预览的两个 socket，不暴露宿主 `/tmp`，并随预览生命周期清理。build 不创建任何桥接，preview 也不能访问 ModelPort、数据库、Memory、AKEP 或通用外网。生产环境仍应保留容器/主机防火墙作为纵深防御。非 Linux 平台默认拒绝执行生成代码；只有已经处于外部隔离环境的本地开发机，才可显式设置 `SIGNALFORGE_ALLOW_UNSANDBOXED_GENERATED_CODE=1` 作为不安全覆盖，生产环境不得开启。
 
 生成工作区的依赖安装固定使用 `--ignore-scripts`，宿主侧不执行 `preinstall/install/postinstall/predev` 等项目代码；项目自身 `predev` 只会由沙箱内的标准 `npm run dev` 生命周期执行。需要原生构建脚本的依赖必须先进入平台审核过的共享依赖或专用构建镜像，不能通过放宽生成工作区权限临时解决。
 
@@ -247,11 +247,11 @@ PI_AGENT_TEST_DATABASE_URL='postgresql://...' npm run test:pi-agent:postgres
 | --- | --- | --- |
 | `MODELPORT_API_KEY` | 无 | 默认 Qwen 与日常 DeepSeek 共用的受限 ModelPort 客户端凭据 |
 | `DEEPSEEK_API_KEY` | 无 | 可选 DeepSeek 官方直连凭据；本地默认不配置 |
-| `QUANTPILOT_LLM_AGENT_ENABLED` | `1` | 项目级 PI Agent 模型执行总开关；无密钥选择会写入 `.data-agent/workspace.json.runtime` 与 Finance Run Plan |
-| `QUANTPILOT_LLM_QUERY_REWRITE_ENABLED` | `1` | Query Rewrite 总开关；关闭后量化规划失败关闭，不启用关键词改写 |
-| `QUANTPILOT_QUERY_REWRITE_LLM_TIMEOUT_MS` | `15000` | Query Rewrite 语义调用硬超时，允许 500–15000ms |
-| `QUANTPILOT_QUERY_REWRITE_LLM_INVALID_OUTPUT_RETRIES` | `2` | 本地量化 Qwen 的强制工具参数不符合 schema 时最多再请求两次；每次仍由 LLM 重写，绝不使用关键词/正则语义兜底 |
-| `QUANTPILOT_QUERY_REWRITE_LLM_MAX_RETRIES` | `0` | Query Rewrite Provider 瞬时错误重试次数，上限 1；最终失败会停止规划和预取 |
+| `SIGNALFORGE_LLM_AGENT_ENABLED` | `1` | 项目级 PI Agent 模型执行总开关；无密钥选择会写入 `.data-agent/workspace.json.runtime` 与 Finance Run Plan |
+| `SIGNALFORGE_LLM_QUERY_REWRITE_ENABLED` | `1` | Query Rewrite 总开关；关闭后量化规划失败关闭，不启用关键词改写 |
+| `SIGNALFORGE_QUERY_REWRITE_LLM_TIMEOUT_MS` | `15000` | Query Rewrite 语义调用硬超时，允许 500–15000ms |
+| `SIGNALFORGE_QUERY_REWRITE_LLM_INVALID_OUTPUT_RETRIES` | `2` | 本地量化 Qwen 的强制工具参数不符合 schema 时最多再请求两次；每次仍由 LLM 重写，绝不使用关键词/正则语义兜底 |
+| `SIGNALFORGE_QUERY_REWRITE_LLM_MAX_RETRIES` | `0` | Query Rewrite Provider 瞬时错误重试次数，上限 1；最终失败会停止规划和预取 |
 | `PI_AGENT_MAX_REQUEST_BYTES` | `2000000` | 单次 Provider 请求体的 UTF-8 字节硬上限；超限时不发起网络请求 |
 | `PI_AGENT_PROVIDER_MAX_RETRIES` | `2` | 响应流开始前，网络错误与瞬时 HTTP 状态的最大重试次数 |
 | `PI_AGENT_PROVIDER_RETRY_BASE_MS` | `500` | Provider 指数退避的基础等待时间 |
@@ -282,10 +282,10 @@ PI_AGENT_TEST_DATABASE_URL='postgresql://...' npm run test:pi-agent:postgres
 | `PI_AGENT_DISPATCH_ENVELOPE_MAX_BYTES` | `262144` | provider-neutral replan 信封的最大 JSON 字节数；credential-shaped 字段始终拒绝，允许范围 1 KiB–4 MiB |
 | `PI_AGENT_RESOURCE_LOCK_WAIT_MS` | `5000` | workspace 锁等待上限；启动仅可接管同主机、PID 已死亡的 schema-v2 owner，远端/不明锁超时失败关闭 |
 | `PI_AGENT_INSTANCE_ID` | `hostname:pid` | 写入资源锁 owner metadata 的稳定实例标识；容器部署建议设置为 pod/instance ID，不能包含换行或超过 256 UTF-8 bytes |
-| `PI_AGENT_WORKSPACE_NAMESPACE` | `quantpilot-local` | canonical workspace 身份命名空间；共同执行同一 project 的实例必须共享 PostgreSQL、namespace 与物理文件系统。不共享工作区的部署必须隔离数据库/project identity，不能只靠改 namespace 绕过 project lease |
+| `PI_AGENT_WORKSPACE_NAMESPACE` | `signalforge-local` | canonical workspace 身份命名空间；共同执行同一 project 的实例必须共享 PostgreSQL、namespace 与物理文件系统。不共享工作区的部署必须隔离数据库/project identity，不能只靠改 namespace 绕过 project lease |
 | `PI_AGENT_SKILL_CONTEXT_CHARS` | `6000` | 数据准备阶段的 Skill manifest + task capsule 总字符预算；原子内容超限时失败，不做语义截断 |
 | `PI_AGENT_PREFETCHED_SKILL_CONTEXT_CHARS` | `4000` | 平台预取 generation/repair 的 Skill manifest + task capsule 总字符预算 |
 | `PI_AGENT_REASONING_EFFORT` | 空 | 遗留兼容配置，当前 runtime 不读取；执行强度由 PhaseGraph 固定为 standard 不调用模型、custom/repair `medium`、data-preparation `high` |
 | `PI_AGENT_REASONING` | `1` | 设为 `0` 关闭 thinking |
-| `QUANTPILOT_GENERATED_SANDBOX` | `1` | Linux 上启用生成项目 namespace 沙箱；设为 `0` 仍需显式不安全覆盖 |
-| `QUANTPILOT_ALLOW_UNSANDBOXED_GENERATED_CODE` | `0` | 仅供已外部隔离的非生产开发环境使用；生产必须保持关闭 |
+| `SIGNALFORGE_GENERATED_SANDBOX` | `1` | Linux 上启用生成项目 namespace 沙箱；设为 `0` 仍需显式不安全覆盖 |
+| `SIGNALFORGE_ALLOW_UNSANDBOXED_GENERATED_CODE` | `0` | 仅供已外部隔离的非生产开发环境使用；生产必须保持关闭 |

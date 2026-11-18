@@ -6,7 +6,7 @@ import type {
 import { DATA_AGENT_TASK_RELATIVE_PATH } from '@/lib/data-agent';
 import {
   createSignalForgeDataAgentRegistry,
-  QUANTPILOT_AGENT_PROFILE,
+  SIGNALFORGE_AGENT_PROFILE,
 } from './agent-profile';
 import { FINANCE_RUN_PLAN_RELATIVE_PATH } from './workspace-artifacts';
 import type { QuantQueryRewriteResult } from './query-rewrite';
@@ -60,7 +60,7 @@ export function projectFinanceRewriteToDataAgentTask(
 
 export function projectFinancePlanToDataAgentPlan(plan: QuantRunPlan): DataAgentExecutionPlan {
   const composition = createSignalForgeDataAgentRegistry().resolveCapability(
-    QUANTPILOT_AGENT_PROFILE.id,
+    SIGNALFORGE_AGENT_PROFILE.id,
     plan.requestedCapabilityId ?? plan.capabilityId,
   ).composition;
   return {
@@ -95,12 +95,12 @@ export function projectFinanceProfileSelection(
   selectionSource: DataAgentProfileSelection['selectionSource'] = 'inferred',
 ): DataAgentProfileSelection {
   const composition = createSignalForgeDataAgentRegistry().resolveCapability(
-    QUANTPILOT_AGENT_PROFILE.id,
+    SIGNALFORGE_AGENT_PROFILE.id,
     capabilityId,
   ).composition;
   return {
     schemaVersion: 1,
-    profile: { ...QUANTPILOT_AGENT_PROFILE },
+    profile: { ...SIGNALFORGE_AGENT_PROFILE },
     selectedCapabilityId: capabilityId,
     composition,
     selectionSource,

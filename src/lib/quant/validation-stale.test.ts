@@ -9,7 +9,7 @@ const temporaryProjects: string[] = [];
 
 async function createProject() {
   const projectPath = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'quantpilot-validation-stale-'),
+    path.join(os.tmpdir(), 'signalforge-validation-stale-'),
   );
   temporaryProjects.push(projectPath);
   await fs.mkdir(path.join(projectPath, '.data-agent'), { recursive: true });

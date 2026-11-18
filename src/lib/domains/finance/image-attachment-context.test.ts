@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('Finance image attachment context', () => {
   it('projects the finance extraction contract onto the generic manifest', async () => {
-    const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'quantpilot-finance-assets-'));
+    const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-finance-assets-'));
     temporaryDirectories.push(projectRoot);
 
     const receiptPath = await writeFinanceAttachmentContext({

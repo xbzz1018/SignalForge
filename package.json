@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev/run-full.js",
     "dev:web": "node scripts/dev/run-web.js",
-    "dev:market": "uv run --extra baostock --extra akshare --project services/market-data quantpilot-market-api",
+    "dev:market": "uv run --extra baostock --extra akshare --project services/market-data signalforge-market-api",
     "ensure:env": "node scripts/dev/setup-env.js",
     "clean:local": "node scripts/dev/cleanup-local-artifacts.js",
     "clean:local:dry-run": "node scripts/dev/cleanup-local-artifacts.js --dry-run",
@@ -18,9 +18,9 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "npm run test:unit && npm run test:backend",
-    "test:unit": "vitest run",
-    "test:api": "vitest run src/app/api",
-    "test:coverage": "vitest run --coverage",
+    "test:unit": "node scripts/testing/run-vitest.js",
+    "test:api": "npm run test:unit -- src/app/api",
+    "test:coverage": "npm run test:unit -- --coverage",
     "test:e2e": "playwright test",
     "check:dependency-sources": "node scripts/checks/check-dependency-sources.js",
     "test:pi-agent:postgres": "node scripts/checks/run-pi-agent-postgres-integration.js",
@@ -45,7 +45,7 @@
     "redis:up": "docker compose up -d redis",
     "redis:logs": "docker compose logs -f redis",
     "redis:cli": "docker compose exec redis redis-cli",
-    "db:psql": "docker compose exec timescaledb psql -U quantpilot -d quantpilot",
+    "db:psql": "docker compose exec timescaledb psql -U signalforge -d signalforge",
     "db:init": "node scripts/db/init-database.js",
     "db:doctor": "node scripts/db/check-database.js",
     "db:sync-workspaces": "node scripts/db/sync-projects-from-workspaces.js",
@@ -103,7 +103,8 @@
     "check:ops-platform-visual": "node scripts/checks/check-ops-platform-visual.js",
     "check:research-reports-visual": "node scripts/checks/check-research-reports-visual.js",
     "check:skills-visual": "node scripts/checks/check-skills-visual.js",
-    "security:audit": "npm audit --audit-level=high --registry=https://registry.npmjs.org",
+    "security:audit": "npm audit --audit-level=high --registry=https://registry.npmjs.org && npm run security:audit:test-tools",
+    "security:audit:test-tools": "npm --prefix scripts/testing audit --audit-level=high --registry=https://registry.npmjs.org",
     "security:audit:production": "npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org",
     "release:check": "node scripts/checks/release-check.js",
     "release:check:full": "node scripts/checks/release-check.js --security --runtime",
@@ -113,7 +114,7 @@
     "benchmark:quant:e2e": "node scripts/evals/run-quant-benchmarks.js --mode e2e",
     "benchmark:quant:hidden": "node scripts/evals/run-quant-benchmarks.js --mode e2e --dataset-visibility hidden",
     "benchmark:quant:shadow": "node scripts/evals/run-quant-benchmarks.js --mode e2e --dataset-visibility production_replay",
-    "postinstall": "npm run ensure:env",
+    "postinstall": "npm run ensure:env && node scripts/testing/install.js",
     "security:audit:backend": "node scripts/checks/audit-market-dependencies.js"
   },
   "dependencies": {
@@ -151,7 +152,6 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "4.1.12",
     "autoprefixer": "^10.5.0",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.4.1",
@@ -160,7 +160,6 @@
     "prisma": "^6.19.3",
     "tailwindcss": "^3.4.19",
     "tsconfig-paths": "^4.2.0",
-    "vitest": "^4.1.12",
     "jiti": "2.6.1"
   },
   "overrides": {
@@ -191,6 +190,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xbzz1018/SignalForge.git"
+    "url": "git+https://github.com/xbzz1018/SignalForge-Python.git"
   }
 }

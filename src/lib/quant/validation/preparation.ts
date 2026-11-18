@@ -32,7 +32,7 @@ async function validationArtifactSignature(projectPath: string): Promise<string>
 }
 
 async function waitForValidationArtifactsToSettle(projectPath: string) {
-  const timeoutMs = Number.parseInt(process.env.QUANTPILOT_VALIDATION_SETTLE_TIMEOUT_MS ?? '', 10) || 4_000;
+  const timeoutMs = Number.parseInt(process.env.SIGNALFORGE_VALIDATION_SETTLE_TIMEOUT_MS ?? '', 10) || 4_000;
   const intervalMs = 500;
   const startedAt = Date.now();
   let lastSignature = '';
@@ -163,8 +163,8 @@ async function normalizeNextConfig(projectPath: string) {
 const path = require('path');
 
 const projectRoot = __dirname;
-const workspaceRoot = process.env.QUANTPILOT_WORKSPACE_ROOT
-  ? path.resolve(process.env.QUANTPILOT_WORKSPACE_ROOT)
+const workspaceRoot = process.env.SIGNALFORGE_WORKSPACE_ROOT
+  ? path.resolve(process.env.SIGNALFORGE_WORKSPACE_ROOT)
   : path.resolve(projectRoot, '../../..');
 
 const nextConfig = {
@@ -217,8 +217,8 @@ module.exports = nextConfig;
     nextContent = nextContent.replace(
       /const projectRoot = __dirname;\n/,
       `const projectRoot = __dirname;
-const workspaceRoot = process.env.QUANTPILOT_WORKSPACE_ROOT
-  ? path.resolve(process.env.QUANTPILOT_WORKSPACE_ROOT)
+const workspaceRoot = process.env.SIGNALFORGE_WORKSPACE_ROOT
+  ? path.resolve(process.env.SIGNALFORGE_WORKSPACE_ROOT)
   : path.resolve(projectRoot, '../../..');
 `
     );

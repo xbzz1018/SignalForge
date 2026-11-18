@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from quantpilot_market_data.cache import MarketDataCache
-from quantpilot_market_data.contracts.quotes import KlineResponse, SymbolResolveResult
-from quantpilot_market_data.providers.eastmoney import EastMoneyError
-from quantpilot_market_data.services import quotes
+from signalforge_market_data.cache import MarketDataCache
+from signalforge_market_data.contracts.quotes import KlineResponse, SymbolResolveResult
+from signalforge_market_data.providers.eastmoney import EastMoneyError
+from signalforge_market_data.services import quotes
 
 
 class DummyProvider:
@@ -49,7 +49,7 @@ def test_symbol_resolver_does_not_cache_empty_upstream_results(monkeypatch) -> N
     )
 
     assert response.results == []
-    assert namespaces == ["symbols-resolve-v2"]
+    assert namespaces == ["symbols-resolve-v3"]
     assert cache_writes == 0
 
 

@@ -71,11 +71,11 @@ rm -rf .next/dev/lock .next/dev/cache/webpack
 | `services/market-data/pyproject.toml`、`services/market-data/uv.lock` | Python 后端依赖和服务入口 |
 | `.pi/skills/`、`.pi/skills.registry.json`、`.pi/skills.lock.json`、`.pi/skills.changelog.json` | 仓库 Skill 权威源，受版本与 SHA-256 完整性校验；不作为 workspace 运行时发现目录 |
 | `.pi/skill-packages/` | 规范发布包，用于校验、回滚、source 缺失时的执行 fallback，以及创建 workspace 参考镜像 |
-| `benchmarks/quantpilot/cases.json` | 固定评测用例集 |
+| `benchmarks/signalforge/cases.json` | 固定评测用例集 |
 | `docs/` | 架构、契约、治理和排障文档 |
 
 ## 后续建议
 
-- `tmp/quantpilot-benchmark-reports/` 里的长期评测历史建议迁入数据库索引，并把大 JSON / 截图转对象存储。
+- `tmp/signalforge-benchmark-reports/` 里的长期评测历史建议迁入数据库索引，并把大 JSON / 截图转对象存储。
 - `data/projects/` 可以继续作为本地 workspace 根目录，但列表、健康快照和生成状态应以 PostgreSQL 为主。
 - 生成工作空间内部的 `node_modules/`、`.next/`、`dist/`、`build/` 也不应被平台采集到可提交产物里。

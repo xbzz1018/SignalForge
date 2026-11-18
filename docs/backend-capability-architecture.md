@@ -44,7 +44,7 @@ flowchart LR
 
 ## 模块边界
 
-`services/market-data/src/quantpilot_market_data` 的长期结构如下：
+`services/market-data/src/signalforge_market_data` 的长期结构如下：
 
 | 目录或文件 | 角色 | 责任 |
 | --- | --- | --- |

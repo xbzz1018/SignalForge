@@ -9,6 +9,7 @@ import { buildQuantProjectSettings, getExecutionQuantCapability, getQuantCapabil
 import {
   rewriteQuantQuery,
   type QuantQueryRewriteResult,
+  type QuantResolvedSymbol,
 } from '@/lib/domains/finance/query-rewrite';
 import {
   projectFinancePlanToDataAgentPlan,
@@ -34,7 +35,7 @@ import {
 } from '@/lib/data-agent';
 import {
   createSignalForgeDataAgentRegistry,
-  QUANTPILOT_AGENT_PROFILE_ID,
+  SIGNALFORGE_AGENT_PROFILE_ID,
 } from '@/lib/domains/finance/agent-profile';
 import {
   FINANCE_QUERY_REWRITE_RELATIVE_PATH,
@@ -54,6 +55,7 @@ export interface QuantRunPlan {
   executionCapabilityId?: string;
   question: string;
   queryRewrite?: QuantQueryRewriteResult;
+  inheritedMarketTargets?: QuantResolvedSymbol[];
   symbols: string[];
   timeRange: string | null;
   backtest?: QuantBacktestRequest;
@@ -536,6 +538,9 @@ export async function writeInitialRunPlan(params: {
   const now = new Date().toISOString();
   const llm = getProjectLlmConfig(params.llmModel);
   const symbols = explicitSymbols.length > 0 ? explicitSymbols : inheritedSymbols;
+  const inheritedMarketTargets = inheritPreviousPlan
+    ? params.previousPlan?.inheritedMarketTargets ?? params.previousPlan?.queryRewrite?.resolvedSymbols
+    : undefined;
   const requestedTimeRange =
     queryRewrite.timeRange?.label ??
     (inheritPreviousPlan ? params.previousPlan?.timeRange ?? null : null);
@@ -554,6 +559,15 @@ export async function writeInitialRunPlan(params: {
     capabilityId: capability.id,
     hasImageAttachments: params.hasImageAttachments,
   });
+  if (queryRewrite.resolvedSymbols.length > explicitSymbols.length) {
+    clarification = {
+      required: true,
+      reason: '研究标的在不同市场使用相同代码。',
+      missing: ['target'],
+      questions: ['请分别发起两个研究任务，以便各自保存行情和分析结果。'],
+      confidence: 1,
+    };
+  }
   const refused = queryRewrite.safety.decision === 'refuse';
   let backtest: QuantBacktestRequest | undefined;
   if (executionCapability.id === 'backtest_review' && !refused && !clarification.required) {
@@ -618,7 +632,7 @@ export async function writeInitialRunPlan(params: {
         : 'planned',
     capabilityId: capability.id,
     composition: createSignalForgeDataAgentRegistry().resolveCapability(
-      QUANTPILOT_AGENT_PROFILE_ID,
+      SIGNALFORGE_AGENT_PROFILE_ID,
       capability.id,
     ).composition,
     llm,
@@ -626,6 +640,7 @@ export async function writeInitialRunPlan(params: {
     executionCapabilityId: executionCapability.id,
     question: planningInstruction,
     queryRewrite,
+    ...(inheritedMarketTargets?.length ? { inheritedMarketTargets } : {}),
     symbols,
     timeRange,
     ...(backtest ? { backtest } : {}),

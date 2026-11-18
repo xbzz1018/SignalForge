@@ -1,0 +1,4 @@
+interface:
+  display_name: "SignalForge Production Release"
+  short_description: "Safely release SignalForge without routine full data sync"
+  default_prompt: "Use $signalforge-production-release to plan and execute a safe feature-focused production release."

@@ -11,6 +11,29 @@ afterEach(async () => {
   await Promise.all(projects.splice(0).map((project) => fs.rm(project, { recursive: true, force: true })));
 });
 
+it.each(['1.000001', '0.000001'])('requests the resolved market identity and rejects wrong-market history: %s', async secid => {
+  const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-market-identity-'));
+  projects.push(projectPath);
+  const fetcher = vi.fn(async (url: string) => Response.json({
+    symbol: '000001',
+    secid: url.includes('/quotes/history/') ? secid : '1.000001',
+    asset_type: 'index',
+    bars: [{ date: '2025-01-02', close: '100' }],
+  }));
+  vi.stubGlobal('fetch', fetcher);
+  const warnings: string[] = [];
+  const result = await fetchSymbolDataset({
+    projectPath, runId: 'index', symbol: '000001', marketIdentifier: '1.000001', rawFiles: [], warnings,
+    plan: { dataRequirements: ['/api/v1/quotes/history/{symbol}'] } as QuantRunPlan,
+  });
+  expect(fetcher.mock.calls.map(([url]) => new URL(url).pathname)).toEqual([
+    '/api/v1/quotes/realtime/1.000001', '/api/v1/quotes/history/1.000001',
+  ]);
+  expect(result).toMatchObject({ secid: '1.000001', asset_type: 'index' });
+  expect(result.kline).toMatchObject({ bars: secid === '1.000001' ? [{ close: '100' }] : [] });
+  expect(warnings).toHaveLength(secid === '1.000001' ? 0 : 1);
+});
+
 describe('backtest experiment artifacts', () => {
   it.each([false, true])('passes explicit research parameters and rejects mismatched execution: %s', async mismatch => {
     const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'qp-backtest-params-'));

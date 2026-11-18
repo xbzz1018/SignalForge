@@ -1,15 +1,16 @@
 import { getRuntimeDegradationConfig } from '@/lib/config/degradation';
 
 export const MARKET_API_BASE_URL =
-  process.env.QUANTPILOT_MARKET_API_URL || process.env.QUANTPILOT_MARKET_API_BASE_URL || 'http://127.0.0.1:8000';
+  process.env.SIGNALFORGE_MARKET_API_URL || process.env.SIGNALFORGE_MARKET_API_BASE_URL || 'http://127.0.0.1:8000';
 
-function getMarketApiConfig() {
-  return getRuntimeDegradationConfig().components.marketApi;
-}
-
-export function assertMarketApiEnabled() {
-  if (!getMarketApiConfig().enabled) {
-    throw new Error('market API 已按降级配置停用');
+export class MarketApiError extends Error {
+  constructor(
+    readonly code: 'MARKET_API_DISABLED' | 'MARKET_API_TIMEOUT' | 'MARKET_API_UPSTREAM_ERROR',
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'MarketApiError';
   }
 }
 
@@ -19,7 +20,6 @@ export async function fetchBacktest(params: {
   strategyId: string;
   limit?: number;
 }): Promise<Record<string, unknown>> {
-  assertMarketApiEnabled();
   const query = new URLSearchParams({
     fee_bps: String(params.parameters.fee_bps ?? 5),
     slippage_bps: String(params.parameters.slippage_bps ?? 0),
@@ -30,43 +30,49 @@ export async function fetchBacktest(params: {
   for (const [key, value] of Object.entries(params.parameters)) {
     query.set(key, String(value));
   }
-  const responseData = await fetchMarketApiJson<Record<string, unknown>>(
+  return fetchMarketApiJson<Record<string, unknown>>(
     `/api/v1/backtests/strategies/${encodeURIComponent(params.strategyId)}/${encodeURIComponent(params.symbol)}?${query.toString()}`,
-    { init: { cache: 'no-store' }, errorBodyLimit: 180 }
   );
-
-  return responseData;
 }
 
 export async function fetchMarketApiJson<T>(
   pathName: string,
-  options: { timeoutMs?: number; init?: RequestInit; errorBodyLimit?: number } = {}
+  options: { timeoutMs?: number; init?: RequestInit } = {}
 ): Promise<T> {
-  assertMarketApiEnabled();
-  const controller = options.timeoutMs ? new AbortController() : null;
-  const timeout = controller && options.timeoutMs ? setTimeout(() => controller.abort(), options.timeoutMs) : null;
+  if (!getRuntimeDegradationConfig().components.marketApi.enabled) {
+    throw new MarketApiError('MARKET_API_DISABLED', 'market API 已按降级配置停用');
+  }
+  const { timeoutMs, init } = options;
+  const callerSignal = init?.signal;
+  const deadline = timeoutMs ? new AbortController() : undefined;
+  const signal = deadline && callerSignal
+    ? AbortSignal.any([callerSignal, deadline.signal])
+    : deadline?.signal ?? callerSignal;
+  const timeout = deadline && setTimeout(() => deadline.abort(new MarketApiError(
+    'MARKET_API_TIMEOUT', `market API timeout after ${timeoutMs}ms`,
+  )), timeoutMs);
   try {
+    signal?.throwIfAborted();
     const response = await fetch(`${MARKET_API_BASE_URL}${pathName}`, {
       cache: 'no-store',
-      ...options.init,
-      signal: controller?.signal,
+      ...init,
+      signal,
     });
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new Error(`market API ${response.status}: ${body.slice(0, options.errorBodyLimit ?? 180)}`);
+      await response.body?.cancel().catch(() => undefined);
+      throw new MarketApiError('MARKET_API_UPSTREAM_ERROR', `market API returned HTTP ${response.status}`);
     }
     return (await response.json()) as T;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`market API timeout after ${options.timeoutMs}ms: ${pathName}`);
-    }
-    throw error;
+    signal?.throwIfAborted();
+    if (error instanceof MarketApiError) throw error;
+    throw new MarketApiError('MARKET_API_UPSTREAM_ERROR', 'market API request failed', { cause: error });
   } finally {
     if (timeout) clearTimeout(timeout);
   }
 }
 
 export function marketAdminHeaders(): Record<string, string> {
-  const token = process.env.QUANTPILOT_MARKET_ADMIN_TOKEN?.trim();
-  return token ? { 'X-QuantPilot-Admin-Token': token } : {};
+  const token = process.env.SIGNALFORGE_MARKET_ADMIN_TOKEN?.trim();
+  return token ? { 'X-SignalForge-Admin-Token': token } : {};
 }

@@ -17,13 +17,13 @@ import psycopg
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from quantpilot_market_data.backtest_accounting import reconcile_backtest
-from quantpilot_market_data.cache import MarketDataCache, RedisJsonCache
-from quantpilot_market_data.providers.baostock import BaoStockClient
-from quantpilot_market_data.providers.eastmoney import EastMoneyClient
-from quantpilot_market_data.replay_backtest import replay_backtest
-from quantpilot_market_data.repositories import upserts
-from quantpilot_market_data.routers.backtests import create_backtest_router
+from signalforge_market_data.backtest_accounting import reconcile_backtest
+from signalforge_market_data.cache import MarketDataCache, RedisJsonCache
+from signalforge_market_data.providers.baostock import BaoStockClient
+from signalforge_market_data.providers.eastmoney import EastMoneyClient
+from signalforge_market_data.replay_backtest import replay_backtest
+from signalforge_market_data.repositories import upserts
+from signalforge_market_data.routers.backtests import create_backtest_router
 
 ROOT = Path(__file__).resolve().parents[2]
 

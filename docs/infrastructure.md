@@ -14,14 +14,14 @@ npm run obs:up
 
 需要 ClickHouse 和整套本地观测组件时，直接运行 `docker compose up -d`，全部组件通过本地 Docker 安装。首次拉取镜像后用 `docker compose ps` 检查状态，再执行 `npm run db:init`。命名卷保留数据，日常停止使用 `docker compose stop`。
 
-PostgreSQL 并发、审批和产品指标集成测试使用单独的空测试数据库：设置 `PI_AGENT_TEST_DATABASE_URL` 后运行 `npm run test:pi-agent:postgres`。测试入口先执行全部版本化迁移，再验证运行时数据库约束与持久化行为；行情 SQL 合同在回滚事务中创建自己的测试表，不需要运行 `db:init`。CI 使用独立的 `quantpilot_integration` 数据库，与合约评测数据隔离；不要指向日常开发或业务数据库。
+PostgreSQL 并发、审批和产品指标集成测试使用单独的空测试数据库：设置 `PI_AGENT_TEST_DATABASE_URL` 后运行 `npm run test:pi-agent:postgres`。测试入口先执行全部版本化迁移，再验证运行时数据库约束与持久化行为；行情 SQL 合同在回滚事务中创建自己的测试表，不需要运行 `db:init`。CI 使用独立的 `signalforge_integration` 数据库，与合约评测数据隔离；不要指向日常开发或业务数据库。
 
 另开终端启动 market-data：
 
 ```bash
 cd services/market-data
 uv sync --extra baostock --extra akshare
-uv run quantpilot-market-api
+uv run signalforge-market-api
 ```
 
 再回到项目根目录启动主前端：
@@ -45,34 +45,34 @@ curl -fsS http://127.0.0.1:38089/readyz
 默认连接信息：
 
 ```env
-DATABASE_URL="postgresql://quantpilot:quantpilot_dev_password@127.0.0.1:35433/quantpilot?schema=public"
+DATABASE_URL="postgresql://signalforge:signalforge_dev_password@127.0.0.1:35433/signalforge?schema=public"
 TIMESCALEDB_IMAGE="timescale/timescaledb:2.27.1-pg18"
-POSTGRES_DB="quantpilot"
-POSTGRES_USER="quantpilot"
-POSTGRES_PASSWORD="quantpilot_dev_password"
+POSTGRES_DB="signalforge"
+POSTGRES_USER="signalforge"
+POSTGRES_PASSWORD="signalforge_dev_password"
 POSTGRES_PORT=35433
 REDIS_URL="redis://127.0.0.1:36380/0"
 REDIS_IMAGE="redis:8-alpine"
 REDIS_PORT=36380
-REDIS_NAMESPACE="quantpilot"
-QUANTPILOT_REDIS_CACHE_ENABLED=1
+REDIS_NAMESPACE="signalforge"
+SIGNALFORGE_REDIS_CACHE_ENABLED=1
 LOKI_URL="http://127.0.0.1:33100"
 GRAFANA_URL="http://127.0.0.1:33012"
-QUANTPILOT_DEGRADATION_MODE="auto"
-QUANTPILOT_MARKET_API_REQUIRED=0
-QUANTPILOT_MEMORY_ENABLED=1
-QUANTPILOT_MEMORY_REQUIRED=0
-QUANTPILOT_MEMORY_API_URL="http://127.0.0.1:38089"
-QUANTPILOT_OBSERVABILITY_REQUIRED=0
-QUANTPILOT_REDIS_REQUIRED=0
+SIGNALFORGE_DEGRADATION_MODE="auto"
+SIGNALFORGE_MARKET_API_REQUIRED=0
+SIGNALFORGE_MEMORY_ENABLED=1
+SIGNALFORGE_MEMORY_REQUIRED=0
+SIGNALFORGE_MEMORY_API_URL="http://127.0.0.1:38089"
+SIGNALFORGE_OBSERVABILITY_REQUIRED=0
+SIGNALFORGE_REDIS_REQUIRED=0
 PORT=3000
 WEB_PORT=3000
-QUANTPILOT_WEB_HOST="127.0.0.1"
+SIGNALFORGE_WEB_HOST="127.0.0.1"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 PREVIEW_PORT_START=4100
 PREVIEW_PORT_END=4999
-QUANTPILOT_ADMIN_TOKEN=""
-QUANTPILOT_MARKET_ADMIN_TOKEN=""
+SIGNALFORGE_ADMIN_TOKEN=""
+SIGNALFORGE_MARKET_ADMIN_TOKEN=""
 ```
 
 ## 组件分工
@@ -115,12 +115,12 @@ Dubbo3 暂时不适合当前项目，因为它主要服务 Java 微服务体系�
 | 端口管理 | 默认使用 `3000`，繁忙时扫描 `3000-3099`，并写回 `.env` / `.env.local` |
 | 预览端口池 | 默认保持 `4100-4999`，留给生成项目预览服务 |
 | 环境初始化 | 创建本地数据目录，补齐数据库、Redis、降级和应用 URL 配置 |
-| 稳定 CSS | 运行稳定 CSS 生成逻辑，输出 `public/generated/quantpilot-tailwind.css` |
+| 稳定 CSS | 运行稳定 CSS 生成逻辑，输出 `public/generated/signalforge-tailwind.css` |
 | 组件恢复 | 本次启动中探测数据库、market-data、Redis、Loki 是否已恢复，并把降级进程切回 `auto` |
 | 数据库同步 | 在非 offline 且数据库启用时执行 `prisma migrate deploy`，确保表、CHECK 与部分唯一索引使用同一版本契约 |
 | Next dev 保护 | 清理过期 `.next/dev/lock` 和 `.next/dev/cache/webpack`，再启动 `npx next dev` |
 
-前端已经移除 `next-rspack`，不再支持或需要 `QUANTPILOT_BUNDLER`、`QUANTPILOT_DISABLE_RSPACK` 这类 bundler 切换配置。开发态交给 Next.js 16 默认链路，项目只维护启动前后的环境和缓存保护。
+前端已经移除 `next-rspack`，不再支持或需要 `SIGNALFORGE_BUNDLER`、`SIGNALFORGE_DISABLE_RSPACK` 这类 bundler 切换配置。开发态交给 Next.js 16 默认链路，项目只维护启动前后的环境和缓存保护。
 
 Next.js 与 `eslint-config-next` 随锁文件一起更新；拉取依赖维护提交后使用 `npm ci` 安装对应版本。更新范围与审计结果见[依赖维护记录](validation-status.md#依赖维护记录)。
 
@@ -136,8 +136,8 @@ Next.js 与 `eslint-config-next` 随锁文件一起更新；拉取依赖维护�
 
 | 配置 | 默认值 | 说明 |
 | --- | --- | --- |
-| `QUANTPILOT_GENERATED_SANDBOX` | `1` | Linux 上启用 namespace 沙箱。 |
-| `QUANTPILOT_ALLOW_UNSANDBOXED_GENERATED_CODE` | `0` | 仅限已由容器或虚拟机完成外部隔离的本地开发；生产不得开启。 |
+| `SIGNALFORGE_GENERATED_SANDBOX` | `1` | Linux 上启用 namespace 沙箱。 |
+| `SIGNALFORGE_ALLOW_UNSANDBOXED_GENERATED_CODE` | `0` | 仅限已由容器或虚拟机完成外部隔离的本地开发；生产不得开启。 |
 
 非 Linux 平台或缺少 `unshare`、`mount`、`chroot`、`setpriv`、`ip` 时默认 fail closed。V8/WebAssembly 会预留很大的稀疏虚拟地址范围，因此脚本不使用会误杀正常 Next.js build 的 `RLIMIT_AS`；生产部署仍须用 cgroup 或容器内存限制约束整个进程树，并把外层容器网络策略作为纵深防御。当前执行内核和宿主治理边界见 [PI Agent 迁移文档](pi-agent-migration.md)，durable 细节见 [PI Agent 架构](pi-agent.md)。
 
@@ -162,22 +162,22 @@ Loki 宿主机端口默认使用 `33100`，生成项目预览端口池从 `4100`
 
 | 配置 | 默认值 | 说明 |
 | --- | --- | --- |
-| `QUANTPILOT_DEGRADATION_MODE` | `auto` | `auto` 允许可选组件缺失并降级；`strict` 将必需组件缺失视为失败；`offline` 跳过可选外部探测。 |
-| `QUANTPILOT_DATABASE_ENABLED` | `1` | 是否启用 PostgreSQL/TimescaleDB 检查和相关能力。 |
-| `QUANTPILOT_DATABASE_REQUIRED` | `1` | 数据库是否作为硬依赖。关闭后健康检查降级为 warning/unknown，但依赖 DB 的页面能力会受限。 |
-| `QUANTPILOT_MARKET_API_ENABLED` | `1` | 是否探测 `services/market-data` 后端。关闭后业务知识中心的支撑资源视图展示内置注册表。 |
-| `QUANTPILOT_MARKET_API_REQUIRED` | `0` | 市场数据后端不可用时是否失败。 |
-| `QUANTPILOT_OBSERVABILITY_ENABLED` | `1` | 是否探测 Loki/Grafana/Alloy。关闭后运行治理中心只读本地文件日志。 |
-| `QUANTPILOT_OBSERVABILITY_REQUIRED` | `0` | Loki/Grafana/Alloy 不可用时是否失败。 |
-| `QUANTPILOT_REDIS_CACHE_ENABLED` | `1` | 是否启用 Redis 缓存；Redis 不可用时后端会自动直读/文件缓存兜底。 |
-| `QUANTPILOT_SCREENER_CACHE_TTL_SECONDS` | `60` | A 股选股筛选接口的短 TTL；skills/首页重复调用同一日期和模式时优先返回缓存结果。 |
-| `QUANTPILOT_REDIS_REQUIRED` | `0` | Redis 不可用时是否作为健康失败。 |
-| `QUANTPILOT_ADMIN_TOKEN` | 空 | Skills 发布、评测启动等宿主写接口令牌；生产/strict 模式必须配置。 |
-| `QUANTPILOT_MARKET_ADMIN_TOKEN` | 空 | 补数、同步、质量扫描等 market-data 写接口令牌；非 loopback 或 strict 模式必须配置。 |
-| `QUANTPILOT_MARKET_MAINTENANCE_ENABLED` | `0` | 是否已部署每日行情维护调度；生产门禁要求为 `1`。实际 timer 模板位于 `deploy/systemd/quantpilot-market-maintenance.timer`。 |
-| `QUANTPILOT_MARKET_MAINTENANCE_UNIVERSE_ID` | `a-share-sample-research-pool` | 每日同步的权威股票池。 |
-| `QUANTPILOT_MARKET_FRESHNESS_MIN_SYMBOLS` | `250` | 最新交易日必须覆盖的最少标的数，避免单一标的更新掩盖全市场过期。 |
-| `QUANTPILOT_WEB_HOST` | `127.0.0.1` | 主前端开发服务监听地址；本地默认仅回环可访问，需要受控局域网访问时再显式覆盖。 |
+| `SIGNALFORGE_DEGRADATION_MODE` | `auto` | `auto` 允许可选组件缺失并降级；`strict` 将必需组件缺失视为失败；`offline` 跳过可选外部探测。 |
+| `SIGNALFORGE_DATABASE_ENABLED` | `1` | 是否启用 PostgreSQL/TimescaleDB 检查和相关能力。 |
+| `SIGNALFORGE_DATABASE_REQUIRED` | `1` | 数据库是否作为硬依赖。关闭后健康检查降级为 warning/unknown，但依赖 DB 的页面能力会受限。 |
+| `SIGNALFORGE_MARKET_API_ENABLED` | `1` | 是否探测 `services/market-data` 后端。关闭后业务知识中心的支撑资源视图展示内置注册表。 |
+| `SIGNALFORGE_MARKET_API_REQUIRED` | `0` | 市场数据后端不可用时是否失败。 |
+| `SIGNALFORGE_OBSERVABILITY_ENABLED` | `1` | 是否探测 Loki/Grafana/Alloy。关闭后运行治理中心只读本地文件日志。 |
+| `SIGNALFORGE_OBSERVABILITY_REQUIRED` | `0` | Loki/Grafana/Alloy 不可用时是否失败。 |
+| `SIGNALFORGE_REDIS_CACHE_ENABLED` | `1` | 是否启用 Redis 缓存；Redis 不可用时后端会自动直读/文件缓存兜底。 |
+| `SIGNALFORGE_SCREENER_CACHE_TTL_SECONDS` | `60` | A 股选股筛选接口的短 TTL；skills/首页重复调用同一日期和模式时优先返回缓存结果。 |
+| `SIGNALFORGE_REDIS_REQUIRED` | `0` | Redis 不可用时是否作为健康失败。 |
+| `SIGNALFORGE_ADMIN_TOKEN` | 空 | Skills 发布、评测启动等宿主写接口令牌；生产/strict 模式必须配置。 |
+| `SIGNALFORGE_MARKET_ADMIN_TOKEN` | 空 | 补数、同步、质量扫描等 market-data 写接口令牌；非 loopback 或 strict 模式必须配置。 |
+| `SIGNALFORGE_MARKET_MAINTENANCE_ENABLED` | `0` | 是否已部署每日行情维护调度；生产门禁要求为 `1`。实际 timer 模板位于 `deploy/systemd/signalforge-market-maintenance.timer`。 |
+| `SIGNALFORGE_MARKET_MAINTENANCE_UNIVERSE_ID` | `a-share-sample-research-pool` | 每日同步的权威股票池。 |
+| `SIGNALFORGE_MARKET_FRESHNESS_MIN_SYMBOLS` | `250` | 最新交易日必须覆盖的最少标的数，避免单一标的更新掩盖全市场过期。 |
+| `SIGNALFORGE_WEB_HOST` | `127.0.0.1` | 主前端开发服务监听地址；本地默认仅回环可访问，需要受控局域网访问时再显式覆盖。 |
 
 推荐本地开发保持 `auto`，只在 CI、演示环境或生产巡检中切到 `strict`。完全离线看页面结构、Skills、日志文件时可切到 `offline`。
 
@@ -190,7 +190,7 @@ PI Agent loop 在主应用或独立 Worker 进程内运行，不启动 Agent CLI
 开发启动脚本会做一次轻量恢复探测：如果上一次是通过 `SKIP_DB_SYNC=1`、`offline` 或关闭组件的方式降级启动，但本次启动时 PostgreSQL/TimescaleDB、market-data、Redis 或 Loki 已经恢复可用，脚本会在当前进程内把这些组件切回启用状态，并把模式恢复为 `auto`。这不会改写 `.env`，只是避免“组件已经拉起来了，前端仍沿用旧的降级环境”。如果确实想强制保持降级，可临时设置：
 
 ```bash
-QUANTPILOT_AUTO_RESTORE_DEGRADATION=0 npm run dev
+SIGNALFORGE_AUTO_RESTORE_DEGRADATION=0 npm run dev
 ```
 
 ## 回填本地工作空间索引
@@ -241,14 +241,14 @@ K 线、因子、信号和组合快照使用 TimescaleDB hypertable，以时间�
 CI 的 Python 测试使用独立 PostgreSQL service。本地也使用一次性 Docker 容器，不向应用数据库写入测试财报：
 
 ```bash
-docker run --rm -d --name quantpilot-financial-history-test \
+docker run --rm -d --name signalforge-financial-history-test \
   --tmpfs /var/lib/postgresql -p 127.0.0.1:35434:5432 \
-  -e POSTGRES_USER=quantpilot_test -e POSTGRES_PASSWORD=quality_test_local \
-  -e POSTGRES_DB=quantpilot_financial_history_test postgres:18.4-alpine
-docker exec quantpilot-financial-history-test pg_isready -U quantpilot_test -d quantpilot_financial_history_test
-MARKET_TEST_DATABASE_URL=postgresql://quantpilot_test:quality_test_local@127.0.0.1:35434/quantpilot_financial_history_test \
+  -e POSTGRES_USER=signalforge_test -e POSTGRES_PASSWORD=quality_test_local \
+  -e POSTGRES_DB=signalforge_financial_history_test postgres:18.4-alpine
+docker exec signalforge-financial-history-test pg_isready -U signalforge_test -d signalforge_financial_history_test
+MARKET_TEST_DATABASE_URL=postgresql://signalforge_test:quality_test_local@127.0.0.1:35434/signalforge_financial_history_test \
   uv run --project services/market-data pytest -q services/market-data/tests/test_financial_history_postgres.py
-docker stop quantpilot-financial-history-test
+docker stop signalforge-financial-history-test
 ```
 
 等待 `pg_isready` 成功后执行测试。示例凭据仅用于回环地址和临时测试库；测试必须显式传入专用 URL，且库名以 `_test` 结尾。停止命令只针对示例容器，保留应用 Compose 服务及其数据卷。

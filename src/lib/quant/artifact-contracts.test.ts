@@ -25,7 +25,7 @@ async function writeWorkspace(
     platform: 'SignalForge',
     composition: {
       schemaVersion: 1,
-      profile: { id: 'quantpilot.finance', version: '1.0.0' },
+      profile: { id: 'signalforge.finance', version: '1.0.0' },
       domainPacks: [{ id: 'finance.research', version: '1.0.0' }],
       deliveryPack: { id: 'workspace.next-dashboard', version: '1.0.0' },
       capability: { id: 'stock_diagnosis' },

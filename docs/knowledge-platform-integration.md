@@ -55,34 +55,34 @@ review + publish <- evaluated Candidate <- helped / neutral / harmed
 Agent Knowledge Platform 使用同尾号端口对：统一 Web 入口 `http://localhost:33005`、Core 直连 `http://localhost:38085`。SignalForge/ModelPort 分别使用 `3000`/`38082`，端口职责互不重叠。
 
 ```dotenv
-QUANTPILOT_KNOWLEDGE_ENABLED=1
-QUANTPILOT_KNOWLEDGE_REQUIRED=0
-QUANTPILOT_KNOWLEDGE_API_URL=http://localhost:33005
-QUANTPILOT_KNOWLEDGE_PURPOSE=quant-research
-QUANTPILOT_KNOWLEDGE_SPACES=https://knowledge.local/spaces/default
-QUANTPILOT_KNOWLEDGE_PROJECT_SPACES_ENABLED=1
-QUANTPILOT_KNOWLEDGE_PROJECT_SPACE_BASE_URL=https://knowledge.local/spaces/quantpilot/projects
-QUANTPILOT_KNOWLEDGE_BEARER_TOKEN=dev-reader
+SIGNALFORGE_KNOWLEDGE_ENABLED=1
+SIGNALFORGE_KNOWLEDGE_REQUIRED=0
+SIGNALFORGE_KNOWLEDGE_API_URL=http://localhost:33005
+SIGNALFORGE_KNOWLEDGE_PURPOSE=quant-research
+SIGNALFORGE_KNOWLEDGE_SPACES=https://knowledge.local/spaces/default
+SIGNALFORGE_KNOWLEDGE_PROJECT_SPACES_ENABLED=1
+SIGNALFORGE_KNOWLEDGE_PROJECT_SPACE_BASE_URL=https://knowledge.local/spaces/signalforge/projects
+SIGNALFORGE_KNOWLEDGE_BEARER_TOKEN=dev-reader
 ```
 
-`QUANTPILOT_KNOWLEDGE_SPACES` 是所有工作区都可读的共享 Space。每次请求还会由服务端追加 `<PROJECT_SPACE_BASE_URL>/<url-encoded Project.id>`；模型、浏览器 body 和生成 workspace 都不能选择或扩大它。生产 token 必须只授权所需 shared Space 与当前项目 Space。关闭 `PROJECT_SPACES_ENABLED` 表示明确采用 shared-only 模式，不适用于含项目私有知识的部署。
+`SIGNALFORGE_KNOWLEDGE_SPACES` 是所有工作区都可读的共享 Space。每次请求还会由服务端追加 `<PROJECT_SPACE_BASE_URL>/<url-encoded Project.id>`；模型、浏览器 body 和生成 workspace 都不能选择或扩大它。生产 token 必须只授权所需 shared Space 与当前项目 Space。关闭 `PROJECT_SPACES_ENABLED` 表示明确采用 shared-only 模式，不适用于含项目私有知识的部署。
 
 `dev-reader` 只允许非生产 development auth。生产配置会拒绝静态 bearer token，必须提供 HTTPS OAuth client-credentials token endpoint、client ID/secret、AKEP resource 和最小 scopes。
 
 ```dotenv
-QUANTPILOT_KNOWLEDGE_OAUTH_TOKEN_URL=https://identity.example/oauth2/token
-QUANTPILOT_KNOWLEDGE_OAUTH_CLIENT_ID=quantpilot
-QUANTPILOT_KNOWLEDGE_OAUTH_CLIENT_SECRET=inject-from-secret-manager
-QUANTPILOT_KNOWLEDGE_OAUTH_RESOURCE=https://knowledge.example/akep/0.1
-QUANTPILOT_KNOWLEDGE_OAUTH_SCOPE="akep:query akep:read akep:feedback"
+SIGNALFORGE_KNOWLEDGE_OAUTH_TOKEN_URL=https://identity.example/oauth2/token
+SIGNALFORGE_KNOWLEDGE_OAUTH_CLIENT_ID=signalforge
+SIGNALFORGE_KNOWLEDGE_OAUTH_CLIENT_SECRET=inject-from-secret-manager
+SIGNALFORGE_KNOWLEDGE_OAUTH_RESOURCE=https://knowledge.example/akep/0.1
+SIGNALFORGE_KNOWLEDGE_OAUTH_SCOPE="akep:query akep:read akep:feedback"
 ```
 
 当前 AKEP Core 是固定单 Tenant 进程模型。生产 token 的签名 Tenant claim 必须与该部署完全一致；请求参数不能自报 Tenant。普通 SignalForge workload 不获得 review、publish、incident 或 erase scope。
 
 ## 可用性语义
 
-- `QUANTPILOT_KNOWLEDGE_REQUIRED=0`：超时、401/403、契约不兼容或空结果显式降级，核心量化任务继续，不能伪造知识。
-- `QUANTPILOT_KNOWLEDGE_REQUIRED=1`：知识准备失败时任务在 Mission 创建前失败关闭。
+- `SIGNALFORGE_KNOWLEDGE_REQUIRED=0`：超时、401/403、契约不兼容或空结果显式降级，核心量化任务继续，不能伪造知识。
+- `SIGNALFORGE_KNOWLEDGE_REQUIRED=1`：知识准备失败时任务在 Mission 创建前失败关闭。
 - `offline` degradation mode：不访问 AKEP 和 ModelPort 等外部可选依赖。
 - 空 ContextPack 是合法结果；只说明当前授权 Space、purpose、词法检索和预算下没有匹配项。
 
@@ -100,7 +100,7 @@ Readiness 会分别展示 `knowledge` 与 `modelPort`，不能用顶层 `ok=true
 curl --fail http://localhost:33005/.well-known/akep
 curl --fail http://localhost:33005/health/ready
 curl --fail http://127.0.0.1:38082/livez
-npx vitest run src/lib/platform/knowledge src/lib/services/pi-agent-prompts.test.ts
+npm run test:unit -- src/lib/platform/knowledge src/lib/services/pi-agent-prompts.test.ts
 npm run check:service-catalog
 npm run type-check
 ```

@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from quantpilot_market_data.cache import RedisJsonCache
+from signalforge_market_data.cache import RedisJsonCache
 
 TEST_URL = os.getenv("MARKET_TEST_REDIS_URL", "")
 pytestmark = pytest.mark.skipif(not TEST_URL, reason="requires isolated MARKET_TEST_REDIS_URL")

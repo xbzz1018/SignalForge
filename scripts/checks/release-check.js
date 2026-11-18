@@ -12,8 +12,8 @@ const includeProduction = process.argv.includes('--production');
 const generateContractEvidence = process.argv.includes('--eval-contract');
 const includeE2eEvidence = process.argv.includes('--e2e-evidence');
 const evidenceModel = String(
-  process.env.QUANTPILOT_RELEASE_EVIDENCE_MODEL
-  || process.env.QUANTPILOT_EVAL_MODEL
+  process.env.SIGNALFORGE_RELEASE_EVIDENCE_MODEL
+  || process.env.SIGNALFORGE_EVAL_MODEL
   || 'local_qwen:qwen3.5-9b-q5km',
 ).trim();
 

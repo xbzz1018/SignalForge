@@ -28,7 +28,7 @@ import {
   mapDataQualityScan,
   mapIngestionJobControlResult,
 } from './strategy-mappers';
-import { assertMarketApiEnabled, fetchMarketApiJson, marketAdminHeaders } from './strategy-market-api';
+import { fetchMarketApiJson, marketAdminHeaders } from './strategy-market-api';
 import { FALLBACK_RESEARCH_STATE } from './strategy-research-defaults';
 
 export async function getStrategyUniverseMembersPage(
@@ -38,6 +38,7 @@ export async function getStrategyUniverseMembersPage(
     pageSize?: number;
     keyword?: string;
     timeoutMs?: number;
+    signal?: AbortSignal;
   } = {}
 ): Promise<StrategyUniverseMembersPage> {
   const universeId = params.universeId || SAMPLE_UNIVERSE_ID;
@@ -51,7 +52,7 @@ export async function getStrategyUniverseMembersPage(
   if (keyword) query.set('keyword', keyword);
   const payload = await fetchMarketApiJson<unknown>(
     `/api/v1/research/universes/${encodeURIComponent(universeId)}/members?${query.toString()}`,
-    { timeoutMs: params.timeoutMs }
+    { timeoutMs: params.timeoutMs, init: { signal: params.signal } }
   );
   return mapResearchUniverseMembersPage(payload, universeId, page, pageSize);
 }
@@ -99,7 +100,6 @@ export async function controlStrategyIngestionJob(params: {
   action: 'pause' | 'resume' | 'stop';
   reason?: string;
 }): Promise<StrategyIngestionJobControlResult> {
-  assertMarketApiEnabled();
   const jobId = params.jobId.trim();
   if (!jobId) throw new Error('缺少补数任务 ID');
   const responseData = await fetchMarketApiJson<unknown>(
@@ -111,7 +111,6 @@ export async function controlStrategyIngestionJob(params: {
         body: JSON.stringify({ action: params.action, reason: params.reason }),
         cache: 'no-store',
       },
-      errorBodyLimit: 200,
     }
   );
 
@@ -128,7 +127,6 @@ export async function runStrategyDataQualityScan(
     persist?: boolean;
   } = {}
 ): Promise<StrategyDataQualityScan> {
-  assertMarketApiEnabled();
   const responseData = await fetchMarketApiJson<unknown>(`/api/v1/foundation/data-quality/scan`, {
     init: {
       method: 'POST',
@@ -143,7 +141,6 @@ export async function runStrategyDataQualityScan(
       }),
       cache: 'no-store',
     },
-    errorBodyLimit: 200,
   });
 
   return mapDataQualityScan(responseData);
@@ -181,7 +178,6 @@ export async function ingestStrategyUniverseHistory(
     adjustment?: string;
   } = {}
 ): Promise<StrategyHistoryIngestionResult> {
-  assertMarketApiEnabled();
   const body = {
     universe_id: params.universeId || SAMPLE_UNIVERSE_ID,
     symbols: params.symbols?.length ? params.symbols : undefined,
@@ -197,7 +193,6 @@ export async function ingestStrategyUniverseHistory(
       body: JSON.stringify(body),
       cache: 'no-store',
     },
-    errorBodyLimit: 200,
   });
 
   return responseData;
@@ -217,7 +212,6 @@ export async function ingestStrategyUniverseHistoryBatch(
     includeValuationFactors?: boolean;
   } = {}
 ): Promise<StrategyHistoryIngestionResult> {
-  assertMarketApiEnabled();
   const body = {
     universe_id: params.universeId || SAMPLE_UNIVERSE_ID,
     offset: Math.max(0, params.offset ?? 0),
@@ -240,7 +234,6 @@ export async function ingestStrategyUniverseHistoryBatch(
         body: JSON.stringify(body),
         cache: 'no-store',
       },
-      errorBodyLimit: 200,
     }
   );
 
@@ -262,7 +255,6 @@ export async function startStrategyUniverseHistoryAutoFill(
     includeValuationFactors?: boolean;
   } = {}
 ): Promise<StrategyAutoFillIngestionStartResult> {
-  assertMarketApiEnabled();
   const body = {
     universe_id: params.universeId || SAMPLE_UNIVERSE_ID,
     offset: Math.max(0, params.offset ?? 0),
@@ -287,7 +279,6 @@ export async function startStrategyUniverseHistoryAutoFill(
         body: JSON.stringify(body),
         cache: 'no-store',
       },
-      errorBodyLimit: 200,
     }
   );
 
@@ -299,7 +290,6 @@ export async function addStrategyUniverseMember(params: {
   query: string;
   syncHistory?: boolean;
 }): Promise<StrategyUniverseMemberAddResult> {
-  assertMarketApiEnabled();
   const universeId = params.universeId || SAMPLE_UNIVERSE_ID;
   const responseData = await fetchMarketApiJson<unknown>(
     `/api/v1/research/universes/${encodeURIComponent(universeId)}/members`,
@@ -310,7 +300,6 @@ export async function addStrategyUniverseMember(params: {
         body: JSON.stringify({ query: params.query }),
         cache: 'no-store',
       },
-      errorBodyLimit: 200,
     }
   );
 
@@ -350,8 +339,8 @@ export async function getStrategySymbolBars(params: {
   provider?: string | null;
   limit?: number;
   includeMetadata?: boolean;
+    signal?: AbortSignal;
 }): Promise<StrategyLocalKlineResponse> {
-  assertMarketApiEnabled();
   const query = new URLSearchParams({
     timeframe: params.timeframe || 'daily',
     adjustment: params.adjustment || 'qfq',
@@ -361,7 +350,7 @@ export async function getStrategySymbolBars(params: {
   if (params.provider) query.set('provider', params.provider);
   const responseData = await fetchMarketApiJson<unknown>(
     `/api/v1/research/bars/${encodeURIComponent(params.symbol)}?${query.toString()}`,
-    { init: { cache: 'no-store' }, errorBodyLimit: 200 }
+    { timeoutMs: 12_000, init: { signal: params.signal } }
   );
 
   return mapLocalKlineResponse(responseData);
@@ -371,13 +360,11 @@ export async function getStrategySymbolDividends(params: {
   symbol: string;
   limit?: number;
 }): Promise<StrategyDividendEventsResponse> {
-  assertMarketApiEnabled();
   const query = new URLSearchParams({
     limit: String(params.limit ?? 20),
   });
   const responseData = await fetchMarketApiJson<unknown>(
     `/api/v1/events/dividends/${encodeURIComponent(params.symbol)}?${query.toString()}`,
-    { init: { cache: 'no-store' }, errorBodyLimit: 200 }
   );
 
   return mapDividendEventsResponse(responseData);

@@ -2,12 +2,12 @@ import fs from 'fs/promises';
 import path from 'path';
 import { type JsonRecord, asRecord } from './values';
 
-const MARKET_API_BASE_URL = process.env.QUANTPILOT_MARKET_API_URL ?? 'http://127.0.0.1:8000';
+const MARKET_API_BASE_URL = process.env.SIGNALFORGE_MARKET_API_URL ?? 'http://127.0.0.1:8000';
 
-const FETCH_TIMEOUT_MS = Number.parseInt(process.env.QUANTPILOT_MARKET_PREFETCH_TIMEOUT_MS ?? '', 10) || 12_000;
+const FETCH_TIMEOUT_MS = Number.parseInt(process.env.SIGNALFORGE_MARKET_PREFETCH_TIMEOUT_MS ?? '', 10) || 12_000;
 
 export const SCREENER_FETCH_TIMEOUT_MS =
-  Number.parseInt(process.env.QUANTPILOT_SCREENER_PREFETCH_TIMEOUT_MS ?? '', 10) || Math.max(FETCH_TIMEOUT_MS, 45_000);
+  Number.parseInt(process.env.SIGNALFORGE_SCREENER_PREFETCH_TIMEOUT_MS ?? '', 10) || Math.max(FETCH_TIMEOUT_MS, 45_000);
 
 export async function fetchJson(
   endpoint: string,

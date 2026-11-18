@@ -1,4 +1,4 @@
-# QuantPilot Prisma migration adoption
+# SignalForge Prisma migration adoption
 
 The migration history starts with the application schema at Git revision
 `c641c00`, followed by additive Agent runtime/evidence migrations, user and
@@ -24,7 +24,7 @@ The latest orchestration migrations are:
 - `20260723000400_worker_registry_and_observability`
 
 Do not use `prisma migrate reset`, `prisma db push --force-reset`, or execute the
-baseline SQL manually against a database that already contains QuantPilot data.
+baseline SQL manually against a database that already contains SignalForge data.
 Take a verified backup before adopting migration history on an existing
 database.
 
@@ -105,7 +105,7 @@ returns their quantities from `usage_buckets.reserved`; it does not delete the
 ## Existing pre-PI Agent database
 
 This path is only for a database already managed by the pre-PI Agent schema at
-revision `c641c00`, with the regular QuantPilot tables present and none of the
+revision `c641c00`, with the regular SignalForge tables present and none of the
 eight `agent_*` runtime or Mission tables present.
 
 First perform a read-only classification:

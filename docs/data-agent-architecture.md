@@ -64,14 +64,14 @@ flowchart LR
 
 `DataAgentProfile` 不是模型名称，而是一套可部署的 Agent 组合。它选择 Domain Pack、默认 capability、Delivery Pack，以及可选的 Memory/Knowledge policy。
 
-当前 `quantpilot.finance-research@1.0.0` 组合：
+当前 `signalforge.finance-research@1.0.0` 组合：
 
 ```text
 PI Agent 0.82.1 + SignalForge Governance
   + finance.quant
   + workspace.next-dashboard
-  + quantpilot.personalization（可选）
-  + quantpilot.governed-knowledge（可选）
+  + signalforge.personalization（可选）
+  + signalforge.governed-knowledge（可选）
 ```
 
 项目表的 `agent_profile_id`、`agent_profile_version` 和 `data_agent_composition_sha256` 是选择事实源，项目空间的 `.data-agent/workspace.json`、`profile.json` 是可审计运行投影；两者不能依赖进程内隐式默认值。`POST /api/projects` 只接受通用 `agentProfileId`、`capabilityId` 和 `capabilitySelectionSource`，未知 Profile/capability 在写目录和入库前失败关闭。
@@ -86,7 +86,7 @@ PI Agent 0.82.1 + SignalForge Governance
 
 HTTP 请求把规划、数据准备和 Mission 创建委托给 Domain 应用服务，完成后会先把 schema v3 `DataAgentGenerationEnvelope` 写入 PostgreSQL job/outbox，再向客户端返回已排队。信封包含不可变 composition lock、Consumer/Tenant/Project/Workspace/Request scope、跨平台 `integrationScopeSha256`、Provider-neutral 执行输入和本次已准备的 Memory/Knowledge 快照，不保存 API Key、Authorization、Cookie、Provider 私有 session 或 hidden reasoning。
 
-生产 generation worker 与本地 inline 调度都根据 `composition.profile.id` 从 `DataAgentGenerationRuntimeRegistry` 解析同一个 handler。Worker 执行前重新核对 envelope 自身哈希、项目 Profile 版本/组合哈希、job 的 Project/Request、canonical workspace 和当前 integration scope；任何漂移都失败关闭。当前 composition root 只注册 `quantpilot.finance-research` handler，但 Worker、dispatch、lease、heartbeat、attempt 和 fencing 都位于通用执行边界。新增业务必须注册自己的 Profile handler，不能在 Worker 脚本里增加行业判断分支。
+生产 generation worker 与本地 inline 调度都根据 `composition.profile.id` 从 `DataAgentGenerationRuntimeRegistry` 解析同一个 handler。Worker 执行前重新核对 envelope 自身哈希、项目 Profile 版本/组合哈希、job 的 Project/Request、canonical workspace 和当前 integration scope；任何漂移都失败关闭。当前 composition root 只注册 `signalforge.finance-research` handler，但 Worker、dispatch、lease、heartbeat、attempt 和 fencing 都位于通用执行边界。新增业务必须注册自己的 Profile handler，不能在 Worker 脚本里增加行业判断分支。
 
 ```text
 Web: Task -> Domain Plan -> Data Prefetch -> Mission -> durable job/outbox

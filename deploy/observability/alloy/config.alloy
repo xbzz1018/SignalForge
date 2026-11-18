@@ -3,13 +3,13 @@ logging {
   format = "logfmt"
 }
 
-discovery.docker "quantpilot" {
+discovery.docker "signalforge" {
   host             = "unix:///var/run/docker.sock"
   refresh_interval = "10s"
 }
 
-discovery.relabel "quantpilot_docker" {
-  targets = discovery.docker.quantpilot.targets
+discovery.relabel "signalforge_docker" {
+  targets = discovery.docker.signalforge.targets
 
   rule {
     source_labels = ["__meta_docker_container_name"]
@@ -33,21 +33,21 @@ discovery.relabel "quantpilot_docker" {
   }
 }
 
-loki.source.docker "quantpilot" {
+loki.source.docker "signalforge" {
   host             = "unix:///var/run/docker.sock"
-  targets          = discovery.docker.quantpilot.targets
-  relabel_rules    = discovery.relabel.quantpilot_docker.rules
+  targets          = discovery.docker.signalforge.targets
+  relabel_rules    = discovery.relabel.signalforge_docker.rules
   refresh_interval = "10s"
-  forward_to       = [loki.process.quantpilot.receiver]
+  forward_to       = [loki.process.signalforge.receiver]
 }
 
-loki.source.file "quantpilot_files" {
+loki.source.file "signalforge_files" {
   targets = [
-    {__path__ = "/var/log/quantpilot/tmp/runtime/*.log", job = "quantpilot-runtime", source = "file"},
-    {__path__ = "/var/log/quantpilot/tmp/quantpilot-eval-queue/logs/*.log", job = "quantpilot-eval", source = "file"},
-    {__path__ = "/var/log/quantpilot/.next/dev/logs/*.log", job = "quantpilot-next", source = "file"},
+    {__path__ = "/var/log/signalforge/tmp/runtime/*.log", job = "signalforge-runtime", source = "file"},
+    {__path__ = "/var/log/signalforge/tmp/signalforge-eval-queue/logs/*.log", job = "signalforge-eval", source = "file"},
+    {__path__ = "/var/log/signalforge/.next/dev/logs/*.log", job = "signalforge-next", source = "file"},
   ]
-  forward_to = [loki.process.quantpilot.receiver]
+  forward_to = [loki.process.signalforge.receiver]
 
   file_match {
     enabled     = true
@@ -55,10 +55,10 @@ loki.source.file "quantpilot_files" {
   }
 }
 
-loki.process "quantpilot" {
+loki.process "signalforge" {
   stage.static_labels {
     values = {
-      app = "quantpilot",
+      app = "signalforge",
       env = "local",
     }
   }

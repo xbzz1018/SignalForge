@@ -22,23 +22,23 @@ function envFlag(name, fallback) {
 
 function shouldRunMarketApi() {
   return (
-    process.env.QUANTPILOT_DEGRADATION_MODE?.trim().toLowerCase() !== 'offline' &&
-    envFlag('QUANTPILOT_MARKET_API_ENABLED', true)
+    process.env.SIGNALFORGE_DEGRADATION_MODE?.trim().toLowerCase() !== 'offline' &&
+    envFlag('SIGNALFORGE_MARKET_API_ENABLED', true)
   );
 }
 
 function shouldRunGenerationWorker() {
   return (
     process.env.PI_AGENT_DISPATCH_MODE?.trim().toLowerCase() === 'worker' &&
-    envFlag('QUANTPILOT_DEV_MANAGE_GENERATION_WORKER', true)
+    envFlag('SIGNALFORGE_DEV_MANAGE_GENERATION_WORKER', true)
   );
 }
 
 function marketApiUrl() {
   return (
-    process.env.QUANTPILOT_MARKET_API_URL ||
-    process.env.QUANTPILOT_MARKET_API_BASE_URL ||
-    `http://127.0.0.1:${process.env.QUANTPILOT_MARKET_PORT || '8000'}`
+    process.env.SIGNALFORGE_MARKET_API_URL ||
+    process.env.SIGNALFORGE_MARKET_API_BASE_URL ||
+    `http://127.0.0.1:${process.env.SIGNALFORGE_MARKET_PORT || '8000'}`
   ).replace(/\/$/, '');
 }
 
@@ -87,7 +87,7 @@ async function startMarketApiIfNeeded() {
 
   const url = marketApiUrl();
   if (await probeHealth(url)) {
-    process.env.QUANTPILOT_MARKET_API_ENABLED = '1';
+    process.env.SIGNALFORGE_MARKET_API_ENABLED = '1';
     console.log(`✅ Market API already healthy at ${url}`);
     return { child: null, managed: false };
   }
@@ -102,7 +102,7 @@ async function startMarketApiIfNeeded() {
   console.log(`🚀 Starting market-data service on ${url}`);
   const child = spawn(
     'uv',
-    ['run', '--extra', 'baostock', '--extra', 'akshare', 'quantpilot-market-api'],
+    ['run', '--extra', 'baostock', '--extra', 'akshare', 'signalforge-market-api'],
     {
       cwd: marketDataDir,
       stdio: 'inherit',
@@ -112,8 +112,8 @@ async function startMarketApiIfNeeded() {
         ...process.env,
         NO_PROXY: noProxy,
         no_proxy: noProxy,
-        QUANTPILOT_MARKET_HOST: host,
-        QUANTPILOT_MARKET_PORT: port,
+        SIGNALFORGE_MARKET_HOST: host,
+        SIGNALFORGE_MARKET_PORT: port,
       },
     }
   );
@@ -124,7 +124,7 @@ async function startMarketApiIfNeeded() {
 
   for (let attempt = 1; attempt <= 40; attempt += 1) {
     if (await probeHealth(url)) {
-      process.env.QUANTPILOT_MARKET_API_ENABLED = '1';
+      process.env.SIGNALFORGE_MARKET_API_ENABLED = '1';
       console.log(`✅ Market API ready at ${url}`);
       return { child, managed: true };
     }

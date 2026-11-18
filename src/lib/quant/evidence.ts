@@ -218,7 +218,7 @@ function buildDatasets(data: JsonRecord, runPlan: JsonRecord | null): DatasetEvi
           as_of: tradeDate,
         },
         rowCount: screener.candidates.length,
-        source: pickString(screener.source, data.source, 'quantpilot-market-api') ?? 'quantpilot-market-api',
+        source: pickString(screener.source, data.source, 'signalforge-market-api') ?? 'signalforge-market-api',
         endpoint: `GET /api/v1/research/screeners/a-share/short-term-candidates?mode=${mode}`,
         critical: false,
         generatedAt: fetchedAt,
@@ -553,7 +553,7 @@ export async function ensureBaselineEvidenceFiles(
   const sourcesEvidence = {
     schemaVersion: 1,
     runId,
-    generated_by: 'quantpilot-platform',
+    generated_by: 'signalforge-platform',
     created_at: now,
     symbol,
     name,
@@ -574,7 +574,7 @@ export async function ensureBaselineEvidenceFiles(
   const dataQualityEvidence = {
     schemaVersion: 1,
     runId,
-    generated_by: 'quantpilot-platform',
+    generated_by: 'signalforge-platform',
     created_at: now,
     status,
     symbol,

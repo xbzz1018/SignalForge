@@ -36,7 +36,7 @@ function envFlag(name: string, fallback: boolean): boolean {
 }
 
 export function getRuntimeDegradationConfig(): RuntimeDegradationConfig {
-  const mode = normalizeMode(process.env.QUANTPILOT_DEGRADATION_MODE);
+  const mode = normalizeMode(process.env.SIGNALFORGE_DEGRADATION_MODE);
   const offline = mode === 'offline';
   const strict = mode === 'strict';
 
@@ -44,35 +44,35 @@ export function getRuntimeDegradationConfig(): RuntimeDegradationConfig {
     mode,
     components: {
       database: {
-        enabled: offline ? false : envFlag('QUANTPILOT_DATABASE_ENABLED', true),
-        required: offline ? false : envFlag('QUANTPILOT_DATABASE_REQUIRED', true),
+        enabled: offline ? false : envFlag('SIGNALFORGE_DATABASE_ENABLED', true),
+        required: offline ? false : envFlag('SIGNALFORGE_DATABASE_REQUIRED', true),
       },
       knowledge: {
         enabled: offline ? false : envFlag(
-          'QUANTPILOT_KNOWLEDGE_ENABLED',
+          'SIGNALFORGE_KNOWLEDGE_ENABLED',
           process.env.NODE_ENV !== 'test',
         ),
-        required: !offline && envFlag('QUANTPILOT_KNOWLEDGE_REQUIRED', false),
+        required: !offline && envFlag('SIGNALFORGE_KNOWLEDGE_REQUIRED', false),
       },
       marketApi: {
-        enabled: offline ? false : envFlag('QUANTPILOT_MARKET_API_ENABLED', true),
-        required: !offline && envFlag('QUANTPILOT_MARKET_API_REQUIRED', strict),
+        enabled: offline ? false : envFlag('SIGNALFORGE_MARKET_API_ENABLED', true),
+        required: !offline && envFlag('SIGNALFORGE_MARKET_API_REQUIRED', strict),
       },
       memory: {
-        enabled: offline ? false : envFlag('QUANTPILOT_MEMORY_ENABLED', process.env.NODE_ENV !== 'test'),
-        required: !offline && envFlag('QUANTPILOT_MEMORY_REQUIRED', false),
+        enabled: offline ? false : envFlag('SIGNALFORGE_MEMORY_ENABLED', process.env.NODE_ENV !== 'test'),
+        required: !offline && envFlag('SIGNALFORGE_MEMORY_REQUIRED', false),
       },
       modelPort: {
-        enabled: offline ? false : envFlag('QUANTPILOT_MODELPORT_ENABLED', true),
-        required: !offline && envFlag('QUANTPILOT_MODELPORT_REQUIRED', strict),
+        enabled: offline ? false : envFlag('SIGNALFORGE_MODELPORT_ENABLED', true),
+        required: !offline && envFlag('SIGNALFORGE_MODELPORT_REQUIRED', strict),
       },
       observability: {
-        enabled: offline ? false : envFlag('QUANTPILOT_OBSERVABILITY_ENABLED', true),
-        required: !offline && envFlag('QUANTPILOT_OBSERVABILITY_REQUIRED', strict),
+        enabled: offline ? false : envFlag('SIGNALFORGE_OBSERVABILITY_ENABLED', true),
+        required: !offline && envFlag('SIGNALFORGE_OBSERVABILITY_REQUIRED', strict),
       },
       redis: {
-        enabled: offline ? false : envFlag('QUANTPILOT_REDIS_CACHE_ENABLED', true),
-        required: !offline && envFlag('QUANTPILOT_REDIS_REQUIRED', strict),
+        enabled: offline ? false : envFlag('SIGNALFORGE_REDIS_CACHE_ENABLED', true),
+        required: !offline && envFlag('SIGNALFORGE_REDIS_REQUIRED', strict),
       },
     },
   };

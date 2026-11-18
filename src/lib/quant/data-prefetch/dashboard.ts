@@ -354,7 +354,7 @@ export async function writeEmptyScreenerResult(params: {
     requested_symbols: [],
     quotes: [],
     fetched_at: now,
-    source: 'quantpilot-market-api',
+    source: 'signalforge-market-api',
   });
   params.rawFiles.push(path.relative(params.projectPath, batchPath).replaceAll(path.sep, '/'));
 
@@ -377,7 +377,7 @@ export async function writeEmptyScreenerResult(params: {
     symbol: 'A_SHARE_UNIVERSE',
     name: 'A 股短线候选池',
     asset_type: 'stock_selection',
-    source: String(params.screener.source ?? 'quantpilot-market-api'),
+    source: String(params.screener.source ?? 'signalforge-market-api'),
     as_of: params.screener.trade_date ?? params.screener.fetched_at ?? now,
     requestedSymbols: [],
     symbols: [],

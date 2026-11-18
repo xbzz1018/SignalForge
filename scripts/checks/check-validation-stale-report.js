@@ -21,7 +21,7 @@ async function writeJson(filePath, value) {
 }
 
 async function main() {
-  const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'quantpilot-stale-validation-'));
+  const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-stale-validation-'));
   try {
     await writeJson(path.join(projectPath, '.data-agent/validation.json'), {
       schemaVersion: 1,

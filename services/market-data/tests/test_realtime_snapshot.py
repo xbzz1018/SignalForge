@@ -5,8 +5,8 @@ from decimal import Decimal
 
 import pytest
 
-from quantpilot_market_data.contracts.quotes import RealtimeQuote
-from quantpilot_market_data.repositories.upserts import validate_realtime_snapshot
+from signalforge_market_data.contracts.quotes import RealtimeQuote
+from signalforge_market_data.repositories.upserts import validate_realtime_snapshot
 
 
 def quote(*, source: str = "eastmoney") -> RealtimeQuote:

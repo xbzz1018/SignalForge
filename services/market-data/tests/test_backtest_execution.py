@@ -5,10 +5,10 @@ from decimal import Decimal
 
 import pytest
 
-from quantpilot_market_data.backtest import build_ma_crossover_backtest
-from quantpilot_market_data.backtest_accounting import reconcile_backtest
-from quantpilot_market_data.contracts.quotes import KlineResponse
-from quantpilot_market_data.replay_backtest import replay_backtest
+from signalforge_market_data.backtest import build_ma_crossover_backtest
+from signalforge_market_data.backtest_accounting import reconcile_backtest
+from signalforge_market_data.contracts.quotes import KlineResponse
+from signalforge_market_data.replay_backtest import replay_backtest
 
 
 def history(closes=None, opens=None):

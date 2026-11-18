@@ -9,12 +9,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from quantpilot_market_data import backtest_experiments
-from quantpilot_market_data.cache import MarketDataCache
-from quantpilot_market_data.contracts.quotes import KlineResponse
-from quantpilot_market_data.replay_backtest import replay_backtest
-from quantpilot_market_data.routers.backtests import create_backtest_router
-from quantpilot_market_data.services import backtests
+from signalforge_market_data import backtest_experiments
+from signalforge_market_data.cache import MarketDataCache
+from signalforge_market_data.contracts.quotes import KlineResponse
+from signalforge_market_data.replay_backtest import replay_backtest
+from signalforge_market_data.routers.backtests import create_backtest_router
+from signalforge_market_data.services import backtests
 
 
 @pytest.mark.parametrize(("fast", "slow"), [(1, 60), (121, 250), (20, 2), (20, 251), (20, 20)])
@@ -66,18 +66,17 @@ def test_routes_preserve_replayable_responses_across_cache_and_engine_changes(
         )
     )
     with TestClient(app) as client:
-        for endpoint in ["ma-crossover/fixture", "strategies/ma_crossover/fixture"]:
-            url = (f"/api/v1/backtests/{endpoint}?fast_window=3&slow_window=7"
-                   "&fee_bps=5.123456&limit=24&adjustment=none")
-            first = client.get(url)
-            assert first.status_code == 200
-            assert first.json()["fetch"]["cache_status"] == "miss"
-            replay_backtest(first.json())
-            second = client.get(url)
-            assert second.json()["fetch"]["cache_status"] == "hit"
-            assert second.json()["experiment"] == first.json()["experiment"]
-            replay_backtest(second.json())
-        assert len(calls) == 2
+        query = "?fast_window=3&slow_window=7&fee_bps=5.123456&limit=24&adjustment=none"
+        first = client.get(f"/api/v1/backtests/ma-crossover/fixture{query}")
+        url = f"/api/v1/backtests/strategies/ma_crossover/fixture{query}"
+        second = client.get(url)
+        assert first.status_code == second.status_code == 200
+        assert first.json()["fetch"]["cache_status"] == "miss"
+        assert second.json()["fetch"]["cache_status"] == "hit"
+        assert first.json()["experiment"] == second.json()["experiment"]
+        replay_backtest(first.json())
+        replay_backtest(second.json())
+        assert len(calls) == 1
 
         # Corrupt one replaceable cache entry; the service must produce a fresh receipt.
         cached_path = tmp_path / f"{second.json()['fetch']['cache_key']}.json"
@@ -87,12 +86,12 @@ def test_routes_preserve_replayable_responses_across_cache_and_engine_changes(
         repaired = client.get(url)
         assert repaired.json()["fetch"]["cache_status"] == "miss"
         replay_backtest(repaired.json())
-        assert len(calls) == 3
+        assert len(calls) == 2
 
         monkeypatch.setattr(backtest_experiments, "_CODE_SHA256", "sha256:" + "0" * 64)
         changed = client.get(url)
         assert changed.json()["fetch"]["cache_status"] == "miss"
-        assert len(calls) == 4
+        assert len(calls) == 3
         with pytest.raises(ValueError, match="engine or runtime changed"):
             replay_backtest(second.json())
 

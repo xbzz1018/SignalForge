@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '../..');
 const project = path.join(root, 'services/market-data');
 const pythonVersion = fs.readFileSync(path.join(project, '.python-version'), 'utf8').trim();
-const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'quantpilot-market-audit-'));
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'signalforge-market-audit-'));
 const requirements = path.join(directory, 'requirements.txt');
 
 function run(args) {

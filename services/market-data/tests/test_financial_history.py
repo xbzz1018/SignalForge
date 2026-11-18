@@ -9,18 +9,18 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from quantpilot_market_data import database_core
-from quantpilot_market_data.cache import MarketDataCache
-from quantpilot_market_data.contracts.fundamentals import (
+from signalforge_market_data import database_core
+from signalforge_market_data.cache import MarketDataCache
+from signalforge_market_data.contracts.fundamentals import (
     FinancialKnowledgeSnapshot,
     FinancialReportItem,
     FinancialReportsResponse,
 )
-from quantpilot_market_data.database_core import DatabaseError
-from quantpilot_market_data.providers.eastmoney import parse_financial_reports_payload
-from quantpilot_market_data.repositories import financial_history
-from quantpilot_market_data.routers.fundamentals import create_fundamentals_router
-from quantpilot_market_data.services import fundamentals
+from signalforge_market_data.database_core import DatabaseError
+from signalforge_market_data.providers.eastmoney import parse_financial_reports_payload
+from signalforge_market_data.repositories import financial_history
+from signalforge_market_data.routers.fundamentals import create_fundamentals_router
+from signalforge_market_data.services import fundamentals
 
 
 class Provider:
@@ -128,7 +128,7 @@ def test_history_routes_reject_ambiguous_or_future_cutoffs_and_require_capture_a
         return connection()
 
     monkeypatch.setattr(financial_history, "connect", connect)
-    monkeypatch.setenv("QUANTPILOT_MARKET_ADMIN_TOKEN", "pit-contract-admin-token")
+    monkeypatch.setenv("SIGNALFORGE_MARKET_ADMIN_TOKEN", "pit-contract-admin-token")
     provider = Provider()
     app = FastAPI()
     app.include_router(

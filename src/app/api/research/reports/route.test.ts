@@ -74,7 +74,7 @@ describe('/api/research/reports authorization', () => {
   });
 
   it.each([null, [], 'invalid', 1])('rejects non-object bodies before running a report: %j', async (body) => {
-    vi.stubEnv('QUANTPILOT_AUTH_MODE', 'local');
+    vi.stubEnv('SIGNALFORGE_AUTH_MODE', 'local');
     const response = await POST(request(body));
     expect(response.status).toBe(400);
     expect(mocks.runReport).not.toHaveBeenCalled();
@@ -92,7 +92,7 @@ describe('/api/research/reports authorization', () => {
     { dryRun: 'false' },
     { confirmed: 1 },
   ])('rejects invalid report fields before any operation: %j', async (body) => {
-    vi.stubEnv('QUANTPILOT_AUTH_MODE', 'local');
+    vi.stubEnv('SIGNALFORGE_AUTH_MODE', 'local');
     const response = await POST(request(body));
     expect(response.status).toBe(400);
     expect(mocks.runReport).not.toHaveBeenCalled();
@@ -102,7 +102,7 @@ describe('/api/research/reports authorization', () => {
   });
 
   it('does not turn malformed JSON into a default report run', async () => {
-    vi.stubEnv('QUANTPILOT_AUTH_MODE', 'local');
+    vi.stubEnv('SIGNALFORGE_AUTH_MODE', 'local');
     const response = await POST(new NextRequest('http://localhost/api/research/reports', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{',
     }));
@@ -112,7 +112,7 @@ describe('/api/research/reports authorization', () => {
   });
 
   it('short-circuits database-backed reads and writes in offline mode', async () => {
-    vi.stubEnv('QUANTPILOT_DATABASE_ENABLED', '0');
+    vi.stubEnv('SIGNALFORGE_DATABASE_ENABLED', '0');
 
     const dashboard = await GET(request());
     const report = await POST(request({ action: 'run-daily-report', dryRun: true }));
