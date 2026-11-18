@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from signalforge_market_data.clickhouse import get_clickhouse_health, initialize_clickhouse
-from signalforge_market_data.contracts.analytics import ClickHouseSyncRequest, ClickHouseSyncResponse
+from signalforge_market_data.contracts.analytics import (
+    ClickHouseSyncRequest,
+    ClickHouseSyncResponse,
+)
 from signalforge_market_data.contracts.foundation import ClickHouseHealthResponse
 from signalforge_market_data.repositories.analytics import sync_clickhouse_daily_bars
 

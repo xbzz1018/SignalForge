@@ -11,6 +11,7 @@ import psycopg
 import pytest
 from psycopg.types.json import Jsonb
 
+from signalforge_market_data.cli import selector_event_loop_factory
 from signalforge_market_data.contracts.fundamentals import FinancialReportItem
 from signalforge_market_data.database_core import DatabaseError
 from signalforge_market_data.repositories import financial_history as history
@@ -110,7 +111,7 @@ def test_revisions_are_frozen_deduplicated_and_preserve_reversions() -> None:
         assert too_early.knowledge.point_in_time is True
         assert too_early.data_quality.status == "warning"
 
-    asyncio.run(scenario())
+    asyncio.run(scenario(), loop_factory=selector_event_loop_factory)
 
 
 @pytest.mark.parametrize("clock_offset", [-3600, 3600])
@@ -138,7 +139,7 @@ def test_snapshot_cutoffs_use_database_clock_despite_worker_skew(monkeypatch, cl
                 cutoff=database_now() + timedelta(minutes=5), limit=8,
             )
 
-    asyncio.run(scenario())
+    asyncio.run(scenario(), loop_factory=selector_event_loop_factory)
 
 
 def test_missing_notice_future_notice_and_future_period_are_excluded() -> None:
@@ -164,7 +165,7 @@ def test_missing_notice_future_notice_and_future_period_are_excluded() -> None:
             )
             assert result.reports == []
 
-    asyncio.run(scenario())
+    asyncio.run(scenario(), loop_factory=selector_event_loop_factory)
 
 
 def test_concurrent_capture_is_idempotent_and_immutable_in_postgres() -> None:
@@ -197,7 +198,7 @@ def test_concurrent_capture_is_idempotent_and_immutable_in_postgres() -> None:
             ):
                 connection.execute(statement, params)
 
-    asyncio.run(scenario())
+    asyncio.run(scenario(), loop_factory=selector_event_loop_factory)
 
 
 def test_corrupted_content_stops_reading_instead_of_returning_unverified_data() -> None:
@@ -220,4 +221,4 @@ def test_corrupted_content_stops_reading_instead_of_returning_unverified_data() 
                 limit=8,
             )
 
-    asyncio.run(scenario())
+    asyncio.run(scenario(), loop_factory=selector_event_loop_factory)

@@ -3,7 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from signalforge_market_data.clickhouse import ClickHouseError
-from signalforge_market_data.contracts.analytics import ClickHouseSyncRequest, ClickHouseSyncResponse
+from signalforge_market_data.contracts.analytics import (
+    ClickHouseSyncRequest,
+    ClickHouseSyncResponse,
+)
 from signalforge_market_data.contracts.foundation import ClickHouseHealthResponse
 from signalforge_market_data.database_core import DatabaseError
 from signalforge_market_data.security import require_market_admin

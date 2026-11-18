@@ -10,7 +10,12 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from signalforge_market_data.contracts.foundation import TradingCalendarDay
-from signalforge_market_data.contracts.quotes import Adjustment, KlineBar, KlinePeriod, KlineResponse
+from signalforge_market_data.contracts.quotes import (
+    Adjustment,
+    KlineBar,
+    KlinePeriod,
+    KlineResponse,
+)
 from signalforge_market_data.providers.base import ProviderCapability
 from signalforge_market_data.providers.eastmoney import (
     infer_asset_type,
