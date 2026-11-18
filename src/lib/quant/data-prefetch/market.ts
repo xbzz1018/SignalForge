@@ -142,13 +142,23 @@ export async function fetchSymbolDataset(params: {
   projectPath: string;
   runId: string;
   symbol: string;
+  marketIdentifier?: string;
   plan: QuantRunPlan;
   rawFiles: string[];
   warnings: string[];
 }): Promise<JsonRecord> {
   const symbolRawDir = path.join(params.projectPath, 'data_file', 'raw', params.runId, params.symbol);
   const historyLimit = inferHistoryLimit(params.plan);
-  const quote = await fetchJson(`/api/v1/quotes/realtime/${params.symbol}`);
+  const identifier = params.marketIdentifier ?? params.symbol;
+  const marketPath = encodeURIComponent(identifier);
+  function verifyIdentity(result: JsonRecord) {
+    if (identifier !== params.symbol && result.secid !== identifier) {
+      throw new Error(`行情标识与研究请求不一致：${identifier}`);
+    }
+  }
+
+  const quote = await fetchJson(`/api/v1/quotes/realtime/${marketPath}`);
+  verifyIdentity(quote);
   const assetType = typeof quote.asset_type === 'string' ? quote.asset_type : 'stock';
   const quotePath = path.join(symbolRawDir, 'quote.json');
   await writeJson(quotePath, quote);
@@ -163,7 +173,9 @@ export async function fetchSymbolDataset(params: {
 
   if (params.plan.dataRequirements.some((endpoint) => endpoint.includes('/quotes/history/'))) {
     try {
-      kline = await fetchJson(`/api/v1/quotes/history/${params.symbol}?period=daily&adjustment=qfq&limit=${historyLimit}`);
+      const data = await fetchJson(`/api/v1/quotes/history/${marketPath}?period=daily&adjustment=qfq&limit=${historyLimit}`);
+      verifyIdentity(data);
+      kline = data;
       const filePath = path.join(symbolRawDir, 'kline-daily-qfq.json');
       await writeJson(filePath, kline);
       params.rawFiles.push(path.relative(params.projectPath, filePath).replaceAll(path.sep, '/'));
@@ -178,9 +190,11 @@ export async function fetchSymbolDataset(params: {
     params.plan.requestedCapabilityId === 'asset_comparison'
   ) {
     try {
-      technicalIndicators = await fetchJson(
-        `/api/v1/indicators/technical/${params.symbol}?period=daily&adjustment=qfq&limit=${historyLimit}`
+      const data = await fetchJson(
+        `/api/v1/indicators/technical/${marketPath}?period=daily&adjustment=qfq&limit=${historyLimit}`
       );
+      verifyIdentity(data);
+      technicalIndicators = data;
       const filePath = path.join(symbolRawDir, 'technical-indicators.json');
       await writeJson(filePath, technicalIndicators);
       params.rawFiles.push(path.relative(params.projectPath, filePath).replaceAll(path.sep, '/'));
@@ -198,8 +212,9 @@ export async function fetchSymbolDataset(params: {
         now: params.plan.createdAt ? new Date(params.plan.createdAt) : undefined,
       });
       backtest = await fetchJson(
-        `/api/v1/backtests/ma-crossover/${params.symbol}?${backtestRequestQuery(spec)}`
+        `/api/v1/backtests/ma-crossover/${marketPath}?${backtestRequestQuery(spec)}`
       );
+      verifyIdentity(backtest);
       const mismatches = backtestResponseMismatches(spec, backtest);
       if (mismatches.length) throw new Error(`回测执行参数或样本与研究请求不一致：${mismatches.join('、')}`);
       const experiment = asRecord(backtest.experiment);

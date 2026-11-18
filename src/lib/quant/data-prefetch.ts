@@ -102,6 +102,18 @@ export async function prefetchQuantDataForRunPlan(params: {
     };
   }
 
+  const marketIdentifiers = new Map<string, string>();
+  for (const target of params.plan.inheritedMarketTargets ?? params.plan.queryRewrite?.resolvedSymbols ?? []) {
+    if (!symbols.includes(target.symbol)) continue;
+    const identifier = target.secid && /^\d+\.\d{6}$/.test(target.secid) &&
+      target.secid.endsWith(`.${target.symbol}`) ? target.secid : target.symbol;
+    const existing = marketIdentifiers.get(target.symbol);
+    if (existing && existing !== identifier) {
+      throw new Error(`标的 ${target.symbol} 在多个市场同号，请分别发起研究任务。`);
+    }
+    marketIdentifiers.set(target.symbol, identifier);
+  }
+
   await syncRunPlanSymbols({
     projectPath: params.projectPath,
     plan: params.plan,
@@ -121,21 +133,12 @@ export async function prefetchQuantDataForRunPlan(params: {
     summary: `平台开始预取 ${symbols.join('、')} 的真实行情数据。`,
   });
 
-  const quoteMap = new Map<string, JsonRecord>();
   if (symbols.length > 1) {
     try {
       const batchQuotes = await fetchJson('/api/v1/quotes/realtime', {
         method: 'POST',
-        body: JSON.stringify({ symbols }),
+        body: JSON.stringify({ symbols: symbols.map((symbol) => marketIdentifiers.get(symbol) ?? symbol) }),
       });
-      const quoteRows = Array.isArray(batchQuotes.quotes) ? batchQuotes.quotes : [];
-      for (const row of quoteRows) {
-        const record = asRecord(row);
-        const symbol = typeof record?.symbol === 'string' ? record.symbol : null;
-        if (symbol && record) {
-          quoteMap.set(symbol, record);
-        }
-      }
       const batchPath = path.join(params.projectPath, 'data_file', 'raw', runId, 'batch-quotes.json');
       await writeJson(batchPath, batchQuotes);
       rawFiles.push(path.relative(params.projectPath, batchPath).replaceAll(path.sep, '/'));
@@ -151,13 +154,11 @@ export async function prefetchQuantDataForRunPlan(params: {
         projectPath: params.projectPath,
         runId,
         symbol,
+        marketIdentifier: marketIdentifiers.get(symbol),
         plan: params.plan,
         rawFiles,
         warnings,
       });
-      if (quoteMap.has(symbol)) {
-        asset.quote = quoteMap.get(symbol);
-      }
       if (
         asRecord(asset.technicalIndicators) ||
         extractBarsFromAsset(asset).length > 0

@@ -6,6 +6,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from quantpilot_market_data.contracts.quotes import (
+    KlineResponse,
     LocalKlineBar,
     LocalKlineResponse,
     LocalKlineSummary,
@@ -19,6 +20,43 @@ class NeverCalledProvider:
 
     async def get_kline(self, *args, **kwargs):
         raise AssertionError("provider must not be called when local coverage is ready")
+
+
+def test_same_code_in_wrong_market_falls_back_to_provider(monkeypatch) -> None:
+    timestamp = datetime(2025, 12, 31, tzinfo=UTC)
+
+    async def resolve(_symbol):
+        return "000001.SZ"
+
+    async def read(**_kwargs):
+        return LocalKlineResponse(
+            symbol="000001.SZ", code="000001", exchange="SZ", secid="0.000001",
+            timeframe="daily", adjustment="qfq",
+            bars=[LocalKlineBar(
+                ts=timestamp, open=Decimal(10), high=Decimal(10),
+                low=Decimal(10), close=Decimal(10), volume=Decimal(100), provider="baostock",
+            )],
+            summary=LocalKlineSummary(row_count=1, first_ts=timestamp, last_ts=timestamp),
+        ), None
+
+    class IndexProvider:
+        id = "test"
+
+        async def get_kline(self, symbol, **_kwargs):
+            assert symbol == "000001.SH"
+            return KlineResponse(
+                symbol="000001", secid="1.000001", source="test", period="daily", adjustment="qfq",
+                bars=[{"date": "2025-12-31", "open": "100", "close": "100"}],
+                fetched_at=timestamp,
+            )
+
+    monkeypatch.setattr(kline_gateway, "resolve_local_symbol", resolve)
+    monkeypatch.setattr(kline_gateway, "_read_local_and_benchmark", read)
+    result = asyncio.run(kline_gateway.get_kline_local_first(
+        IndexProvider(), symbol="000001.SH", period="daily", adjustment="qfq",
+        limit=1, end="20260101",
+    ))
+    assert result.secid == "1.000001"
 
 
 def test_expected_trade_date_respects_close_and_weekend() -> None:

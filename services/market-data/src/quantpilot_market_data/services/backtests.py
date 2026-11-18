@@ -1,14 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from quantpilot_market_data.backtest import (
-    build_ma_crossover_backtest,
-    build_strategy_backtest,
-    canonical_strategy_id,
-)
+from quantpilot_market_data.backtest import build_strategy_backtest, canonical_strategy_id
 from quantpilot_market_data.backtest_experiments import current_engine_identity, verify_experiment
 from quantpilot_market_data.backtest_parameters import (
     backtest_date,
@@ -138,85 +135,22 @@ async def get_ma_crossover_backtest(
     start: str | None = None,
     slippage_bps: Decimal = Decimal("0"),
 ) -> BacktestResponse:
-    slippage_bps = _slippage(slippage_bps)
-    parameters = normalize_strategy_parameters(
-        "ma_crossover",
-        {"fast_window": fast_window, "slow_window": slow_window},
-        fee_bps,
-    )
-    normalized_fast, normalized_slow = parameters["fast_window"], parameters["slow_window"]
-    normalized_limit, start_date, end_date = _history_request(
-        limit=limit,
-        start=start,
-        end=end,
-        period=period,
-        parameters=parameters,
-        initial_cash=initial_cash,
-    )
-    local = await get_local_kline_if_ready(
-        symbol=symbol,
-        period=period,
-        adjustment=adjustment,
-        limit=normalized_limit,
-        end=(end_date or "2050-01-01").replace("-", ""),
-    )
-    if local is not None:
-        _check_identity(local, symbol, period, adjustment, end_date)
-        local = _check_coverage(local, start_date, parameters, limit)
-        return build_ma_crossover_backtest(
-            local,
-            fast_window=normalized_fast,
-            slow_window=normalized_slow,
-            initial_cash=initial_cash,
-            fee_bps=fee_bps,
-            slippage_bps=slippage_bps,
-            start=start_date,
-            end=end_date,
-        )
-    cache_key = cache.build_key(
-        "backtest-ma-crossover",
-        {
-            "history_contract": 2,
-            "engine": current_engine_identity().model_dump(mode="json"),
-            "symbol": symbol,
-            "fast_window": normalized_fast,
-            "slow_window": normalized_slow,
-            "period": period,
-            "adjustment": adjustment,
-            "limit": normalized_limit,
-            "end": end,
-            "start": start_date,
-            "initial_cash": str(initial_cash),
-            "fee_bps": str(fee_bps),
-            "slippage_bps": str(slippage_bps),
-        },
-    )
-    cached = _read_cached_backtest(cache, cache_key)
-    if cached is not None:
-        return cached
-
-    kline = await get_kline_local_first(
+    return await get_strategy_backtest(
         client,
+        cache,
+        strategy_id="ma_crossover",
         symbol=symbol,
+        parameters={"fast_window": fast_window, "slow_window": slow_window},
         period=period,
         adjustment=adjustment,
-        limit=normalized_limit,
-        end=(end_date or "2050-01-01").replace("-", ""),
-        bypass_local=True,
-    )
-    _check_identity(kline, symbol, period, adjustment, end_date)
-    kline = _check_coverage(kline, start_date, parameters, limit)
-    response = build_ma_crossover_backtest(
-        kline,
-        fast_window=normalized_fast,
-        slow_window=normalized_slow,
+        limit=limit,
+        end=end,
         initial_cash=initial_cash,
         fee_bps=fee_bps,
+        ttl_seconds=ttl_seconds,
         slippage_bps=slippage_bps,
-        start=start_date,
-        end=end_date,
+        start=start,
     )
-    return cache_response(cache, cache_key, ttl_seconds, response, BacktestResponse)
 
 
 async def get_strategy_backtest(
@@ -225,7 +159,7 @@ async def get_strategy_backtest(
     *,
     strategy_id: str,
     symbol: str,
-    parameters: dict[str, str],
+    parameters: Mapping[str, str | int],
     period: KlinePeriod,
     adjustment: Adjustment,
     limit: int,
@@ -238,43 +172,48 @@ async def get_strategy_backtest(
 ) -> BacktestResponse:
     slippage_bps = _slippage(slippage_bps)
     strategy_id = canonical_strategy_id(strategy_id)
-    parameters = normalize_strategy_parameters(strategy_id, parameters, fee_bps)
+    normalized_parameters = normalize_strategy_parameters(strategy_id, dict(parameters), fee_bps)
     normalized_limit, start_date, end_date = _history_request(
         limit=limit,
         start=start,
         end=end,
         period=period,
-        parameters=parameters,
+        parameters=normalized_parameters,
         initial_cash=initial_cash,
     )
-    local = await get_local_kline_if_ready(
-        symbol=symbol,
-        period=period,
-        adjustment=adjustment,
-        limit=normalized_limit,
-        end=(end_date or "2050-01-01").replace("-", ""),
-    )
-    if local is not None:
-        _check_identity(local, symbol, period, adjustment, end_date)
-        local = _check_coverage(local, start_date, parameters, limit)
+    history_end = (end_date or "2050-01-01").replace("-", "")
+
+    def compute(kline: KlineResponse) -> BacktestResponse:
+        _check_identity(kline, symbol, period, adjustment, end_date)
         return build_strategy_backtest(
-            local,
+            _check_coverage(kline, start_date, normalized_parameters, limit),
             strategy_id=strategy_id,
-            parameters=parameters,
+            parameters=normalized_parameters,
             initial_cash=initial_cash,
             fee_bps=fee_bps,
             slippage_bps=slippage_bps,
             start=start_date,
             end=end_date,
         )
+
+    local = await get_local_kline_if_ready(
+        symbol=symbol,
+        period=period,
+        adjustment=adjustment,
+        limit=normalized_limit,
+        end=history_end,
+    )
+    if local is not None:
+        return compute(local)
+
     cache_key = cache.build_key(
         "backtest-strategy",
         {
-            "history_contract": 2,
+            "history_contract": 3,
             "engine": current_engine_identity().model_dump(mode="json"),
             "strategy_id": strategy_id,
             "symbol": symbol,
-            "parameters": parameters,
+            "parameters": normalized_parameters,
             "period": period,
             "adjustment": adjustment,
             "limit": normalized_limit,
@@ -295,22 +234,10 @@ async def get_strategy_backtest(
         period=period,
         adjustment=adjustment,
         limit=normalized_limit,
-        end=(end_date or "2050-01-01").replace("-", ""),
+        end=history_end,
         bypass_local=True,
     )
-    _check_identity(kline, symbol, period, adjustment, end_date)
-    kline = _check_coverage(kline, start_date, parameters, limit)
-    response = build_strategy_backtest(
-        kline,
-        strategy_id=strategy_id,
-        parameters=parameters,
-        initial_cash=initial_cash,
-        fee_bps=fee_bps,
-        slippage_bps=slippage_bps,
-        start=start_date,
-        end=end_date,
-    )
-    return cache_response(cache, cache_key, ttl_seconds, response, BacktestResponse)
+    return cache_response(cache, cache_key, ttl_seconds, compute(kline), BacktestResponse)
 
 
 def _slippage(value: Decimal) -> Decimal:

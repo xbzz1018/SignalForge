@@ -97,15 +97,17 @@ KNOWN_SECURITY_ALIASES: dict[str, str] = {
     "300ETF": "1.510300",
 }
 
-KNOWN_INDEX_CODES = {
-    "000300",
-    "000688",
-    "000852",
-    "000905",
-    "399001",
-    "399006",
-    "399300",
+BARE_INDEX_SECIDS = {
+    "000300": "1.000300",
+    "000688": "1.000688",
+    "000852": "1.000852",
+    "000905": "1.000905",
+    "399001": "0.399001",
+    "399006": "0.399006",
+    "399300": "0.399300",
 }
+KNOWN_INDEX_SECIDS = {*BARE_INDEX_SECIDS.values(), "1.000001"}
+EXCHANGE_TO_MARKET_ID = {"SH": "1", "SZ": "0", "BJ": "0"}
 
 QUOTE_FIELDS = ",".join(
     [
@@ -513,16 +515,19 @@ def normalize_secid(symbol_or_secid: str) -> str:
         market, code = value.split(".", 1)
         if market.isdigit() and code.isdigit() and len(code) == 6:
             return f"{market}.{code}"
-        if market.isdigit() and len(market) == 6 and code.upper() in {"SH", "SZ", "BJ"}:
-            return normalize_secid(market)
+        if market.isdigit() and len(market) == 6 and code.upper() in EXCHANGE_TO_MARKET_ID:
+            return f"{EXCHANGE_TO_MARKET_ID[code.upper()]}.{market}"
         raise ValueError(f"无效的东方财富 secid：{symbol_or_secid}")
 
-    code = value.upper().removeprefix("SH").removeprefix("SZ").removeprefix("BJ")
+    market_id = EXCHANGE_TO_MARKET_ID.get(value[:2].upper())
+    code = value[2:] if market_id is not None else value
     if not code.isdigit() or len(code) != 6:
         raise ValueError(f"无效的股票代码：{symbol_or_secid}")
+    if market_id is not None:
+        return f"{market_id}.{code}"
 
-    if code in KNOWN_INDEX_CODES:
-        return f"{'1' if code.startswith('000') else '0'}.{code}"
+    if code in BARE_INDEX_SECIDS:
+        return BARE_INDEX_SECIDS[code]
     if code.startswith(SH_ETF_CODE_PREFIXES):
         return f"1.{code}"
     if code.startswith(("15", "16", "18")):
@@ -604,7 +609,8 @@ def infer_asset_type(
     market_id = secid.split(".", 1)[0] if secid and "." in secid else ""
     normalized_name = name or str((raw or {}).get("Name") or "")
 
-    if symbol in KNOWN_INDEX_CODES or security_type_name == "指数" or classify.lower() == "index":
+    known_index = secid in KNOWN_INDEX_SECIDS if secid else symbol in BARE_INDEX_SECIDS
+    if known_index or security_type_name == "指数" or classify.lower() == "index":
         return "index"
     if (
         "ETF" in normalized_name.upper()

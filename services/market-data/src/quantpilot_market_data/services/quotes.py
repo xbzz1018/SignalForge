@@ -45,7 +45,7 @@ async def resolve_symbol(
     # were resolved locally. Empty suggest responses are deliberately not
     # cached: a transient upstream miss must not turn into repeated false
     # clarification requests in the long-running workspace flow.
-    cache_key = cache.build_key("symbols-resolve-v2", {"query": query, "count": normalized_count})
+    cache_key = cache.build_key("symbols-resolve-v3", {"query": query, "count": normalized_count})
     cached = read_cached_response(cache, cache_key, SymbolResolveResponse)
     if cached is not None:
         return cached
@@ -64,7 +64,7 @@ async def get_realtime_quote(
     symbol: str,
     ttl_seconds: int,
 ) -> RealtimeQuote:
-    cache_key = cache.build_key("quote-realtime", {"symbol": symbol})
+    cache_key = cache.build_key("quote-realtime-v2", {"symbol": symbol})
     cached = read_cached_response(cache, cache_key, RealtimeQuote)
     if cached is not None:
         return cached
@@ -81,7 +81,7 @@ async def get_realtime_quotes(
     ttl_seconds: int,
 ) -> BatchQuoteResponse:
     normalized_symbols = [symbol.strip() for symbol in symbols]
-    cache_key = cache.build_key("quote-realtime-batch", {"symbols": normalized_symbols})
+    cache_key = cache.build_key("quote-realtime-batch-v2", {"symbols": normalized_symbols})
     cached = read_cached_response(cache, cache_key, BatchQuoteResponse)
     if cached is not None:
         return cached
@@ -128,7 +128,7 @@ async def get_history_quote(
             return local
 
     cache_key = cache.build_key(
-        "quote-history",
+        "quote-history-v2",
         {
             "symbol": symbol,
             "period": period,
@@ -263,7 +263,7 @@ def intraday_redis_cache_key(
 ) -> str:
     normalized_symbol = symbol.strip().upper()
     return (
-        f"intraday:v2:eastmoney:{normalized_symbol}:{period}:{cache_date.isoformat()}"
+        f"intraday:v3:eastmoney:{normalized_symbol}:{period}:{cache_date.isoformat()}"
         f":limit:{limit}:end:{end}"
     )
 

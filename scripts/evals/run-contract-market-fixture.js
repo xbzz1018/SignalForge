@@ -28,6 +28,7 @@ const exactAliases = new Map([
   ...securities.flatMap((security) => [
     [security.symbol, security.symbol],
     [security.name, security.symbol],
+    [identity(security).secid, security.symbol],
   ]),
 ]);
 

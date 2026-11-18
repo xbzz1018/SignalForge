@@ -451,7 +451,10 @@ async function resolveTargetSet(params: {
   );
   const uniqueResolved = resolvedSymbols.filter(
     (item, index, items) =>
-      items.findIndex((candidate) => candidate.symbol === item.symbol) === index,
+      items.findIndex((candidate) =>
+        (candidate.secid ?? `${candidate.market}:${candidate.symbol}`) ===
+        (item.secid ?? `${item.market}:${item.symbol}`),
+      ) === index,
   );
   const effectiveUnresolvedTargets = unresolvedTargets.filter(
     (target) => !targetIsCoveredByResolvedSymbol(target, uniqueResolved),

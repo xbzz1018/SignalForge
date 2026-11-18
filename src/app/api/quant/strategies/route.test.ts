@@ -54,6 +54,7 @@ vi.mock('@/lib/quota', async (importOriginal) => ({
 
 import { ApiIdempotencyConflictError } from '@/lib/server/api-idempotency';
 import { GET, POST } from './route';
+import { MarketApiError } from '@/lib/quant/strategy-market-api';
 
 function request(
   body?: unknown,
@@ -184,7 +185,11 @@ describe('/api/quant/strategies authorization', () => {
     expect(mocks.reserveQuota).not.toHaveBeenCalled();
   });
 
-  it('releases failed business usage and uses a new quota key on retry attempt', async () => {
+  it.each([
+    ['MARKET_API_DISABLED', 503],
+    ['MARKET_API_TIMEOUT', 504],
+    ['MARKET_API_UPSTREAM_ERROR', 502],
+  ] as const)('maps %s and releases failed usage before retry', async (code, expectedStatus) => {
     mocks.requireAction.mockResolvedValue({ session: { user: { id: 'member-1' } } });
     mocks.claimApiOperation
       .mockResolvedValueOnce({
@@ -199,13 +204,16 @@ describe('/api/quant/strategies authorization', () => {
       .mockResolvedValueOnce({ reservation: { id: 'reservation-1' } })
       .mockResolvedValueOnce({ reservation: { id: 'reservation-2' } });
     mocks.getStrategySymbolBars
-      .mockRejectedValueOnce(new Error('market backend unavailable'))
+      .mockRejectedValueOnce(new MarketApiError(code, 'invalid private diagnostic'))
       .mockResolvedValueOnce([{ symbol: '600519' }]);
 
     const failed = await POST(request({ action: 'symbol-bars', symbol: '600519' }, 'POST', 'bars-retry'));
     const retried = await POST(request({ action: 'symbol-bars', symbol: '600519' }, 'POST', 'bars-retry'));
 
-    expect(failed.status).toBe(500);
+    expect(failed.status).toBe(expectedStatus);
+    const failure = await failed.json();
+    expect(failure).toMatchObject({ success: false, error: code });
+    expect(failure.message).not.toContain('private diagnostic');
     expect(retried.status).toBe(200);
     expect(mocks.releaseQuotaReservation).toHaveBeenCalledWith({ reservationId: 'reservation-1' });
     expect(mocks.failApiOperation).toHaveBeenCalledWith(expect.objectContaining({

@@ -49,7 +49,7 @@ def test_symbol_resolver_does_not_cache_empty_upstream_results(monkeypatch) -> N
     )
 
     assert response.results == []
-    assert namespaces == ["symbols-resolve-v2"]
+    assert namespaces == ["symbols-resolve-v3"]
     assert cache_writes == 0
 
 

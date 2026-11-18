@@ -37,7 +37,7 @@ async def get_technical_indicators(
     if local is not None:
         return build_technical_indicators(local)
     cache_key = cache.build_key(
-        "technical-indicators",
+        "technical-indicators-v2",
         {
             "symbol": symbol,
             "period": period,

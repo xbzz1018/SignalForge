@@ -71,20 +71,24 @@ describe('generated project sandbox', () => {
   });
 
   it.runIf(process.platform === 'linux')('wraps commands in user, mount, network, and PID namespaces', async () => {
-    const projectPath = path.resolve('data/projects');
-    const wrapped = await wrapGeneratedProjectCommand(projectPath, 'npm', ['run', 'build']);
-    expect(wrapped.command).toBe('unshare');
-    expect(wrapped.args).toEqual(expect.arrayContaining([
-      '--user',
-      '--map-root-user',
-      '--mount',
-      '--net',
-      '--pid',
-      '--fork',
-      'npm',
-      'run',
-      'build',
-    ]));
+    const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-sandbox-command-'));
+    try {
+      const wrapped = await wrapGeneratedProjectCommand(projectPath, 'npm', ['run', 'build']);
+      expect(wrapped.command).toBe('unshare');
+      expect(wrapped.args).toEqual(expect.arrayContaining([
+        '--user',
+        '--map-root-user',
+        '--mount',
+        '--net',
+        '--pid',
+        '--fork',
+        'npm',
+        'run',
+        'build',
+      ]));
+    } finally {
+      await fs.rmdir(projectPath);
+    }
   });
 
   it('requires the paired explicit override before running a trusted command directly', async () => {

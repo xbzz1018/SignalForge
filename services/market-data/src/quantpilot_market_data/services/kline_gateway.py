@@ -14,6 +14,7 @@ from quantpilot_market_data.contracts.quotes import (
 )
 from quantpilot_market_data.database_core import SHANGHAI_TZ, DatabaseError
 from quantpilot_market_data.providers.base import HistoricalKlineProvider
+from quantpilot_market_data.providers.eastmoney import normalize_secid
 from quantpilot_market_data.repositories.bars import (
     get_expected_latest_trade_date,
     get_local_kline,
@@ -171,6 +172,19 @@ async def get_local_kline_if_ready(
             )
     except (DatabaseError, PsycopgError):
         return None
+    try:
+        requested_secid = normalize_secid(symbol)
+    except ValueError:
+        pass  # Local identifiers need not be EastMoney identifiers.
+    else:
+        try:
+            local_secid = normalize_secid(local.secid or local.symbol)
+        except ValueError:
+            return None
+        if local_secid != requested_secid:
+            return None
+        if local.secid != local_secid:
+            local = local.model_copy(update={"secid": local_secid})
     if len(local.bars) < limit:
         return None
     local_last_ts = local.bars[-1].ts if local.bars else None

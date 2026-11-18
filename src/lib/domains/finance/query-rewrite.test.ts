@@ -50,6 +50,21 @@ function resolvedSecurity(target: string, symbol = '600589', market = 'SH') {
 }
 
 describe('quant query rewrite schema v4', () => {
+  it('keeps a stock and an index with the same bare code distinct', async () => {
+    const result = await rewriteQuantQuery('比较上证指数和平安银行', {
+      semanticRewriter: successfulRewrite(semanticData({
+        targetCandidates: ['上证指数', '平安银行'], analysisFocusId: 'comparison',
+      })),
+      resolver: async (target) => {
+        if (target === '平安银行') return resolvedSecurity(target, '000001', 'SZ');
+        const fixture = resolvedSecurity(target, '000001');
+        fixture.results[0].asset_type = 'index';
+        return fixture;
+      },
+    });
+    expect(result.resolvedSymbols.map(({ secid }) => secid)).toEqual(['1.000001', '0.000001']);
+  });
+
   it('uses the selected LLM as the only semantic parser before resolving 大位科技', async () => {
     const semanticRewriter = successfulRewrite(semanticData({
       timeRange: {

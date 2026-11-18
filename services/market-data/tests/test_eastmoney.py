@@ -36,6 +36,9 @@ from quantpilot_market_data.providers.eastmoney import (
         ("SH600519", "1.600519"),
         ("000001", "0.000001"),
         ("SZ000001", "0.000001"),
+        ("000001.SZ", "0.000001"),
+        ("000001.SH", "1.000001"),
+        ("SH000001", "1.000001"),
         ("300750", "0.300750"),
         ("920992", "0.920992"),
         ("沪深300", "1.000300"),
@@ -136,6 +139,9 @@ def test_parse_quote_payload_treats_invalid_numeric_fields_as_missing() -> None:
 
 
 def test_infer_asset_type_for_index_and_etf() -> None:
+    assert infer_asset_type(symbol="000001", secid="1.000001") == "index"
+    assert infer_asset_type(symbol="000001", secid="0.000001") == "stock"
+    assert infer_asset_type(symbol="000688", secid="0.000688") == "stock"
     assert infer_asset_type(symbol="600519", secid="1.600519", name="贵州茅台") == "stock"
     assert infer_asset_type(symbol="000300", secid="1.000300", name="沪深300") == "index"
     assert infer_asset_type(symbol="510300", secid="1.510300", name="沪深300ETF华泰柏瑞") == "etf"
@@ -658,7 +664,7 @@ def test_parse_announcements_payload() -> None:
 
 def test_market_data_cache_round_trip(tmp_path: Path) -> None:
     cache = MarketDataCache(root=tmp_path, enabled=True)
-    cache_key = cache.build_key("quote-realtime", {"symbol": "600519"})
+    cache_key = cache.build_key("quote-realtime-v2", {"symbol": "600519"})
 
     assert cache.read(cache_key) is None
 

@@ -92,7 +92,7 @@ class BaoStockClient:
         if limit > 0:
             bars = bars[-limit:]
         symbol = baostock_symbol(code)
-        secid = normalize_secid(symbol)
+        secid = normalize_secid(symbol_or_secid)
         return KlineResponse(
             symbol=symbol,
             secid=secid,

@@ -192,7 +192,7 @@ assertIncludes('services/market-data/src/quantpilot_market_data/services/analyti
   'sync_clickhouse_analytics',
 ]);
 assertIncludes('services/market-data/src/quantpilot_market_data/services/backtests.py', [
-  'build_ma_crossover_backtest',
+  'return await get_strategy_backtest(',
   'build_strategy_backtest',
   'read_cached_response',
 ]);
