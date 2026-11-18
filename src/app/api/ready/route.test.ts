@@ -10,7 +10,7 @@ describe('GET /api/ready', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns 200 only when required components are ready', async () => {
-    mocks.getWebReadiness.mockResolvedValue({ ok: true, service: 'quantpilot-web', components: [] });
+    mocks.getWebReadiness.mockResolvedValue({ ok: true, service: 'signalforge-web', components: [] });
 
     const response = await GET();
 
@@ -21,7 +21,7 @@ describe('GET /api/ready', () => {
   it('returns 503 while preserving the readiness projection', async () => {
     mocks.getWebReadiness.mockResolvedValue({
       ok: false,
-      service: 'quantpilot-web',
+      service: 'signalforge-web',
       components: [{ name: 'database', status: 'failed' }],
     });
 

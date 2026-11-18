@@ -78,8 +78,8 @@ interface CollectedTurn {
 }
 
 const argv = process.argv.slice(2);
-const KNOWLEDGE_ACCEPTANCE_SPACE = 'https://knowledge.local/spaces/quantpilot-acceptance';
-const SYNTHETIC_SUBJECT = 'quantpilot-triad-experience-v1';
+const KNOWLEDGE_ACCEPTANCE_SPACE = 'https://knowledge.local/spaces/signalforge-acceptance';
+const SYNTHETIC_SUBJECT = 'signalforge-triad-experience-v1';
 
 function option(name: string): string | null {
   const prefix = `--${name}=`;
@@ -131,9 +131,9 @@ function scaleOption(): number {
 }
 
 function modelTimeoutMs(): number {
-  const value = Number.parseInt(process.env.QUANTPILOT_TRIAD_MODEL_TIMEOUT_MS ?? '30000', 10);
+  const value = Number.parseInt(process.env.SIGNALFORGE_TRIAD_MODEL_TIMEOUT_MS ?? '30000', 10);
   assert(Number.isSafeInteger(value) && value >= 1_000 && value <= 120_000,
-    'QUANTPILOT_TRIAD_MODEL_TIMEOUT_MS must be between 1000 and 120000.');
+    'SIGNALFORGE_TRIAD_MODEL_TIMEOUT_MS must be between 1000 and 120000.');
   return value;
 }
 
@@ -520,7 +520,7 @@ async function runKnowledgeCases(
           taskCategory: 'triad-experience',
           eventId: `triad-feedback-${item.id}-${runId}`,
           outcome: 'helped' as const,
-          acceptedReceiptId: `urn:quantpilot:acceptance:${runId}`,
+          acceptedReceiptId: `urn:signalforge:acceptance:${runId}`,
           acceptedReceiptSha256: stableHash(`accepted:${runId}`),
           observedAt,
         };

@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from quantpilot_market_data.cache import MarketDataCache
-from quantpilot_market_data.contracts.quotes import KlineResponse, SymbolResolveResult
-from quantpilot_market_data.providers.eastmoney import EastMoneyError
-from quantpilot_market_data.services import quotes
+from signalforge_market_data.cache import MarketDataCache
+from signalforge_market_data.contracts.quotes import KlineResponse, SymbolResolveResult
+from signalforge_market_data.providers.eastmoney import EastMoneyError
+from signalforge_market_data.services import quotes
 
 
 class DummyProvider:

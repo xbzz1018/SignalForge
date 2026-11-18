@@ -63,10 +63,10 @@ curl -s -X POST http://localhost:3000/api/research/reports \
 1. 把对应 webhook 写入本地环境变量或部署环境。
 
 ```bash
-QUANTPILOT_WXWORK_RESEARCH_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
-QUANTPILOT_FEISHU_RESEARCH_WEBHOOK="https://open.feishu.cn/open-apis/bot/v2/hook/..."
-QUANTPILOT_DINGTALK_RESEARCH_WEBHOOK="https://oapi.dingtalk.com/robot/send?access_token=..."
-QUANTPILOT_DISCORD_RESEARCH_WEBHOOK="https://discord.com/api/webhooks/..."
+SIGNALFORGE_WXWORK_RESEARCH_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+SIGNALFORGE_FEISHU_RESEARCH_WEBHOOK="https://open.feishu.cn/open-apis/bot/v2/hook/..."
+SIGNALFORGE_DINGTALK_RESEARCH_WEBHOOK="https://oapi.dingtalk.com/robot/send?access_token=..."
+SIGNALFORGE_DISCORD_RESEARCH_WEBHOOK="https://discord.com/api/webhooks/..."
 ```
 
 2. 把 `notification_channels.is_dry_run` 改为 `false`，并确认 `channel_type` 是 `wxwork`、`feishu`、`dingtalk` 或 `discord`。

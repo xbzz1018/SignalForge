@@ -25,7 +25,7 @@ function tokenMatches(expected: string, provided: string): boolean {
 }
 
 function requestToken(request: Request): string {
-  const direct = request.headers.get('x-quantpilot-admin-token')?.trim();
+  const direct = request.headers.get('x-signalforge-admin-token')?.trim();
   if (direct) return direct;
   const authorization = request.headers.get('authorization')?.trim() ?? '';
   return authorization.toLowerCase().startsWith('bearer ')
@@ -79,7 +79,7 @@ export function assertPrivilegedMutation(request: Request): void {
     }
   }
 
-  const expected = process.env.QUANTPILOT_ADMIN_TOKEN?.trim() ?? '';
+  const expected = process.env.SIGNALFORGE_ADMIN_TOKEN?.trim() ?? '';
   const provided = requestToken(request);
   if (expected) {
     if (!provided || !tokenMatches(expected, provided)) {
@@ -88,11 +88,11 @@ export function assertPrivilegedMutation(request: Request): void {
     return;
   }
 
-  const strict = process.env.NODE_ENV === 'production' || process.env.QUANTPILOT_DEGRADATION_MODE === 'strict';
+  const strict = process.env.NODE_ENV === 'production' || process.env.SIGNALFORGE_DEGRADATION_MODE === 'strict';
   const forwardedHost = request.headers.get('x-forwarded-host');
   const host = forwardedHost || request.headers.get('host');
   const loopback = LOOPBACK_HOSTS.has(requestUrl.hostname.toLowerCase()) && LOOPBACK_HOSTS.has(hostname(host));
   if (strict || !loopback) {
-    throw new PrivilegedRequestError('管理接口未配置 QUANTPILOT_ADMIN_TOKEN，已拒绝非本机写入。', 403);
+    throw new PrivilegedRequestError('管理接口未配置 SIGNALFORGE_ADMIN_TOKEN，已拒绝非本机写入。', 403);
   }
 }

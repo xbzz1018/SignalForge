@@ -8,8 +8,8 @@ describe('runtime degradation configuration', () => {
   });
 
   it('disables database access when offline mode is selected', () => {
-    vi.stubEnv('QUANTPILOT_DEGRADATION_MODE', 'offline');
-    vi.stubEnv('QUANTPILOT_DATABASE_ENABLED', '1');
+    vi.stubEnv('SIGNALFORGE_DEGRADATION_MODE', 'offline');
+    vi.stubEnv('SIGNALFORGE_DATABASE_ENABLED', '1');
 
     const config = getRuntimeDegradationConfig();
 
@@ -19,8 +19,8 @@ describe('runtime degradation configuration', () => {
   });
 
   it('keeps an explicitly disabled database disabled outside offline mode', () => {
-    vi.stubEnv('QUANTPILOT_DEGRADATION_MODE', 'auto');
-    vi.stubEnv('QUANTPILOT_DATABASE_ENABLED', '0');
+    vi.stubEnv('SIGNALFORGE_DEGRADATION_MODE', 'auto');
+    vi.stubEnv('SIGNALFORGE_DATABASE_ENABLED', '0');
 
     expect(getRuntimeDegradationConfig().components.database).toEqual({
       enabled: false,

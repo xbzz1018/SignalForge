@@ -5,14 +5,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from quantpilot_market_data.contracts.quotes import (
+from signalforge_market_data.contracts.quotes import (
     KlineResponse,
     LocalKlineBar,
     LocalKlineResponse,
     LocalKlineSummary,
 )
-from quantpilot_market_data.repositories.bars import estimate_latest_completed_trade_date
-from quantpilot_market_data.services import kline_gateway
+from signalforge_market_data.repositories.bars import estimate_latest_completed_trade_date
+from signalforge_market_data.services import kline_gateway
 
 
 class NeverCalledProvider:

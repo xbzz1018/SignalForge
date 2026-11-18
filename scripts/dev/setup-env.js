@@ -99,18 +99,18 @@ function buildInfrastructureEnvironmentDefaults(contents) {
   const existing = parseEnv(contents);
   const defaults = {
     TIMESCALEDB_IMAGE: 'timescale/timescaledb:2.27.1-pg18',
-    POSTGRES_DB: 'quantpilot',
-    POSTGRES_USER: 'quantpilot',
-    POSTGRES_PASSWORD: 'quantpilot_dev_password',
+    POSTGRES_DB: 'signalforge',
+    POSTGRES_USER: 'signalforge',
+    POSTGRES_PASSWORD: 'signalforge_dev_password',
     POSTGRES_PORT: '35433',
     REDIS_IMAGE: 'redis:8-alpine',
     REDIS_PORT: '36380',
-    REDIS_NAMESPACE: 'quantpilot',
-    QUANTPILOT_REDIS_CACHE_ENABLED: '1',
+    REDIS_NAMESPACE: 'signalforge',
+    SIGNALFORGE_REDIS_CACHE_ENABLED: '1',
     CLICKHOUSE_IMAGE: 'clickhouse/clickhouse-server:25.8',
-    CLICKHOUSE_DB: 'quantpilot',
-    CLICKHOUSE_USER: 'quantpilot',
-    CLICKHOUSE_PASSWORD: 'quantpilot_dev_password',
+    CLICKHOUSE_DB: 'signalforge',
+    CLICKHOUSE_USER: 'signalforge',
+    CLICKHOUSE_PASSWORD: 'signalforge_dev_password',
     CLICKHOUSE_HTTP_PORT: '38123',
     CLICKHOUSE_NATIVE_PORT: '39023',
   };
@@ -260,38 +260,38 @@ async function ensureEnvironment(options = {}) {
   if (!isValidEncryptionKey(encryptionKey)) {
     envDefaults.ENCRYPTION_KEY = `"${crypto.randomBytes(32).toString('hex')}"`;
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_ENABLE_INTERNAL_TOKEN_API')) {
-    envDefaults.QUANTPILOT_ENABLE_INTERNAL_TOKEN_API = '0';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_ENABLE_INTERNAL_TOKEN_API')) {
+    envDefaults.SIGNALFORGE_ENABLE_INTERNAL_TOKEN_API = '0';
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_INTERNAL_API_TOKEN')) {
-    envDefaults.QUANTPILOT_INTERNAL_API_TOKEN = '""';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_INTERNAL_API_TOKEN')) {
+    envDefaults.SIGNALFORGE_INTERNAL_API_TOKEN = '""';
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_MAX_IMAGE_UPLOAD_BYTES')) {
-    envDefaults.QUANTPILOT_MAX_IMAGE_UPLOAD_BYTES = String(10 * 1024 * 1024);
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_MAX_IMAGE_UPLOAD_BYTES')) {
+    envDefaults.SIGNALFORGE_MAX_IMAGE_UPLOAD_BYTES = String(10 * 1024 * 1024);
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_DEGRADATION_MODE')) {
-    envDefaults.QUANTPILOT_DEGRADATION_MODE = '"auto"';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_DEGRADATION_MODE')) {
+    envDefaults.SIGNALFORGE_DEGRADATION_MODE = '"auto"';
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_DATABASE_ENABLED')) {
-    envDefaults.QUANTPILOT_DATABASE_ENABLED = '1';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_DATABASE_ENABLED')) {
+    envDefaults.SIGNALFORGE_DATABASE_ENABLED = '1';
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_DATABASE_REQUIRED')) {
-    envDefaults.QUANTPILOT_DATABASE_REQUIRED = '1';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_DATABASE_REQUIRED')) {
+    envDefaults.SIGNALFORGE_DATABASE_REQUIRED = '1';
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_MARKET_API_ENABLED')) {
-    envDefaults.QUANTPILOT_MARKET_API_ENABLED = '1';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_MARKET_API_ENABLED')) {
+    envDefaults.SIGNALFORGE_MARKET_API_ENABLED = '1';
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_MARKET_API_REQUIRED')) {
-    envDefaults.QUANTPILOT_MARKET_API_REQUIRED = '0';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_MARKET_API_REQUIRED')) {
+    envDefaults.SIGNALFORGE_MARKET_API_REQUIRED = '0';
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_OBSERVABILITY_ENABLED')) {
-    envDefaults.QUANTPILOT_OBSERVABILITY_ENABLED = '1';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_OBSERVABILITY_ENABLED')) {
+    envDefaults.SIGNALFORGE_OBSERVABILITY_ENABLED = '1';
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_OBSERVABILITY_REQUIRED')) {
-    envDefaults.QUANTPILOT_OBSERVABILITY_REQUIRED = '0';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_OBSERVABILITY_REQUIRED')) {
+    envDefaults.SIGNALFORGE_OBSERVABILITY_REQUIRED = '0';
   }
-  if (!hasEnvKey(envContents, 'QUANTPILOT_REDIS_REQUIRED')) {
-    envDefaults.QUANTPILOT_REDIS_REQUIRED = '0';
+  if (!hasEnvKey(envContents, 'SIGNALFORGE_REDIS_REQUIRED')) {
+    envDefaults.SIGNALFORGE_REDIS_REQUIRED = '0';
   }
   const portStartCandidates = [
     parsePortValue(process.env.PREVIEW_PORT_START),
@@ -395,12 +395,12 @@ async function ensureEnvironment(options = {}) {
   }
 
   const configuredAuthMode =
-    readEnvRawValue(envLocalContents, 'QUANTPILOT_AUTH_MODE') ||
-    readEnvRawValue(envContents, 'QUANTPILOT_AUTH_MODE');
+    readEnvRawValue(envLocalContents, 'SIGNALFORGE_AUTH_MODE') ||
+    readEnvRawValue(envContents, 'SIGNALFORGE_AUTH_MODE');
   const enableLocalAuth = enableAuthOverride || configuredAuthMode === 'local';
   const existingAuthSecret =
-    readEnvRawValue(envLocalContents, 'QUANTPILOT_AUTH_SECRET') ||
-    readEnvRawValue(envContents, 'QUANTPILOT_AUTH_SECRET') ||
+    readEnvRawValue(envLocalContents, 'SIGNALFORGE_AUTH_SECRET') ||
+    readEnvRawValue(envContents, 'SIGNALFORGE_AUTH_SECRET') ||
     readEnvRawValue(envLocalContents, 'BETTER_AUTH_SECRET') ||
     readEnvRawValue(envContents, 'BETTER_AUTH_SECRET');
   const authSecret = existingAuthSecret || crypto.randomBytes(48).toString('base64url');
@@ -413,12 +413,12 @@ async function ensureEnvironment(options = {}) {
     PREVIEW_PORT_END: String(portRangeEnd),
     ...(enableLocalAuth
       ? {
-          QUANTPILOT_AUTH_MODE: 'local',
-          QUANTPILOT_AUTH_SECRET: authSecret,
+          SIGNALFORGE_AUTH_MODE: 'local',
+          SIGNALFORGE_AUTH_SECRET: authSecret,
           BETTER_AUTH_URL: url,
-          QUANTPILOT_AUTH_SECURE_COOKIES: '0',
-          QUANTPILOT_AUTH_TRUSTED_ORIGINS: `${url},http://127.0.0.1:${port}`,
-          QUANTPILOT_AUTH_ALLOW_SIGNUP: '0',
+          SIGNALFORGE_AUTH_SECURE_COOKIES: '0',
+          SIGNALFORGE_AUTH_TRUSTED_ORIGINS: `${url},http://127.0.0.1:${port}`,
+          SIGNALFORGE_AUTH_ALLOW_SIGNUP: '0',
         }
       : {}),
   };

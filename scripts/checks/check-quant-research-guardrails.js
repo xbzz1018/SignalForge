@@ -189,7 +189,7 @@ async function main() {
   assert(inferHistoryLimit(researchPlan('最近半年沪深300走势如何？')) === 126, '半年 should map to 126 trading days');
   assert(inferHistoryLimit(researchPlan('最近80个交易日沪深300走势如何？')) === 80, 'explicit trading days should win');
 
-  const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'quantpilot-research-guardrails-'));
+  const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-research-guardrails-'));
 
   try {
     await writeJson(path.join(projectPath, '.data-agent/finance-run-plan.json'), researchPlan(researchQuestion));

@@ -9,13 +9,13 @@ from decimal import Decimal, localcontext
 
 import pytest
 
-from quantpilot_market_data import backtest_experiments
-from quantpilot_market_data.backtest import STRATEGY_NAMES, build_strategy_backtest
-from quantpilot_market_data.backtest_experiments import digest, result_digest
-from quantpilot_market_data.contracts.analysis import BacktestResponse
-from quantpilot_market_data.contracts.common import DataQuality
-from quantpilot_market_data.contracts.quotes import KlineBar, KlineResponse
-from quantpilot_market_data.replay_backtest import replay_backtest
+from signalforge_market_data import backtest_experiments
+from signalforge_market_data.backtest import STRATEGY_NAMES, build_strategy_backtest
+from signalforge_market_data.backtest_experiments import digest, result_digest
+from signalforge_market_data.contracts.analysis import BacktestResponse
+from signalforge_market_data.contracts.common import DataQuality
+from signalforge_market_data.contracts.quotes import KlineBar, KlineResponse
+from signalforge_market_data.replay_backtest import replay_backtest
 
 
 def observed_data() -> KlineResponse:
@@ -113,7 +113,7 @@ def test_tampering_is_rejected_before_engine_execution(mutation, monkeypatch):
         raise AssertionError("Engine ran before integrity validation")
 
     monkeypatch.setattr(
-        "quantpilot_market_data.replay_backtest.build_strategy_backtest", must_not_execute
+        "signalforge_market_data.replay_backtest.build_strategy_backtest", must_not_execute
     )
     with pytest.raises(ValueError):
         replay_backtest(payload)
@@ -168,7 +168,7 @@ def test_cli_verifies_saved_artifact_and_returns_failure_for_changed_results(tmp
     artifact = tmp_path / "backtest.json"
     original = captured().model_dump(mode="json")
     artifact.write_text(json.dumps(original))
-    command = [sys.executable, "-m", "quantpilot_market_data.replay_backtest", str(artifact)]
+    command = [sys.executable, "-m", "signalforge_market_data.replay_backtest", str(artifact)]
     result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=20)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["experiment_id"] == original["experiment"]["experiment_id"]

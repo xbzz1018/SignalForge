@@ -35,7 +35,7 @@ export function buildPreferenceContext(input: {
   scope: 'global' | 'project';
   context?: Record<string, unknown>;
 }): MemoryContext {
-  const context: MemoryContext = { product: 'quantpilot' };
+  const context: MemoryContext = { product: 'signalforge' };
   if (input.scope === 'project') context.project_id = input.projectId;
   for (const [key, value] of Object.entries(input.context ?? {})) {
     if (key === 'product' || key === 'project_id') continue;
@@ -55,7 +55,7 @@ export function buildPreferenceContext(input: {
 export function isSignalForgePreference(preference: { key: string; context: MemoryContext }): boolean {
   try {
     assertPersonalizationKey(preference.key);
-    return preference.context.product === 'quantpilot';
+    return preference.context.product === 'signalforge';
   } catch {
     return false;
   }

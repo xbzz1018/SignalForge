@@ -93,13 +93,13 @@ const CUSTOM_LANE_BUDGETS = createPiAgentPhaseGraph({
 loadProjectEnvironment();
 
 const prisma = new PrismaClient();
-const CASES_PATH = path.resolve('benchmarks/quantpilot/cases.json');
-const E2E_SUITE_PATH = path.resolve('benchmarks/quantpilot/e2e-suite.json');
-const DATASET_REGISTRY_PATH = path.resolve('benchmarks/quantpilot/datasets.json');
-const SNAPSHOT_MANIFEST_PATH = path.resolve('benchmarks/quantpilot/snapshot-manifest.json');
-const QUERY_REWRITE_FIXTURES_PATH = path.resolve('benchmarks/quantpilot/query-rewrite-fixtures.json');
+const CASES_PATH = path.resolve('benchmarks/signalforge/cases.json');
+const E2E_SUITE_PATH = path.resolve('benchmarks/signalforge/e2e-suite.json');
+const DATASET_REGISTRY_PATH = path.resolve('benchmarks/signalforge/datasets.json');
+const SNAPSHOT_MANIFEST_PATH = path.resolve('benchmarks/signalforge/snapshot-manifest.json');
+const QUERY_REWRITE_FIXTURES_PATH = path.resolve('benchmarks/signalforge/query-rewrite-fixtures.json');
 const PROJECTS_DIR = path.resolve(process.env.PROJECTS_DIR || './data/projects');
-const REPORTS_DIR = path.resolve('tmp/quantpilot-benchmark-reports');
+const REPORTS_DIR = path.resolve('tmp/signalforge-benchmark-reports');
 const DEFAULT_MODEL = getDefaultModelForCli('pi');
 const QUERY_REWRITE_FIXTURES = require(QUERY_REWRITE_FIXTURES_PATH);
 
@@ -147,15 +147,15 @@ function parseArgs(argv) {
   const selected = new Set();
   let limit = null;
   let keepProjects = false;
-  let trigger = process.env.QUANTPILOT_EVAL_TRIGGER || 'cli';
-  let evaluatorId = process.env.QUANTPILOT_EVAL_EVALUATOR || 'rule-strict';
-  let concurrency = Number.parseInt(process.env.QUANTPILOT_EVAL_CONCURRENCY || '1', 10);
-  let repeat = Number.parseInt(process.env.QUANTPILOT_EVAL_REPEAT || '1', 10);
-  let mode = process.env.QUANTPILOT_EVAL_MODE || 'contract';
-  let datasetVisibility = process.env.QUANTPILOT_EVAL_DATASET_VISIBILITY || 'public';
-  let casesFile = process.env.QUANTPILOT_EVAL_CASES_PATH || null;
+  let trigger = process.env.SIGNALFORGE_EVAL_TRIGGER || 'cli';
+  let evaluatorId = process.env.SIGNALFORGE_EVAL_EVALUATOR || 'rule-strict';
+  let concurrency = Number.parseInt(process.env.SIGNALFORGE_EVAL_CONCURRENCY || '1', 10);
+  let repeat = Number.parseInt(process.env.SIGNALFORGE_EVAL_REPEAT || '1', 10);
+  let mode = process.env.SIGNALFORGE_EVAL_MODE || 'contract';
+  let datasetVisibility = process.env.SIGNALFORGE_EVAL_DATASET_VISIBILITY || 'public';
+  let casesFile = process.env.SIGNALFORGE_EVAL_CASES_PATH || null;
   let cli = 'pi';
-  let model = process.env.QUANTPILOT_EVAL_MODEL || DEFAULT_MODEL;
+  let model = process.env.SIGNALFORGE_EVAL_MODEL || DEFAULT_MODEL;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -290,8 +290,8 @@ function parseArgs(argv) {
   }
   if (datasetVisibility !== 'public') {
     casesFile = casesFile || (datasetVisibility === 'hidden'
-      ? process.env.QUANTPILOT_HIDDEN_EVAL_CASES_PATH
-      : process.env.QUANTPILOT_PRODUCTION_REPLAY_CASES_PATH) || null;
+      ? process.env.SIGNALFORGE_HIDDEN_EVAL_CASES_PATH
+      : process.env.SIGNALFORGE_PRODUCTION_REPLAY_CASES_PATH) || null;
     if (!casesFile) {
       throw new Error(`${datasetVisibility} 评测必须通过环境变量或 --cases-file 注入外部数据集`);
     }
@@ -1671,7 +1671,7 @@ async function runVisualCheck({ projectId, testCase }) {
   }
 
   const { chromium } = require('playwright');
-  const screenshotDir = path.resolve('tmp/quantpilot-benchmark-screenshots');
+  const screenshotDir = path.resolve('tmp/signalforge-benchmark-screenshots');
   await fs.mkdir(screenshotDir, { recursive: true });
   const failures = [];
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -1688,7 +1688,7 @@ async function runVisualCheck({ projectId, testCase }) {
     preview = await previewManager.start(projectId);
     browser = await chromium.launch({
       headless: true,
-      executablePath: process.env.QUANTPILOT_CHROMIUM_EXECUTABLE_PATH || undefined,
+      executablePath: process.env.SIGNALFORGE_CHROMIUM_EXECUTABLE_PATH || undefined,
     });
     for (const viewport of viewports) {
       const page = await browser.newPage({
@@ -1820,7 +1820,7 @@ async function readGenerationPrefetch(projectPath) {
 
 async function waitForAcceptedMission({ projectPath, projectId, requestId }) {
   const timeoutMs = Number.parseInt(
-    process.env.QUANTPILOT_E2E_MISSION_TIMEOUT_MS || '1200000',
+    process.env.SIGNALFORGE_E2E_MISSION_TIMEOUT_MS || '1200000',
     10,
   );
   const deadline = Date.now() + (Number.isSafeInteger(timeoutMs) && timeoutMs > 0
@@ -2781,7 +2781,7 @@ async function main() {
         visibility: args.datasetVisibility,
         promptsRedacted: args.datasetVisibility !== 'public',
         sourceIdentitySha256: sha256(
-          args.datasetVisibility === 'public' ? 'benchmarks/quantpilot/cases.json' : args.datasetVisibility,
+          args.datasetVisibility === 'public' ? 'benchmarks/signalforge/cases.json' : args.datasetVisibility,
         ),
       },
       provenance: {

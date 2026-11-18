@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QuantRunPlan } from '@/lib/domains/finance/workspace';
 import {
   createSignalForgeDataAgentRegistry,
-  QUANTPILOT_AGENT_PROFILE_ID,
+  SIGNALFORGE_AGENT_PROFILE_ID,
 } from '@/lib/domains/finance';
 import { getProjectLlmConfig } from '@/lib/config/llm';
 import { buildFundamentalMetricComparison } from "./data-prefetch/fundamentals";
@@ -73,7 +73,7 @@ describe('quant data-prefetch symbol candidates', () => {
   });
 
   it('does not parse symbols from the question after Query Rewrite has produced the run plan', async () => {
-    const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'quantpilot-prefetch-symbol-'));
+    const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-prefetch-symbol-'));
     temporaryProjects.push(projectPath);
     await fs.mkdir(path.join(projectPath, '.data-agent'), { recursive: true });
 
@@ -84,7 +84,7 @@ describe('quant data-prefetch symbol candidates', () => {
       status: 'planned',
       capabilityId: 'stock_diagnosis',
       composition: createSignalForgeDataAgentRegistry().resolveCapability(
-        QUANTPILOT_AGENT_PROFILE_ID,
+        SIGNALFORGE_AGENT_PROFILE_ID,
         'stock_diagnosis',
       ).composition,
       llm: getProjectLlmConfig(),

@@ -723,7 +723,7 @@ async function executePiAgentPhase(
     const templateId = runPlan?.visualization?.templateId ?? visualization.templateId;
     const variantId = runPlan?.visualization?.variantId ?? visualization.variantId;
     const standardCompilerEligible =
-      process.env.QUANTPILOT_EVAL_FORCE_MODEL_AGENT !== '1' &&
+      process.env.SIGNALFORGE_EVAL_FORCE_MODEL_AGENT !== '1' &&
       classifyPiAgentPreparedIntent(instruction) === 'standard' &&
       isDashboardSpecCapabilitySupported(templateId, variantId) &&
       preparedAssessment.dashboardSpecReady;
@@ -738,7 +738,7 @@ async function executePiAgentPhase(
       dashboardSpecReady: preparedAssessment.dashboardSpecReady,
     });
     if (phaseGraph.providerMode === 'model' && !llmConfig.agent.enabled) {
-      throw new Error('项目 LLM Agent 已由 QUANTPILOT_LLM_AGENT_ENABLED 禁用。');
+      throw new Error('项目 LLM Agent 已由 SIGNALFORGE_LLM_AGENT_ENABLED 禁用。');
     }
     if (phaseGraph.providerMode === 'model' && !apiKey) {
       throw new Error(

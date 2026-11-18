@@ -581,14 +581,14 @@ function runBenchmarkQueueItem(item: QuantEvalQueueItem) {
       cwd: ROOT,
       env: {
         ...process.env,
-        QUANTPILOT_EVAL_TRIGGER: 'eval-backend',
-        QUANTPILOT_EVAL_EVALUATOR: item.evaluatorId,
-        QUANTPILOT_EVAL_CONCURRENCY: String(item.concurrency),
-        QUANTPILOT_EVAL_REPEAT: String(item.repeat),
-        QUANTPILOT_EVAL_MODE: item.mode,
-        QUANTPILOT_EVAL_CLI: item.cli,
-        QUANTPILOT_EVAL_MODEL: item.model,
-        ...(supportsReasoningEffort(item.cli) ? { QUANTPILOT_EVAL_REASONING_EFFORT: item.reasoningEffort || 'low' } : {}),
+        SIGNALFORGE_EVAL_TRIGGER: 'eval-backend',
+        SIGNALFORGE_EVAL_EVALUATOR: item.evaluatorId,
+        SIGNALFORGE_EVAL_CONCURRENCY: String(item.concurrency),
+        SIGNALFORGE_EVAL_REPEAT: String(item.repeat),
+        SIGNALFORGE_EVAL_MODE: item.mode,
+        SIGNALFORGE_EVAL_CLI: item.cli,
+        SIGNALFORGE_EVAL_MODEL: item.model,
+        ...(supportsReasoningEffort(item.cli) ? { SIGNALFORGE_EVAL_REASONING_EFFORT: item.reasoningEffort || 'low' } : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -976,7 +976,7 @@ export async function getQuantEvalDashboardData(): Promise<QuantEvalDashboardDat
   ]);
   const latestRun = runs[0] ?? null;
   const capabilities = new Set(cases.map((testCase) => testCase.capabilityId));
-  const mutationDir = path.join(ROOT, 'tmp', 'quantpilot-eval-mutations');
+  const mutationDir = path.join(ROOT, 'tmp', 'signalforge-eval-mutations');
   const mutationReport = await fs.readdir(mutationDir, { withFileTypes: true })
     .then(async (entries) => {
       const files = await Promise.all(entries
@@ -989,11 +989,11 @@ export async function getQuantEvalDashboardData(): Promise<QuantEvalDashboardDat
       return latest ? readJson(latest.filePath).then((value) => ({ value, filePath: latest.filePath })) : null;
     })
     .catch(() => null);
-  const datasetRegistry = await readJson(path.join(ROOT, 'benchmarks', 'quantpilot', 'datasets.json')).catch(() => null);
-  const snapshotManifest = await readJson(path.join(ROOT, 'benchmarks', 'quantpilot', 'snapshot-manifest.json')).catch(() => null);
+  const datasetRegistry = await readJson(path.join(ROOT, 'benchmarks', 'signalforge', 'datasets.json')).catch(() => null);
+  const snapshotManifest = await readJson(path.join(ROOT, 'benchmarks', 'signalforge', 'snapshot-manifest.json')).catch(() => null);
   const calibrationPath = path.resolve(
-    process.env.QUANTPILOT_EVAL_JUDGE_CALIBRATION_PATH ||
-      'benchmarks/quantpilot/judge-calibration.contract.json',
+    process.env.SIGNALFORGE_EVAL_JUDGE_CALIBRATION_PATH ||
+      'benchmarks/signalforge/judge-calibration.contract.json',
   );
   const calibrationDataset = await readJson(calibrationPath).catch(() => null);
   const calibration = isRecord(calibrationDataset) && Array.isArray(calibrationDataset.samples)

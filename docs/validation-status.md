@@ -2,7 +2,7 @@
 
 [仓库首页](../README.md) · [项目案例](project-case.md) · [评测指南](evals-guide.md)
 
-记录日期：2026-11-16。以下区分本地代码检查、确定性合同和真实模型交付；GitHub CI 以[对应提交的运行结果](https://github.com/xbzz1018/SignalForge/actions/workflows/quality.yml)为准。
+记录日期：2026-11-16。以下区分本地代码检查、确定性合同和真实模型交付；GitHub CI 以[对应提交的运行结果](https://github.com/xbzz1018/SignalForge-Python/actions/workflows/quality.yml)为准。
 
 ## 当前验收结果
 
@@ -31,7 +31,7 @@
 | 隔离 | WSL2 / Linux namespace，未允许无沙箱生成执行 |
 | 范围 | 1 个样本；未执行完整发布回归，不推导长期成功率 |
 
-此前两次尝试仍保留：ETF 页面因图标 404 被拒绝；修复图标后的指数任务通过标准模板交付，但因没有进入模型生成路径被严格模型门禁拒绝。显式使用已有的 `QUANTPILOT_EVAL_FORCE_MODEL_AGENT=1` 后才得到上述模型样本，未放宽条件或把模板算作模型成绩。
+此前两次尝试仍保留：ETF 页面因图标 404 被拒绝；修复图标后的指数任务通过标准模板交付，但因没有进入模型生成路径被严格模型门禁拒绝。显式使用已有的 `SIGNALFORGE_EVAL_FORCE_MODEL_AGENT=1` 后才得到上述模型样本，未放宽条件或把模板算作模型成绩。
 
 本次也修复了 Windows 行情服务事件循环、Skills 源码查看权限链路、策略和报告的错误 JSON 处理。该模型报告早于最后一处无关的报告字段校验，摘要保留各自构建身份。品牌文案和文档整理后的检查另行记录，不据此声称重跑了模型样本。
 

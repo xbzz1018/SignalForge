@@ -10,7 +10,7 @@ const MIGRATION_PATH = path.join(
   process.cwd(),
   'prisma/migrations/20260716000400_add_permissions_and_usage_quotas/migration.sql',
 );
-const migrationSql = readFileSync(MIGRATION_PATH, 'utf8');
+const migrationSql = readFileSync(MIGRATION_PATH, 'utf8').replaceAll('\r\n', '\n');
 const hardeningMigrationSql = readFileSync(path.join(
   process.cwd(),
   'prisma/migrations/20260717000100_harden_default_member_quotas/migration.sql',

@@ -108,7 +108,7 @@ export default function ChatInput({
   const submissionLockRef = useRef(false);
   const [loadedDraftStorageKey, setLoadedDraftStorageKey] = useState<string | null>(null);
   const supportsImageUpload = true;
-  const draftStorageKey = projectId ? `quantpilot:question-draft:${projectId}` : null;
+  const draftStorageKey = projectId ? `signalforge:question-draft:${projectId}` : null;
 
   const modelOptionsForCli = useMemo(
     () => modelOptions.filter(option => option.cli === preferredCli),

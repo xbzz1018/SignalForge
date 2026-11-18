@@ -1,0 +1,783 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from math import sqrt
+from typing import Any
+
+from signalforge_market_data.backtest_accounting import reconcile_backtest
+from signalforge_market_data.backtest_execution import ExecutionLedger
+from signalforge_market_data.backtest_experiments import attach_experiment, capture_input_data
+from signalforge_market_data.backtest_input import validate_strategy_bars
+from signalforge_market_data.backtest_parameters import (
+    backtest_date,
+    finite_decimal,
+    normalize_strategy_parameters,
+    periods_per_year,
+)
+from signalforge_market_data.backtest_parameters import (
+    decimal_param as _decimal_param,
+)
+from signalforge_market_data.backtest_parameters import (
+    int_param as _int_param,
+)
+from signalforge_market_data.contracts.analysis import (
+    BacktestEquityPoint,
+    BacktestResponse,
+    BacktestSignal,
+    BacktestSummary,
+)
+from signalforge_market_data.contracts.quotes import KlineResponse
+
+
+def _round(value: Decimal | None, places: int = 4) -> Decimal | None:
+    if value is None:
+        return None
+    quant = Decimal("1").scaleb(-places)
+    return value.quantize(quant, rounding=ROUND_HALF_UP)
+
+
+def _mean(values: list[Decimal]) -> Decimal | None:
+    if not values:
+        return None
+    return sum(values, Decimal("0")) / Decimal(len(values))
+
+
+def _rolling_mean(closes: list[Decimal | None], end_index: int, window: int) -> Decimal | None:
+    if end_index + 1 < window:
+        return None
+    values = closes[end_index + 1 - window : end_index + 1]
+    if any(value is None for value in values):
+        return None
+    return _mean([value for value in values if value is not None])
+
+
+def _rolling_high(values: list[Decimal | None], end_index: int, window: int) -> Decimal | None:
+    if end_index < 0 or end_index + 1 < window:
+        return None
+    sample = values[end_index + 1 - window : end_index + 1]
+    if any(value is None for value in sample):
+        return None
+    return max(value for value in sample if value is not None)
+
+
+def _rolling_low(values: list[Decimal | None], end_index: int, window: int) -> Decimal | None:
+    if end_index < 0 or end_index + 1 < window:
+        return None
+    sample = values[end_index + 1 - window : end_index + 1]
+    if any(value is None for value in sample):
+        return None
+    return min(value for value in sample if value is not None)
+
+
+def _rolling_std(values: list[Decimal | None], end_index: int, window: int) -> Decimal | None:
+    if end_index + 1 < window:
+        return None
+    sample = values[end_index + 1 - window : end_index + 1]
+    if any(value is None for value in sample):
+        return None
+    clean = [value for value in sample if value is not None]
+    mean = _mean(clean)
+    if mean is None:
+        return None
+    variance = sum((value - mean) ** 2 for value in clean) / Decimal(len(clean))
+    return Decimal(str(sqrt(float(variance))))
+
+
+def _rolling_volume_mean(
+    values: list[int | None],
+    end_index: int,
+    window: int,
+) -> Decimal | None:
+    if end_index + 1 < window:
+        return None
+    sample = values[end_index + 1 - window : end_index + 1]
+    if any(value is None for value in sample):
+        return None
+    clean = [Decimal(value) for value in sample if value is not None]
+    return _mean(clean)
+
+
+def _rsi(closes: list[Decimal | None], end_index: int, window: int) -> Decimal | None:
+    if end_index < window:
+        return None
+    gains: list[Decimal] = []
+    losses: list[Decimal] = []
+    for index in range(end_index - window + 1, end_index + 1):
+        current = closes[index]
+        previous = closes[index - 1]
+        if current is None or previous is None:
+            return None
+        change = current - previous
+        if change >= 0:
+            gains.append(change)
+            losses.append(Decimal("0"))
+        else:
+            gains.append(Decimal("0"))
+            losses.append(abs(change))
+    average_gain = _mean(gains)
+    average_loss = _mean(losses)
+    if average_gain is None or average_loss is None:
+        return None
+    if average_loss == 0:
+        return Decimal("50") if average_gain == 0 else Decimal("100")
+    relative_strength = average_gain / average_loss
+    return Decimal("100") - (Decimal("100") / (Decimal("1") + relative_strength))
+
+
+def _true_range(
+    high: Decimal | None,
+    low: Decimal | None,
+    previous_close: Decimal | None,
+) -> Decimal | None:
+    if high is None or low is None:
+        return None
+    if previous_close is None:
+        return high - low
+    return max(high - low, abs(high - previous_close), abs(low - previous_close))
+
+
+def _atr(
+    highs: list[Decimal | None],
+    lows: list[Decimal | None],
+    closes: list[Decimal | None],
+    end_index: int,
+    window: int,
+) -> Decimal | None:
+    if end_index + 1 < window:
+        return None
+    ranges: list[Decimal] = []
+    for index in range(end_index + 1 - window, end_index + 1):
+        value = _true_range(
+            highs[index],
+            lows[index],
+            closes[index - 1] if index > 0 else None,
+        )
+        if value is None:
+            return None
+        ranges.append(value)
+    return _mean(ranges)
+
+
+def _rolling_return_pct(
+    closes: list[Decimal | None],
+    end_index: int,
+    window: int,
+) -> Decimal | None:
+    if end_index < window:
+        return None
+    return _return_pct(closes[end_index], closes[end_index - window])
+
+
+def _annualized_price_volatility_pct(
+    closes: list[Decimal | None],
+    end_index: int,
+    window: int,
+    annual_periods: int = 252,
+) -> Decimal | None:
+    if end_index < window:
+        return None
+    returns: list[Decimal] = []
+    for index in range(end_index - window + 1, end_index + 1):
+        value = _return_pct(closes[index], closes[index - 1])
+        if value is None:
+            return None
+        returns.append(value)
+    return _annualized_volatility_pct(returns, annual_periods)
+
+
+def _return_pct(current: Decimal | None, previous: Decimal | None) -> Decimal | None:
+    if current is None or previous is None or previous == 0:
+        return None
+    return ((current - previous) / previous) * Decimal("100")
+
+
+def _annualized_return_pct(
+    final_equity: Decimal,
+    sample_count: int,
+    annual_periods: int = 252,
+) -> Decimal | None:
+    if sample_count <= 1 or final_equity <= 0:
+        return None
+    value = (float(final_equity) ** (annual_periods / (sample_count - 1)) - 1) * 100
+    return Decimal(str(value))
+
+
+def _annualized_volatility_pct(
+    returns: list[Decimal],
+    annual_periods: int = 252,
+) -> Decimal | None:
+    if len(returns) < 2:
+        return None
+    mean_return = _mean(returns)
+    if mean_return is None:
+        return None
+    variance = sum((value - mean_return) ** 2 for value in returns) / Decimal(len(returns))
+    return Decimal(str(sqrt(float(variance)))) * Decimal(str(sqrt(annual_periods)))
+
+
+def canonical_strategy_id(strategy_id: str) -> str:
+    normalized = strategy_id.strip().lower().replace("-", "_")
+    aliases = {
+        "ma": "ma_crossover",
+        "ma_cross": "ma_crossover",
+        "moving_average_crossover": "ma_crossover",
+        "donchian": "donchian_breakout",
+        "turtle": "turtle_trend",
+        "rsi": "rsi_reversion",
+        "bollinger": "bollinger_reversion",
+        "momentum": "momentum_trend",
+        "volume_breakout": "volume_price_breakout",
+        "atr_breakout": "atr_trailing_breakout",
+        "low_vol": "low_volatility_trend",
+        "pullback": "ma_pullback_reclaim",
+        "gap": "gap_reversal",
+    }
+    return aliases.get(normalized, normalized)
+
+
+STRATEGY_NAMES = {
+    "ma_crossover": "均线交叉趋势",
+    "donchian_breakout": "Donchian 通道突破",
+    "turtle_trend": "海龟中期趋势",
+    "volume_price_breakout": "放量价格突破",
+    "atr_trailing_breakout": "ATR 突破追踪",
+    "rsi_reversion": "RSI 回撤反转",
+    "bollinger_reversion": "布林带均值回归",
+    "momentum_trend": "动量趋势过滤",
+    "low_volatility_trend": "低波动趋势持有",
+    "ma_pullback_reclaim": "均线回踩再启动",
+    "gap_reversal": "跳空回补反转",
+}
+
+
+def build_ma_crossover_backtest(
+    kline: KlineResponse,
+    *,
+    fast_window: int = 20,
+    slow_window: int = 60,
+    initial_cash: Decimal | int | float | str = Decimal("1"),
+    fee_bps: Decimal | int | float | str = Decimal("5"),
+    slippage_bps: Decimal | int | float | str = Decimal("0"),
+    start: str | None = None,
+    end: str | None = None,
+) -> BacktestResponse:
+    return build_strategy_backtest(
+        kline,
+        strategy_id="ma_crossover",
+        parameters={
+            "fast_window": fast_window,
+            "slow_window": slow_window,
+            "fee_bps": fee_bps,
+        },
+        initial_cash=initial_cash,
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+        start=start,
+        end=end,
+    )
+
+
+def build_strategy_backtest(
+    kline: KlineResponse,
+    *,
+    strategy_id: str,
+    parameters: dict[str, Any] | None = None,
+    initial_cash: Decimal | int | float | str = Decimal("1"),
+    fee_bps: Decimal | int | float | str = Decimal("5"),
+    slippage_bps: Decimal | int | float | str = Decimal("0"),
+    start: str | None = None,
+    end: str | None = None,
+) -> BacktestResponse:
+    normalized_strategy_id = canonical_strategy_id(strategy_id)
+    if normalized_strategy_id not in STRATEGY_NAMES:
+        raise ValueError(f"暂不支持的策略：{strategy_id}")
+    params = normalize_strategy_parameters(normalized_strategy_id, parameters, fee_bps)
+    annual_periods = periods_per_year(kline.period)
+    start_date, end_date = backtest_date(start), backtest_date(end)
+    if start_date and end_date and start_date > end_date:
+        raise ValueError("回测开始日期不能晚于结束日期。")
+
+    if normalized_strategy_id == "ma_crossover":
+        fast_window = _int_param(params, "fast_window", 20, minimum=2, maximum=120)
+        slow_window = _int_param(params, "slow_window", 60, minimum=3, maximum=250)
+        if fast_window >= slow_window:
+            raise ValueError("fast_window 必须小于 slow_window。")
+    elif normalized_strategy_id == "turtle_trend":
+        fast_window = _int_param(params, "breakout_window", 55, minimum=5, maximum=250)
+        slow_window = _int_param(params, "exit_window", 20, minimum=3, maximum=120)
+    else:
+        fast_window = _int_param(
+            params,
+            "fast_window",
+            _int_param(params, "lookback_window", _int_param(params, "breakout_window", 20)),
+            minimum=2,
+            maximum=250,
+        )
+        slow_window = _int_param(
+            params,
+            "slow_window",
+            _int_param(params, "trend_window", _int_param(params, "exit_window", 60)),
+            minimum=2,
+            maximum=300,
+        )
+
+    params["fee_bps"] = str(fee_bps)
+    cash = finite_decimal(initial_cash, "initial_cash")
+    if not cash.is_finite() or cash <= 0:
+        raise ValueError("initial_cash 必须为大于 0 的有限数值。")
+    fee = finite_decimal(fee_bps, "fee_bps")
+    if not fee.is_finite() or fee < 0 or fee > 10000:
+        raise ValueError("fee_bps 必须为 0 到 10000 之间的有限数值。")
+    slippage = finite_decimal(slippage_bps, "slippage_bps")
+    if not 0 <= slippage < 10000:
+        raise ValueError("slippage_bps 必须为 0 到小于 10000 的有限数值。")
+
+    data = capture_input_data(kline)
+    source_metadata = kline.metadata
+    kline = KlineResponse.model_validate(data.model_dump(mode="json"))
+    dates = [backtest_date(bar.date) for bar in kline.bars]
+    if dates != sorted(set(dates)):
+        raise ValueError("回测行情日期必须严格递增且不重复。")
+    for bar, normalized_date in zip(kline.bars, dates, strict=True):
+        bar.date = normalized_date
+    # Freeze the same canonical dates used by interval filtering and trade records.
+    data = capture_input_data(kline)
+    validate_strategy_bars(kline, normalized_strategy_id)
+    if (start_date or end_date) and not any(
+        (not start_date or bar.date >= start_date) and (not end_date or bar.date <= end_date)
+        for bar in kline.bars
+    ):
+        raise ValueError("指定回测区间内没有行情。")
+
+    ledger = ExecutionLedger(cash, fee / 10000, slippage / 10000)
+    closes = [bar.close for bar in kline.bars]
+    highs = [bar.high for bar in kline.bars]
+    lows = [bar.low for bar in kline.bars]
+    opens = [bar.open for bar in kline.bars]
+    volumes = [bar.volume for bar in kline.bars]
+    equity = cash
+    peak_equity = cash
+    position = 0
+    trades = ledger.trades
+    equity_curve: list[BacktestEquityPoint] = []
+    strategy_returns: list[Decimal] = []
+    position_days = 0
+    entry_index: int | None = None
+    highest_close_since_entry: Decimal | None = None
+
+    for index, bar in enumerate(kline.bars):
+        # Preceding bars warm indicators only; never trade or earn returns outside the interval.
+        if start_date and bar.date < start_date:
+            continue
+        if end_date and bar.date > end_date:
+            break
+        equity_before_bar = equity
+        close = bar.close
+        assert close is not None and bar.open is not None
+        held_before_open = ledger.quantity > 0
+        filled_side = ledger.fill_open(bar.date, bar.open)
+        position = int(ledger.quantity > 0)
+        current_trade = ledger.current_trade
+        if filled_side == "buy":
+            entry_index = index
+            highest_close_since_entry = None
+        elif filled_side == "sell":
+            assert entry_index is not None
+            trades[-1].holding_days = index - entry_index
+            entry_index = None
+            highest_close_since_entry = None
+        equity = ledger.cash + ledger.quantity * close
+        if current_trade is not None:
+            assert entry_index is not None
+            current_trade.holding_days = index - entry_index
+        previous_close = closes[index - 1] if index > 0 else None
+        primary_indicator: Decimal | None = None
+        secondary_indicator: Decimal | None = None
+        benchmark_return = _return_pct(close, previous_close)
+        if held_before_open or position == 1:
+            position_days += 1
+        if position == 1:
+            highest_close_since_entry = (
+                close
+                if highest_close_since_entry is None
+                else max(highest_close_since_entry, close)
+            )
+
+        enter_signal = False
+        exit_signal = False
+
+        if normalized_strategy_id == "ma_crossover":
+            primary_indicator = _rolling_mean(closes, index, fast_window)
+            secondary_indicator = _rolling_mean(closes, index, slow_window)
+            previous_fast_ma = _rolling_mean(closes, index - 1, fast_window) if index > 0 else None
+            previous_slow_ma = _rolling_mean(closes, index - 1, slow_window) if index > 0 else None
+            enter_signal = (
+                close is not None
+                and previous_fast_ma is not None
+                and previous_slow_ma is not None
+                and primary_indicator is not None
+                and secondary_indicator is not None
+                and previous_fast_ma <= previous_slow_ma
+                and primary_indicator > secondary_indicator
+            )
+            exit_signal = (
+                close is not None
+                and previous_fast_ma is not None
+                and previous_slow_ma is not None
+                and primary_indicator is not None
+                and secondary_indicator is not None
+                and previous_fast_ma >= previous_slow_ma
+                and primary_indicator < secondary_indicator
+            )
+        elif normalized_strategy_id in {"donchian_breakout", "turtle_trend"}:
+            breakout_window = _int_param(
+                params,
+                "breakout_window",
+                55 if normalized_strategy_id == "turtle_trend" else 20,
+                minimum=5,
+                maximum=250,
+            )
+            exit_window = _int_param(
+                params,
+                "exit_window",
+                20 if normalized_strategy_id == "turtle_trend" else 10,
+                minimum=3,
+                maximum=120,
+            )
+            primary_indicator = _rolling_high(highs, index - 1, breakout_window)
+            secondary_indicator = _rolling_low(lows, index - 1, exit_window)
+            enter_signal = (
+                close is not None and primary_indicator is not None and close > primary_indicator
+            )
+            exit_signal = (
+                close is not None
+                and secondary_indicator is not None
+                and close < secondary_indicator
+            )
+        elif normalized_strategy_id == "rsi_reversion":
+            rsi_window = _int_param(params, "rsi_window", 14, minimum=3, maximum=60)
+            trend_window = _int_param(params, "trend_window", 60, minimum=10, maximum=250)
+            entry_rsi = _decimal_param(params, "entry_rsi", 35, minimum=5, maximum=60)
+            exit_rsi = _decimal_param(params, "exit_rsi", 55, minimum=40, maximum=95)
+            rsi_value = _rsi(closes, index, rsi_window)
+            trend_ma = _rolling_mean(closes, index, trend_window)
+            primary_indicator = rsi_value
+            secondary_indicator = trend_ma
+            enter_signal = (
+                close is not None
+                and rsi_value is not None
+                and trend_ma is not None
+                and rsi_value <= entry_rsi
+                and close >= trend_ma
+            )
+            exit_signal = (
+                close is not None
+                and rsi_value is not None
+                and (rsi_value >= exit_rsi or (trend_ma is not None and close < trend_ma))
+            )
+        elif normalized_strategy_id == "bollinger_reversion":
+            lookback_window = _int_param(params, "lookback_window", 20, minimum=10, maximum=120)
+            entry_z = _decimal_param(params, "entry_z", 2, minimum=0.5, maximum=4)
+            exit_z = _decimal_param(params, "exit_z", 0, minimum=-1, maximum=2)
+            middle = _rolling_mean(closes, index, lookback_window)
+            std = _rolling_std(closes, index, lookback_window)
+            z_score = None
+            if close is not None and middle is not None and std is not None and std > 0:
+                z_score = (close - middle) / std
+            primary_indicator = middle
+            secondary_indicator = (
+                middle - entry_z * std if middle is not None and std is not None else None
+            )
+            enter_signal = z_score is not None and z_score <= -entry_z
+            exit_signal = z_score is not None and z_score >= exit_z
+        elif normalized_strategy_id == "momentum_trend":
+            momentum_window = _int_param(params, "momentum_window", 60, minimum=10, maximum=250)
+            trend_window = _int_param(params, "trend_window", 120, minimum=20, maximum=300)
+            min_momentum_pct = _decimal_param(
+                params,
+                "min_momentum_pct",
+                8,
+                minimum=-20,
+                maximum=80,
+            )
+            exit_momentum_pct = _decimal_param(
+                params,
+                "exit_momentum_pct",
+                0,
+                minimum=-30,
+                maximum=30,
+            )
+            momentum = _rolling_return_pct(closes, index, momentum_window)
+            trend_ma = _rolling_mean(closes, index, trend_window)
+            primary_indicator = momentum
+            secondary_indicator = trend_ma
+            enter_signal = (
+                close is not None
+                and momentum is not None
+                and trend_ma is not None
+                and momentum >= min_momentum_pct
+                and close > trend_ma
+            )
+            exit_signal = (
+                close is not None
+                and momentum is not None
+                and trend_ma is not None
+                and (momentum <= exit_momentum_pct or close < trend_ma)
+            )
+        elif normalized_strategy_id == "volume_price_breakout":
+            breakout_window = _int_param(params, "breakout_window", 20, minimum=5, maximum=120)
+            exit_window = _int_param(params, "exit_window", 10, minimum=3, maximum=80)
+            volume_window = _int_param(params, "volume_window", 20, minimum=5, maximum=120)
+            volume_ratio = _decimal_param(params, "volume_ratio", "1.4", minimum="1", maximum="5")
+            channel_high = _rolling_high(highs, index - 1, breakout_window)
+            channel_low = _rolling_low(lows, index - 1, exit_window)
+            volume_mean = _rolling_volume_mean(volumes, index - 1, volume_window)
+            current_volume = Decimal(volumes[index]) if volumes[index] is not None else None
+            primary_indicator = channel_high
+            secondary_indicator = channel_low
+            enter_signal = (
+                close is not None
+                and channel_high is not None
+                and current_volume is not None
+                and volume_mean is not None
+                and close > channel_high
+                and current_volume >= volume_mean * volume_ratio
+            )
+            exit_signal = close is not None and channel_low is not None and close < channel_low
+        elif normalized_strategy_id == "atr_trailing_breakout":
+            breakout_window = _int_param(params, "breakout_window", 20, minimum=5, maximum=120)
+            atr_window = _int_param(params, "atr_window", 14, minimum=5, maximum=60)
+            atr_multiplier = _decimal_param(
+                params,
+                "atr_multiplier",
+                "2.5",
+                minimum="0.5",
+                maximum="8",
+            )
+            channel_high = _rolling_high(highs, index - 1, breakout_window)
+            atr_value = _atr(highs, lows, closes, index, atr_window)
+            trailing_stop = (
+                highest_close_since_entry - atr_value * atr_multiplier
+                if highest_close_since_entry is not None and atr_value is not None
+                else None
+            )
+            primary_indicator = channel_high
+            secondary_indicator = trailing_stop
+            enter_signal = close is not None and channel_high is not None and close > channel_high
+            exit_signal = close is not None and trailing_stop is not None and close < trailing_stop
+        elif normalized_strategy_id == "low_volatility_trend":
+            trend_window = _int_param(params, "trend_window", 60, minimum=20, maximum=250)
+            vol_window = _int_param(params, "vol_window", 20, minimum=10, maximum=120)
+            max_volatility_pct = _decimal_param(
+                params,
+                "max_volatility_pct",
+                35,
+                minimum=5,
+                maximum=120,
+            )
+            exit_volatility_pct = _decimal_param(
+                params,
+                "exit_volatility_pct",
+                max_volatility_pct * Decimal("1.25"),
+                minimum=5,
+                maximum=150,
+            )
+            trend_ma = _rolling_mean(closes, index, trend_window)
+            volatility = _annualized_price_volatility_pct(closes, index, vol_window, annual_periods)
+            primary_indicator = trend_ma
+            secondary_indicator = volatility
+            enter_signal = (
+                close is not None
+                and trend_ma is not None
+                and volatility is not None
+                and close > trend_ma
+                and volatility <= max_volatility_pct
+            )
+            exit_signal = (
+                close is not None
+                and trend_ma is not None
+                and volatility is not None
+                and (close < trend_ma or volatility > exit_volatility_pct)
+            )
+        elif normalized_strategy_id == "ma_pullback_reclaim":
+            pullback_window = _int_param(params, "pullback_window", 20, minimum=5, maximum=80)
+            trend_window = _int_param(params, "trend_window", 60, minimum=20, maximum=250)
+            stop_loss_pct = _decimal_param(params, "stop_loss_pct", 8, minimum=1, maximum=30)
+            pullback_ma = _rolling_mean(closes, index, pullback_window)
+            previous_pullback_ma = (
+                _rolling_mean(closes, index - 1, pullback_window) if index > 0 else None
+            )
+            trend_ma = _rolling_mean(closes, index, trend_window)
+            primary_indicator = pullback_ma
+            secondary_indicator = trend_ma
+            trade_return_pct = (
+                _return_pct(close, current_trade.entry_price)
+                if close is not None and current_trade is not None
+                else None
+            )
+            stop_triggered = trade_return_pct is not None and trade_return_pct <= -stop_loss_pct
+            enter_signal = (
+                close is not None
+                and previous_close is not None
+                and pullback_ma is not None
+                and previous_pullback_ma is not None
+                and trend_ma is not None
+                and close > trend_ma
+                and previous_close <= previous_pullback_ma
+                and close > pullback_ma
+            )
+            exit_signal = (
+                close is not None and trend_ma is not None and (close < trend_ma or stop_triggered)
+            )
+        elif normalized_strategy_id == "gap_reversal":
+            gap_down_pct = _decimal_param(params, "gap_down_pct", 3, minimum=0.5, maximum=12)
+            max_holding_days = _int_param(params, "max_holding_days", 5, minimum=1, maximum=30)
+            stop_loss_pct = _decimal_param(params, "stop_loss_pct", 6, minimum=1, maximum=30)
+            open_price = opens[index]
+            gap_pct = _return_pct(open_price, previous_close)
+            holding_days = index - entry_index if entry_index is not None else 0
+            primary_indicator = gap_pct
+            secondary_indicator = Decimal(holding_days)
+            trade_return_pct = (
+                _return_pct(close, current_trade.entry_price)
+                if close is not None and current_trade is not None
+                else None
+            )
+            stop_triggered = trade_return_pct is not None and trade_return_pct <= -stop_loss_pct
+            enter_signal = (
+                close is not None
+                and open_price is not None
+                and gap_pct is not None
+                and gap_pct <= -gap_down_pct
+                and close > open_price
+            )
+            exit_signal = (
+                close is not None
+                and previous_close is not None
+                and (close >= previous_close or holding_days >= max_holding_days or stop_triggered)
+            )
+
+        if position == 0 and enter_signal and ledger.cash > 0:
+            ledger.pending = BacktestSignal(date=bar.date, side="buy")
+        elif position == 1 and exit_signal:
+            ledger.pending = BacktestSignal(date=bar.date, side="sell")
+
+        peak_equity = max(peak_equity, equity)
+        drawdown_pct = (
+            ((equity - peak_equity) / peak_equity) * Decimal("100") if peak_equity else None
+        )
+        strategy_return_pct = _return_pct(equity, equity_before_bar) or Decimal("0")
+        if equity_curve or strategy_return_pct != 0:
+            strategy_returns.append(strategy_return_pct)
+
+        equity_curve.append(
+            BacktestEquityPoint(
+                date=bar.date,
+                close=close,
+                fast_ma=_round(primary_indicator, 4),
+                slow_ma=_round(secondary_indicator, 4),
+                position=position,
+                daily_return_pct=_round(benchmark_return, 4),
+                strategy_return_pct=_round(strategy_return_pct, 4),
+                equity=_round(equity, 6) or equity,
+                cash_balance=ledger.cash,
+                quantity=ledger.quantity,
+                market_value=ledger.quantity * close,
+                drawdown_pct=_round(drawdown_pct, 4),
+            )
+        )
+
+    closed_trades = [trade for trade in trades if trade.status == "closed"]
+    winning_trades = [
+        trade for trade in closed_trades if trade.return_pct is not None and trade.return_pct > 0
+    ]
+    first_close = equity_curve[0].close if equity_curve else None
+    latest_close = equity_curve[-1].close if equity_curve else None
+    total_return = _return_pct(equity, cash)
+    benchmark_return = _return_pct(latest_close, first_close)
+    max_drawdown = min(
+        [point.drawdown_pct for point in equity_curve if point.drawdown_pct is not None],
+        default=None,
+    )
+    volatility = _annualized_volatility_pct(strategy_returns, annual_periods)
+    annualized_return = _annualized_return_pct(equity / cash, len(equity_curve), annual_periods)
+
+    sharpe = None
+    if annualized_return is not None and volatility is not None and volatility != 0:
+        sharpe = annualized_return / volatility
+
+    summary = BacktestSummary(
+        start_date=equity_curve[0].date if equity_curve else None,
+        end_date=equity_curve[-1].date if equity_curve else None,
+        sample_count=len(equity_curve),
+        initial_cash=cash,
+        final_equity=_round(equity, 6) or equity,
+        cash_balance=ledger.cash,
+        market_value=ledger.quantity * latest_close if latest_close is not None else Decimal("0"),
+        total_fees=ledger.total_fees,
+        total_slippage=ledger.total_slippage,
+        realized_pnl=ledger.realized_pnl,
+        unrealized_pnl=(
+            ledger.unrealized_pnl(latest_close) if latest_close is not None else Decimal("0")
+        ),
+        total_return_pct=_round(total_return, 4),
+        benchmark_return_pct=_round(benchmark_return, 4),
+        excess_return_pct=_round(
+            total_return - benchmark_return
+            if total_return is not None and benchmark_return is not None
+            else None,
+            4,
+        ),
+        max_drawdown_pct=_round(max_drawdown, 4),
+        annualized_return_pct=_round(annualized_return, 4),
+        volatility_annualized_pct=_round(volatility, 4),
+        sharpe=_round(sharpe, 4),
+        trade_count=len(closed_trades),
+        win_rate_pct=_round(
+            (Decimal(len(winning_trades)) / Decimal(len(closed_trades))) * Decimal("100")
+            if closed_trades
+            else None,
+            4,
+        ),
+        exposure_pct=_round(
+            (Decimal(position_days) / Decimal(len(equity_curve))) * Decimal("100")
+            if equity_curve
+            else None,
+            4,
+        ),
+    )
+
+    response = BacktestResponse(
+        symbol=kline.symbol,
+        name=kline.name,
+        secid=kline.secid,
+        asset_type=kline.asset_type,
+        market=kline.market,
+        source=kline.source,
+        currency=kline.currency,
+        timezone=kline.timezone,
+        strategy_id=normalized_strategy_id,
+        strategy_name=STRATEGY_NAMES[normalized_strategy_id],
+        fast_window=fast_window,
+        slow_window=slow_window,
+        fee_bps=fee,
+        slippage_bps=slippage,
+        execution_timing="next_open",
+        parameters=params,
+        evaluation_start=start_date,
+        evaluation_end=end_date,
+        period=kline.period,
+        adjustment=kline.adjustment,
+        equity_curve=equity_curve,
+        trades=trades,
+        fills=ledger.fills,
+        pending_signal=ledger.pending,
+        summary=summary,
+        as_of=kline.as_of,
+        fetched_at=datetime.now(UTC),
+        metadata=source_metadata,
+        data_quality=kline.data_quality,
+    )
+    response.metadata = {**response.metadata, "accounting": reconcile_backtest(response, kline)}
+    return attach_experiment(response, data, initial_cash=cash, fee_bps=fee)

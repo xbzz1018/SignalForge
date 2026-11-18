@@ -210,7 +210,7 @@ export async function recallPersonalization(input: {
       subjectId: actor,
       query: input.instruction.trim().slice(0, 4_096),
       context: {
-        product: 'quantpilot',
+        product: 'signalforge',
         project_id: input.projectId,
         ...(input.capabilityId ? { capability: input.capabilityId.slice(0, 512) } : {}),
       },
@@ -325,7 +325,7 @@ export async function exposePersonalization(input: {
       sourceProjectionSha256: prepared.sourceProjectionSha256,
       deliveredContextSha256: prepared.deliveredContextSha256,
       revisionIds: prepared.exposedRevisionIds,
-      idempotencyKey: `quantpilot:${requestId}:memory-usage`,
+      idempotencyKey: `signalforge:${requestId}:memory-usage`,
       purpose: runtime.config.purpose,
     }, requestId);
     const usageMatchesCapsule =
@@ -424,8 +424,8 @@ export async function rememberPersonalPreference(input: {
   return runtime.port.rememberPreference({
     tenantId: runtime.config.tenantId,
     subjectId: actor,
-    source: 'quantpilot-explicit-confirmation',
-    idempotencyKey: `quantpilot:${stableEventId}:preference`,
+    source: 'signalforge-explicit-confirmation',
+    idempotencyKey: `signalforge:${stableEventId}:preference`,
     key,
     value,
     context,
@@ -471,8 +471,8 @@ export async function correctPersonalPreference(input: {
     tenantId: runtime.config.tenantId,
     subjectId: actor,
     recordId,
-    source: 'quantpilot-explicit-correction',
-    idempotencyKey: `quantpilot:${stableEventId}:correction`,
+    source: 'signalforge-explicit-correction',
+    idempotencyKey: `signalforge:${stableEventId}:correction`,
     value,
     evidenceText,
     reason,
@@ -641,7 +641,7 @@ export async function recordPersonalMemoryFeedback(input: {
       revisionId: input.revisionId,
       usageId: use.providerUsageId ?? undefined,
       kind: input.kind,
-      idempotencyKey: `quantpilot:${stableEventId}:outcome`,
+      idempotencyKey: `signalforge:${stableEventId}:outcome`,
       weight,
       purpose: runtime.config.purpose,
       note: input.note?.trim().slice(0, 4_096),

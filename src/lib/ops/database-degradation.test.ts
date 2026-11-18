@@ -19,7 +19,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe('ops page database degradation', () => {
   it('skips all database-backed workspace, trace and Worker reads when explicitly disabled', async () => {
-    vi.stubEnv('QUANTPILOT_DATABASE_ENABLED', '0');
+    vi.stubEnv('SIGNALFORGE_DATABASE_ENABLED', '0');
     const [health, trace, workers] = await Promise.all([
       getWorkspaceHealthDashboard(),
       getGenerationObservabilityDashboard(),
@@ -34,7 +34,7 @@ describe('ops page database degradation', () => {
   });
 
   it('preserves required database failures instead of treating them as an empty workspace', async () => {
-    vi.stubEnv('QUANTPILOT_DATABASE_ENABLED', '1');
+    vi.stubEnv('SIGNALFORGE_DATABASE_ENABLED', '1');
     mocks.projects.mockRejectedValue(new Error('database unavailable'));
     mocks.traceProjects.mockRejectedValue(new Error('database unavailable'));
 

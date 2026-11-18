@@ -8,10 +8,10 @@ const { loadProjectEnvironment } = require('../shared/load-env');
 loadProjectEnvironment();
 
 const baseUrl = process.env.BETTER_AUTH_URL || 'http://127.0.0.1:3000';
-const adminEmail = process.env.QUANTPILOT_AUTH_ADMIN_EMAIL || 'admin@quantpilot.local';
-const adminPassword = process.env.QUANTPILOT_AUTH_ADMIN_PASSWORD || 'admin';
+const adminEmail = process.env.SIGNALFORGE_AUTH_ADMIN_EMAIL || 'admin@signalforge.local';
+const adminPassword = process.env.SIGNALFORGE_AUTH_ADMIN_PASSWORD || 'admin';
 const scope = `authz-e2e-${randomUUID()}`;
-const memberEmail = `${scope}@quantpilot.local`;
+const memberEmail = `${scope}@signalforge.local`;
 const projectId = `${scope}-member`;
 const foreignProjectId = `${scope}-admin`;
 const memberTestPassword = 'MemberVerification!2026';
@@ -55,7 +55,7 @@ async function main() {
   const prisma = new PrismaClient();
   const browser = await chromium.launch({
     headless: true,
-    executablePath: process.env.QUANTPILOT_CHROMIUM_EXECUTABLE_PATH || undefined,
+    executablePath: process.env.SIGNALFORGE_CHROMIUM_EXECUTABLE_PATH || undefined,
   });
   let memberId = null;
   let adminPage = null;

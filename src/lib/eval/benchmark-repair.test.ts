@@ -42,7 +42,7 @@ function report(passed: boolean): QuantValidationReport {
 }
 
 async function setupRun(maxRepairAttempts = 2) {
-  const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'quantpilot-benchmark-repair-'));
+  const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-benchmark-repair-'));
   temporaryProjects.push(projectPath);
   const identifiers = {
     projectPath,

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from quantpilot_market_data.contracts.foundation import ClickHouseHealthResponse
-from quantpilot_market_data.contracts.ingestion import IngestionPreflightCoverage
-from quantpilot_market_data.repositories.foundation import (
+from signalforge_market_data.contracts.foundation import ClickHouseHealthResponse
+from signalforge_market_data.contracts.ingestion import IngestionPreflightCoverage
+from signalforge_market_data.repositories.foundation import (
     _clickhouse_foundation_projection,
     _coverage_missing_fields,
 )
-from quantpilot_market_data.services.ingestion_support import missing_preflight_fields
+from signalforge_market_data.services.ingestion_support import missing_preflight_fields
 
 
 def test_quality_scan_reports_only_the_incomplete_field() -> None:

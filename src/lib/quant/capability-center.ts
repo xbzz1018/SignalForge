@@ -83,8 +83,8 @@ export interface CapabilityCenterData {
 }
 
 const MARKET_API_BASE_URL =
-  process.env.QUANTPILOT_MARKET_API_URL ||
-  process.env.QUANTPILOT_MARKET_API_BASE_URL ||
+  process.env.SIGNALFORGE_MARKET_API_URL ||
+  process.env.SIGNALFORGE_MARKET_API_BASE_URL ||
   'http://127.0.0.1:8000';
 
 const FALLBACK_DATA_PROVIDERS: CapabilityCenterDataProvider[] = [
@@ -185,7 +185,7 @@ const FALLBACK_DATA_PROVIDERS: CapabilityCenterDataProvider[] = [
     limitations: ['需要商业授权、终端环境或账号登录，当前本地未配置凭证。'],
   },
   {
-    id: 'quantpilot-technical-indicators',
+    id: 'signalforge-technical-indicators',
     name: 'SignalForge 技术指标',
     category: 'indicator',
     status: 'available',
@@ -195,7 +195,7 @@ const FALLBACK_DATA_PROVIDERS: CapabilityCenterDataProvider[] = [
     limitations: [],
   },
   {
-    id: 'quantpilot-ma-crossover-backtest',
+    id: 'signalforge-ma-crossover-backtest',
     name: 'SignalForge 均线突破回测',
     category: 'backtest',
     status: 'available',
@@ -230,7 +230,7 @@ const FALLBACK_DATA_PROVIDERS: CapabilityCenterDataProvider[] = [
     limitations: [],
   },
   {
-    id: 'quantpilot-fundamental-indicators',
+    id: 'signalforge-fundamental-indicators',
     name: 'SignalForge 财务衍生指标',
     category: 'fundamental',
     status: 'available',

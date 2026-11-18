@@ -49,7 +49,7 @@ npm run build
 npm run test:e2e
 ```
 
-测试自动启动 `127.0.0.1:3107` 上的独立本地服务，使用空工作空间并关闭认证和外部组件，仅用于 UI 合同验收，不复用正在运行的服务。指标成功场景使用显式的合成 API 数据；它不能替代真实 Mission 或金融数据 E2E。截图与失败 trace 写入 `test-results/product-health/`，HTML 报告在 `playwright-report/`。本机已有浏览器时可通过 `QUANTPILOT_CHROMIUM_EXECUTABLE_PATH` 指定 Chromium 可执行文件；CI 安装 Playwright 配套版本。
+测试自动启动 `127.0.0.1:3107` 上的独立本地服务，使用空工作空间并关闭认证和外部组件，仅用于 UI 合同验收，不复用正在运行的服务。指标成功场景使用显式的合成 API 数据；它不能替代真实 Mission 或金融数据 E2E。截图与失败 trace 写入 `test-results/product-health/`，HTML 报告在 `playwright-report/`。本机已有浏览器时可通过 `SIGNALFORGE_CHROMIUM_EXECUTABLE_PATH` 指定 Chromium 可执行文件；CI 安装 Playwright 配套版本。
 
 同一套浏览器门禁还覆盖聊天文件编辑器：真实页面连接内存 API fixture，验证保存、失败重试、取消关闭保留草稿，以及移动端编辑宽度。测试拦截所有业务 API，不创建真实项目、修改工作空间文件或触发模型任务。ESLint 排除上述报告目录，仍检查 spec 本身。
 
@@ -158,10 +158,10 @@ npm run test:e2e
 关键配置在 `.env`：
 
 ```env
-QUANTPILOT_DEGRADATION_MODE=auto
-QUANTPILOT_MARKET_API_REQUIRED=0
-QUANTPILOT_OBSERVABILITY_REQUIRED=0
-QUANTPILOT_REDIS_REQUIRED=0
+SIGNALFORGE_DEGRADATION_MODE=auto
+SIGNALFORGE_MARKET_API_REQUIRED=0
+SIGNALFORGE_OBSERVABILITY_REQUIRED=0
+SIGNALFORGE_REDIS_REQUIRED=0
 ```
 
 如果用户反馈“页面打不开”，不要先把所有组件都重启一遍。先用运行治理中心或 `npm run doctor` 判断是哪一层缺失，再动对应组件。
@@ -197,7 +197,7 @@ npm run obs:logs
 只想在没有外部组件时做本地排查：
 
 ```bash
-QUANTPILOT_DEGRADATION_MODE=offline npm run doctor
+SIGNALFORGE_DEGRADATION_MODE=offline npm run doctor
 ```
 
 ## 运行治理中心未来还可以增强什么

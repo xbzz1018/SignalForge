@@ -20,12 +20,12 @@ function isProvider(value: string): boolean {
 }
 
 function internalTokenApiEnabled(): boolean {
-  return process.env.QUANTPILOT_ENABLE_INTERNAL_TOKEN_API === '1';
+  return process.env.SIGNALFORGE_ENABLE_INTERNAL_TOKEN_API === '1';
 }
 
 function internalTokenApiAuthorized(request: NextRequest): boolean {
-  const expected = process.env.QUANTPILOT_INTERNAL_API_TOKEN;
-  const provided = request.headers.get('x-quantpilot-internal-token');
+  const expected = process.env.SIGNALFORGE_INTERNAL_API_TOKEN;
+  const provided = request.headers.get('x-signalforge-internal-token');
   if (!expected || !provided) {
     return false;
   }

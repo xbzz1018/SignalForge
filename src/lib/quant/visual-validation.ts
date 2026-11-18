@@ -480,7 +480,7 @@ export async function validateQuantVisualPresentation(params: {
     const { chromium } = await import('playwright');
     browser = await chromium.launch({
       headless: true,
-      executablePath: process.env.QUANTPILOT_CHROMIUM_EXECUTABLE_PATH || undefined,
+      executablePath: process.env.SIGNALFORGE_CHROMIUM_EXECUTABLE_PATH || undefined,
     });
     const viewports = await Promise.all(
       VIEWPORTS.map((viewport) =>

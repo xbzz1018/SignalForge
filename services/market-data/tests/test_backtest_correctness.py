@@ -7,9 +7,9 @@ from math import sqrt
 
 import pytest
 
-from quantpilot_market_data.backtest import build_strategy_backtest
-from quantpilot_market_data.contracts.quotes import KlineResponse
-from quantpilot_market_data.replay_backtest import replay_backtest
+from signalforge_market_data.backtest import build_strategy_backtest
+from signalforge_market_data.contracts.quotes import KlineResponse
+from signalforge_market_data.replay_backtest import replay_backtest
 
 PRICES = [10, 10, 10, 9, 8, 10, 12, 14, 12, 10, 8, 9, 11, 13, 10]
 

@@ -11,9 +11,9 @@ import psycopg
 import pytest
 from psycopg.types.json import Jsonb
 
-from quantpilot_market_data.contracts.fundamentals import FinancialReportItem
-from quantpilot_market_data.database_core import DatabaseError
-from quantpilot_market_data.repositories import financial_history as history
+from signalforge_market_data.contracts.fundamentals import FinancialReportItem
+from signalforge_market_data.database_core import DatabaseError
+from signalforge_market_data.repositories import financial_history as history
 
 TEST_URL = os.getenv("MARKET_TEST_DATABASE_URL", "")
 pytestmark = pytest.mark.skipif(not TEST_URL, reason="requires isolated MARKET_TEST_DATABASE_URL")

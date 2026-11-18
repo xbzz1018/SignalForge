@@ -8,6 +8,6 @@ describe('GET /api/health', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('no-store, max-age=0');
-    await expect(response.json()).resolves.toEqual({ ok: true, service: 'quantpilot-web' });
+    await expect(response.json()).resolves.toEqual({ ok: true, service: 'signalforge-web' });
   });
 });

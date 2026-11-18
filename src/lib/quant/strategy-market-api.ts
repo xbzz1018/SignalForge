@@ -1,7 +1,7 @@
 import { getRuntimeDegradationConfig } from '@/lib/config/degradation';
 
 export const MARKET_API_BASE_URL =
-  process.env.QUANTPILOT_MARKET_API_URL || process.env.QUANTPILOT_MARKET_API_BASE_URL || 'http://127.0.0.1:8000';
+  process.env.SIGNALFORGE_MARKET_API_URL || process.env.SIGNALFORGE_MARKET_API_BASE_URL || 'http://127.0.0.1:8000';
 
 export class MarketApiError extends Error {
   constructor(
@@ -73,6 +73,6 @@ export async function fetchMarketApiJson<T>(
 }
 
 export function marketAdminHeaders(): Record<string, string> {
-  const token = process.env.QUANTPILOT_MARKET_ADMIN_TOKEN?.trim();
-  return token ? { 'X-QuantPilot-Admin-Token': token } : {};
+  const token = process.env.SIGNALFORGE_MARKET_ADMIN_TOKEN?.trim();
+  return token ? { 'X-SignalForge-Admin-Token': token } : {};
 }

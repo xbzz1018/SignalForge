@@ -299,9 +299,9 @@
       ],
       "dependsOn": [],
       "publicSurface": [
-        "services/market-data/src/quantpilot_market_data/routers",
-        "services/market-data/src/quantpilot_market_data/services",
-        "services/market-data/src/quantpilot_market_data/repositories"
+        "services/market-data/src/signalforge_market_data/routers",
+        "services/market-data/src/signalforge_market_data/services",
+        "services/market-data/src/signalforge_market_data/repositories"
       ],
       "migrationNotes": [
         "旧 database.py 兼容门面已删除；连接与转换工具只进入 database_core.py，业务 SQL 只进入对应 repository。"
@@ -389,11 +389,11 @@
         "reason": "模型选择只通过项目当前合同持久化，不恢复平行偏好 API。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/database.py",
+        "path": "services/market-data/src/signalforge_market_data/database.py",
         "reason": "数据库连接与业务 SQL 已拆入 database_core 和 repositories。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/models.py",
+        "path": "services/market-data/src/signalforge_market_data/models.py",
         "reason": "数据合同已迁入 contracts/ 各领域，调用方直接导入所属模块，不恢复单文件合同门面。"
       },
       {
@@ -454,7 +454,7 @@
       },
       {
         "path": "src/lib/agent/skills/compiler.ts",
-        "pattern": "(?:QuantPilot|SignalForge)Image|mcp__MiniMax__understand_image",
+        "pattern": "(?:SignalForge|SignalForge)Image|mcp__MiniMax__understand_image",
         "reason": "PI Agent Skill 编译器不保留具体产品或 Provider 的旧工具别名兼容。"
       },
       {
@@ -519,7 +519,7 @@
         "nextAction": "入口只负责预取流程；规划、端点、指标、图片证据和最终数据投影进入 data-prefetch/ 各模块。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/api.py",
+        "path": "services/market-data/src/signalforge_market_data/api.py",
         "maxLines": 1540,
         "targetLines": 700,
         "nextAction": "收敛为 app factory 和 router 注册；业务 endpoint 必须进入 routers/，use case 必须进入 services/。"
@@ -543,49 +543,49 @@
         "nextAction": "已拆 cases/sets、paths、runtime-utils 和 report/database mappers；继续拆 runs / queue / repairs / scheduling，保留 src/lib/eval 作为唯一公开入口。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/contracts/analysis.py",
+        "path": "services/market-data/src/signalforge_market_data/contracts/analysis.py",
         "maxLines": 400,
         "targetLines": 400,
         "nextAction": "只保留所属领域的请求、响应和校验；业务取数与编排留在 services/。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/contracts/analytics.py",
+        "path": "services/market-data/src/signalforge_market_data/contracts/analytics.py",
         "maxLines": 400,
         "targetLines": 400,
         "nextAction": "只保留所属领域的请求、响应和校验；业务取数与编排留在 services/。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/contracts/common.py",
+        "path": "services/market-data/src/signalforge_market_data/contracts/common.py",
         "maxLines": 400,
         "targetLines": 400,
         "nextAction": "只保留所属领域的请求、响应和校验；业务取数与编排留在 services/。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/contracts/foundation.py",
+        "path": "services/market-data/src/signalforge_market_data/contracts/foundation.py",
         "maxLines": 400,
         "targetLines": 400,
         "nextAction": "只保留所属领域的请求、响应和校验；业务取数与编排留在 services/。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/contracts/fundamentals.py",
+        "path": "services/market-data/src/signalforge_market_data/contracts/fundamentals.py",
         "maxLines": 400,
         "targetLines": 400,
         "nextAction": "只保留所属领域的请求、响应和校验；业务取数与编排留在 services/。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/contracts/ingestion.py",
+        "path": "services/market-data/src/signalforge_market_data/contracts/ingestion.py",
         "maxLines": 400,
         "targetLines": 400,
         "nextAction": "只保留所属领域的请求、响应和校验；业务取数与编排留在 services/。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/contracts/quotes.py",
+        "path": "services/market-data/src/signalforge_market_data/contracts/quotes.py",
         "maxLines": 400,
         "targetLines": 400,
         "nextAction": "只保留所属领域的请求、响应和校验；业务取数与编排留在 services/。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/contracts/universes.py",
+        "path": "services/market-data/src/signalforge_market_data/contracts/universes.py",
         "maxLines": 400,
         "targetLines": 400,
         "nextAction": "只保留所属领域的请求、响应和校验；业务取数与编排留在 services/。"
@@ -735,7 +735,7 @@
         "nextAction": "保持文件树、编辑状态与 React 交互边界；文件读写竞态由独立状态单元回归。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/repositories/financial_history.py",
+        "path": "services/market-data/src/signalforge_market_data/repositories/financial_history.py",
         "maxLines": 300,
         "targetLines": 300,
         "nextAction": "仅负责不可变财报版本与历史查询；provider 抓取和 HTTP 错误映射留在 service/router。"
@@ -831,25 +831,25 @@
         "nextAction": "保持用量与上下文口径独立、来源显式；缺失信息不能伪装为精确零值。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/contracts/experiments.py",
+        "path": "services/market-data/src/signalforge_market_data/contracts/experiments.py",
         "maxLines": 150,
         "targetLines": 150,
         "nextAction": "保持数值引擎、实验契约与离线复跑分离；实验不得重新取实时数据，新增策略必须通过复跑回归。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/backtest_experiments.py",
+        "path": "services/market-data/src/signalforge_market_data/backtest_experiments.py",
         "maxLines": 250,
         "targetLines": 250,
         "nextAction": "保持数值引擎、实验契约与离线复跑分离；实验不得重新取实时数据，新增策略必须通过复跑回归。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/replay_backtest.py",
+        "path": "services/market-data/src/signalforge_market_data/replay_backtest.py",
         "maxLines": 100,
         "targetLines": 100,
         "nextAction": "保持数值引擎、实验契约与离线复跑分离；实验不得重新取实时数据，新增策略必须通过复跑回归。"
       },
       {
-        "path": "services/market-data/src/quantpilot_market_data/backtest.py",
+        "path": "services/market-data/src/signalforge_market_data/backtest.py",
         "maxLines": 800,
         "targetLines": 800,
         "nextAction": "保持数值引擎、实验契约与离线复跑分离；实验不得重新取实时数据，新增策略必须通过复跑回归。"

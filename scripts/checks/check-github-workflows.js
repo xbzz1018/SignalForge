@@ -57,7 +57,7 @@ if (!/MARKET_TEST_REDIS_URL:\s*redis:\/\/127\.0\.0\.1:36381\/0/.test(marketBacke
     !/36381:6379/.test(marketBackend)) {
   failures.push('.github/workflows/quality.yml: backend Redis integration must use its isolated service');
 }
-if (!/QUANTPILOT_AUTH_ADMIN_EMAIL:\s*auth-smoke-admin@quantpilot\.local/.test(quality)) {
+if (!/SIGNALFORGE_AUTH_ADMIN_EMAIL:\s*auth-smoke-admin@signalforge\.local/.test(quality)) {
   failures.push('.github/workflows/quality.yml: authenticated smoke must use an explicit CI administrator');
 }
 if (!/node scripts\/evals\/run-contract-market-fixture\.js/.test(quality)) {
@@ -70,8 +70,8 @@ if (/npm run dev:market/.test(quality)) {
   failures.push('.github/workflows/quality.yml: deterministic contract evaluation must not depend on public market APIs');
 }
 if (
-  !/QUANTPILOT_GENERATED_SANDBOX:\s*0/.test(quality) ||
-  !/QUANTPILOT_ALLOW_UNSANDBOXED_GENERATED_CODE:\s*1/.test(quality)
+  !/SIGNALFORGE_GENERATED_SANDBOX:\s*0/.test(quality) ||
+  !/SIGNALFORGE_ALLOW_UNSANDBOXED_GENERATED_CODE:\s*1/.test(quality)
 ) {
   failures.push('.github/workflows/quality.yml: trusted contract templates must explicitly opt out of unavailable runner namespaces');
 }
@@ -85,7 +85,7 @@ const nightlyContracts = [
   ['live evaluation only runs with a configured secret', /if:\s*needs\.configuration\.outputs\.deepseek-configured\s*==\s*'true'/],
   ['manual live evaluation remains fail-closed', /GITHUB_EVENT_NAME.*workflow_dispatch[\s\S]*DEEPSEEK_API_KEY must be configured/],
   ['scheduled missing-secret runs emit a notice', /::notice::DEEPSEEK_API_KEY is not configured/],
-  ['hosted live evaluation selects the remote DeepSeek model', /QUANTPILOT_EVAL_MODEL:\s*deepseek-v4-flash/],
+  ['hosted live evaluation selects the remote DeepSeek model', /SIGNALFORGE_EVAL_MODEL:\s*deepseek-v4-flash/],
   ['generation passes the expected DeepSeek model explicitly', /benchmark:quant:e2e -- --model deepseek-v4-flash/],
   ['the independent gate expects the same DeepSeek model', /eval:ci:e2e -- --model deepseek-v4-flash/],
 ];
@@ -94,7 +94,7 @@ for (const [description, pattern] of nightlyContracts) {
 }
 
 const release = fs.readFileSync(path.join(workflowDir, 'release-evidence.yml'), 'utf8');
-if (!/QUANTPILOT_RELEASE_EVIDENCE_MODEL:\s*deepseek-v4-flash/.test(release)) {
+if (!/SIGNALFORGE_RELEASE_EVIDENCE_MODEL:\s*deepseek-v4-flash/.test(release)) {
   failures.push('.github/workflows/release-evidence.yml: hosted evidence must explicitly select the remote DeepSeek model');
 }
 if (!/DEEPSEEK_API_KEY is required; release evidence cannot be skipped/.test(release)) {

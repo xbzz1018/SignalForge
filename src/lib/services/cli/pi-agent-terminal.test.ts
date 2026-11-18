@@ -261,7 +261,7 @@ describe('PI Agent terminal ownership', () => {
     });
     delete process.env.PI_AGENT_TIMEOUT_MS;
     delete process.env.PI_AGENT_REASONING_EFFORT;
-    delete process.env.QUANTPILOT_EVAL_FORCE_MODEL_AGENT;
+    delete process.env.SIGNALFORGE_EVAL_FORCE_MODEL_AGENT;
   });
 
   afterEach(async () => {
@@ -883,7 +883,7 @@ describe('PI Agent terminal ownership', () => {
         variantId: 'single-stock-command-center',
       },
     });
-    process.env.QUANTPILOT_EVAL_FORCE_MODEL_AGENT = '1';
+    process.env.SIGNALFORGE_EVAL_FORCE_MODEL_AGENT = '1';
 
     await executePiAgent(
       'project-test',

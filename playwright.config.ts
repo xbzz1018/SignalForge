@@ -18,7 +18,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:3107',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    launchOptions: { executablePath: process.env.QUANTPILOT_CHROMIUM_EXECUTABLE_PATH || undefined },
+    launchOptions: { executablePath: process.env.SIGNALFORGE_CHROMIUM_EXECUTABLE_PATH || undefined },
   },
   projects: [
     { name: 'desktop', use: { viewport: { width: 1440, height: 900 }, colorScheme: 'light' } },
@@ -29,10 +29,10 @@ export default defineConfig({
     wait: { stdout: /Ready in/ },
     timeout: 60_000,
     env: {
-      QUANTPILOT_AUTH_MODE: 'disabled',
-      QUANTPILOT_DEGRADATION_MODE: 'offline',
-      QUANTPILOT_DATABASE_ENABLED: '0',
-      QUANTPILOT_KNOWLEDGE_ENABLED: '0',
+      SIGNALFORGE_AUTH_MODE: 'disabled',
+      SIGNALFORGE_DEGRADATION_MODE: 'offline',
+      SIGNALFORGE_DATABASE_ENABLED: '0',
+      SIGNALFORGE_KNOWLEDGE_ENABLED: '0',
       DATABASE_URL: 'postgresql://unused:unused@127.0.0.1:1/unused?connect_timeout=1',
       PROJECTS_DIR: './tmp/e2e-product-health-projects',
     },

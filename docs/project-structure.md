@@ -107,13 +107,13 @@ SignalForge 采用一个 Next.js 主应用、一个 Python 市场数据后端和
 
 | 路径 | 责任 |
 | --- | --- |
-| `services/market-data/src/quantpilot_market_data/routers/` | FastAPI controller，只处理 HTTP 参数、状态码和响应模型 |
-| `services/market-data/src/quantpilot_market_data/services/` | use case 编排，处理缓存、降级、provider 选择和数据质量 |
-| `services/market-data/src/quantpilot_market_data/repositories/` | TimescaleDB/PostgreSQL 查询、ClickHouse 同步、读模型缓存、事务、批量写入和分页 |
-| `services/market-data/src/quantpilot_market_data/database_core.py` | 数据库连接、日期、Decimal、JSON 和证券元数据解析等无业务状态基础函数 |
-| `services/market-data/src/quantpilot_market_data/providers/` | 东方财富、Baostock、AKShare 和候选信源 adapter |
-| `services/market-data/src/quantpilot_market_data/analytics/` | ClickHouse 等分析加速 adapter |
-| `services/market-data/src/quantpilot_market_data/cache.py` | 本地 JSON 和 Redis cache-aside |
+| `services/market-data/src/signalforge_market_data/routers/` | FastAPI controller，只处理 HTTP 参数、状态码和响应模型 |
+| `services/market-data/src/signalforge_market_data/services/` | use case 编排，处理缓存、降级、provider 选择和数据质量 |
+| `services/market-data/src/signalforge_market_data/repositories/` | TimescaleDB/PostgreSQL 查询、ClickHouse 同步、读模型缓存、事务、批量写入和分页 |
+| `services/market-data/src/signalforge_market_data/database_core.py` | 数据库连接、日期、Decimal、JSON 和证券元数据解析等无业务状态基础函数 |
+| `services/market-data/src/signalforge_market_data/providers/` | 东方财富、Baostock、AKShare 和候选信源 adapter |
+| `services/market-data/src/signalforge_market_data/analytics/` | ClickHouse 等分析加速 adapter |
+| `services/market-data/src/signalforge_market_data/cache.py` | 本地 JSON 和 Redis cache-aside |
 
 完整规则见 [后端能力架构与持续优化边界](backend-capability-architecture.md)。
 
@@ -141,7 +141,7 @@ SignalForge 采用一个 Next.js 主应用、一个 Python 市场数据后端和
 - `src/app/strategy-platform/StrategyPlatformClient.tsx` 已拆出 helpers、金融知识、股票池、K 线详情、板块资金、因子目录和基础组件视图；后续继续拆弹窗、hooks 和扫描编排。
 - `src/lib/quant/strategies.ts` 已拆出 types、catalog、readiness、scan repository 和 response mappers；后续继续拆 market API client 和 dashboard service。
 - 市场数据持久化已经按 analytics、bars、coverage、foundation、ingestion、sector_flow、screener、universes、upserts repository 拆分，禁止恢复 `database.py` 聚合门面。
-- 将 `services/market-data/src/quantpilot_market_data/api.py` 拆为 `routers/registry.py`、`routers/quotes.py`、`routers/history.py`、`routers/ingestion.py`、`routers/analytics.py`、`routers/foundation.py` 和对应 `services/` use case。
+- 将 `services/market-data/src/signalforge_market_data/api.py` 拆为 `routers/registry.py`、`routers/quotes.py`、`routers/history.py`、`routers/ingestion.py`、`routers/analytics.py`、`routers/foundation.py` 和对应 `services/` use case。
 - `src/lib/utils/scaffold.ts` 的基础/专用模板已经迁出；后续继续拆 dependency planner、repair adapter 和 workspace writer 的文件写入策略。
 - 生成链路已落 PostgreSQL durable job/outbox、claim/attempt/fencing、独立 polling worker 和 replan 重试；下一步让评测、策略扫描复用同一调度合同。Redis 只承担可丢失的唤醒与进度缓存，锁和完成态权威始终留在 PostgreSQL。
 - 为 workspace 健康快照增加 PostgreSQL 索引表，但保留原始 workspace 文件。

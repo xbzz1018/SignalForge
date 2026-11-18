@@ -36,7 +36,7 @@ const fixture: ProductHealthDashboard = {
 
 test.beforeEach(async ({ page, colorScheme }) => {
   await page.addInitScript((theme) => {
-    localStorage.setItem('quantpilot-color-mode', theme ?? 'light');
+    localStorage.setItem('signalforge-color-mode', theme ?? 'light');
   }, colorScheme);
 });
 

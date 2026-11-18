@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev/run-full.js",
     "dev:web": "node scripts/dev/run-web.js",
-    "dev:market": "uv run --extra baostock --extra akshare --project services/market-data quantpilot-market-api",
+    "dev:market": "uv run --extra baostock --extra akshare --project services/market-data signalforge-market-api",
     "ensure:env": "node scripts/dev/setup-env.js",
     "clean:local": "node scripts/dev/cleanup-local-artifacts.js",
     "clean:local:dry-run": "node scripts/dev/cleanup-local-artifacts.js --dry-run",
@@ -45,7 +45,7 @@
     "redis:up": "docker compose up -d redis",
     "redis:logs": "docker compose logs -f redis",
     "redis:cli": "docker compose exec redis redis-cli",
-    "db:psql": "docker compose exec timescaledb psql -U quantpilot -d quantpilot",
+    "db:psql": "docker compose exec timescaledb psql -U signalforge -d signalforge",
     "db:init": "node scripts/db/init-database.js",
     "db:doctor": "node scripts/db/check-database.js",
     "db:sync-workspaces": "node scripts/db/sync-projects-from-workspaces.js",
@@ -191,6 +191,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xbzz1018/SignalForge.git"
+    "url": "git+https://github.com/xbzz1018/SignalForge-Python.git"
   }
 }

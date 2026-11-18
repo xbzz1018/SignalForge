@@ -9,12 +9,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from quantpilot_market_data import backtest_experiments
-from quantpilot_market_data.cache import MarketDataCache
-from quantpilot_market_data.contracts.quotes import KlineResponse
-from quantpilot_market_data.replay_backtest import replay_backtest
-from quantpilot_market_data.routers.backtests import create_backtest_router
-from quantpilot_market_data.services import backtests
+from signalforge_market_data import backtest_experiments
+from signalforge_market_data.cache import MarketDataCache
+from signalforge_market_data.contracts.quotes import KlineResponse
+from signalforge_market_data.replay_backtest import replay_backtest
+from signalforge_market_data.routers.backtests import create_backtest_router
+from signalforge_market_data.services import backtests
 
 
 @pytest.mark.parametrize(("fast", "slow"), [(1, 60), (121, 250), (20, 2), (20, 251), (20, 20)])

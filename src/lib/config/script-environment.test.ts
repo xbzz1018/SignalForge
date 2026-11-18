@@ -13,7 +13,7 @@ afterEach(() => roots.splice(0).forEach((root) => fs.rmSync(root, { recursive: t
 
 describe('CLI environment precedence', () => {
   it('keeps injected credentials above local overrides and shared defaults', () => {
-    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quantpilot-env-'));
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'signalforge-env-'));
     roots.push(rootDir);
     fs.writeFileSync(path.join(rootDir, '.env'), 'DATABASE_URL=default-db\nTOKEN=default-token\nPORT=35433\n');
     fs.writeFileSync(path.join(rootDir, '.env.local'), 'DATABASE_URL=local-db\nTOKEN=local-token\n');
@@ -25,7 +25,7 @@ describe('CLI environment precedence', () => {
   });
 
   it('supports environment-only processes and preserves intentional empty overrides', () => {
-    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quantpilot-env-'));
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'signalforge-env-'));
     roots.push(rootDir);
     const target = { TOKEN: '' };
     expect(loadProjectEnvironment({ rootDir, target })).toEqual({ TOKEN: '' });

@@ -58,10 +58,10 @@ export async function GET(request: NextRequest) {
 
     if (config?.enabled) {
       try {
-        service = await inspectPersonalMemory('quantpilot-account-memory');
+        service = await inspectPersonalMemory('signalforge-account-memory');
         preferences = await listPersonalPreferences({
           actorUserId: session.user.id,
-          requestId: 'quantpilot-account-memory',
+          requestId: 'signalforge-account-memory',
         });
         status = 'ready';
       } catch (cause) {

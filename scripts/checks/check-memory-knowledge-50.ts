@@ -73,8 +73,8 @@ interface CaseResult {
 }
 
 const argv = process.argv.slice(2);
-const EXPECTED_DATASET = 'quantpilot-memory-knowledge-acceptance-50-v1';
-const DEFAULT_SUBJECT = 'quantpilot-acceptance-50-v1';
+const EXPECTED_DATASET = 'signalforge-memory-knowledge-acceptance-50-v1';
+const DEFAULT_SUBJECT = 'signalforge-acceptance-50-v1';
 
 function option(name: string): string | null {
   const prefix = `--${name}=`;
@@ -440,7 +440,7 @@ async function runCase(input: {
         taskCategory: 'memory-knowledge-50-acceptance',
         eventId: `acceptance-50-knowledge-feedback-${input.item.id.toLowerCase()}-${input.runId}`,
         outcome: 'helped',
-        acceptedReceiptId: `urn:quantpilot:acceptance-50:${input.runId}:${input.item.id}`,
+        acceptedReceiptId: `urn:signalforge:acceptance-50:${input.runId}:${input.item.id}`,
         acceptedReceiptSha256: sha256(`accepted:${input.runId}:${input.item.id}`),
         observedAt: occurredAt,
       }, { config: knowledgeConfig });

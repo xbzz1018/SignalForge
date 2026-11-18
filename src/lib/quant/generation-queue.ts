@@ -60,7 +60,7 @@ type QueueTask<T> = () => Promise<T>;
 
 const MAX_QUEUE_ITEMS =
   Number.parseInt(
-    process.env.QUANTPILOT_GENERATION_QUEUE_HISTORY_LIMIT ?? "",
+    process.env.SIGNALFORGE_GENERATION_QUEUE_HISTORY_LIMIT ?? "",
     10,
   ) || 50;
 

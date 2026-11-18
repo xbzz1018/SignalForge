@@ -12,9 +12,9 @@ import { fileExists, formatDuration, normalizeRelativePath, readTextFile } from 
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
-const BUILD_TIMEOUT_MS = Number.parseInt(process.env.QUANTPILOT_VALIDATION_BUILD_TIMEOUT_MS ?? '', 10) || 180_000;
+const BUILD_TIMEOUT_MS = Number.parseInt(process.env.SIGNALFORGE_VALIDATION_BUILD_TIMEOUT_MS ?? '', 10) || 180_000;
 
-const PREVIEW_HTTP_TIMEOUT_MS = Number.parseInt(process.env.QUANTPILOT_VALIDATION_HTTP_TIMEOUT_MS ?? '', 10) || 45_000;
+const PREVIEW_HTTP_TIMEOUT_MS = Number.parseInt(process.env.SIGNALFORGE_VALIDATION_HTTP_TIMEOUT_MS ?? '', 10) || 45_000;
 
 const FETCH_TIMEOUT_MS = 5_000;
 

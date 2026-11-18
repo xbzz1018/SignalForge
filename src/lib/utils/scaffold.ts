@@ -65,7 +65,7 @@ function shouldRefreshScaffoldFile(filePath: string, existing: string): boolean 
   if (normalizedPath.endsWith('/app/api/market/[...path]/route.ts')) {
     const targetsQuantBackend =
       existing.includes('127.0.0.1:8000/api/v1') ||
-      existing.includes('QUANTPILOT_MARKET_API') ||
+      existing.includes('SIGNALFORGE_MARKET_API') ||
       existing.includes('/api/v1/');
 
     return !targetsQuantBackend && trimmed.length < 1_200;
@@ -81,7 +81,7 @@ function shouldRefreshScaffoldFile(filePath: string, existing: string): boolean 
       existing.includes('delete runtimeEnv.NEXT_RSPACK') ||
       existing.includes('delete runtimeEnv.TURBOPACK') ||
       !existing.includes("defaultBundlerArgs = hasBundlerFlag ? [] : ['--webpack']") ||
-      !existing.includes('QUANTPILOT_WORKSPACE_ROOT') ||
+      !existing.includes('SIGNALFORGE_WORKSPACE_ROOT') ||
       !existing.includes("fs.existsSync(path.join(projectRoot, '.next', 'BUILD_ID'))")
     );
   }
@@ -91,7 +91,7 @@ function shouldRefreshScaffoldFile(filePath: string, existing: string): boolean 
       existing.includes('delete buildEnv.NEXT_RSPACK') ||
       existing.includes('delete buildEnv.TURBOPACK') ||
       !existing.includes("NODE_ENV: 'production'") ||
-      !existing.includes('QUANTPILOT_WORKSPACE_ROOT') ||
+      !existing.includes('SIGNALFORGE_WORKSPACE_ROOT') ||
       !existing.includes('NEXT_PRIVATE_BUILD_WORKER') ||
       !existing.includes("defaultBundlerArgs = hasBundlerFlag ? [] : ['--webpack']") ||
       !existing.includes("['next', 'build'")
@@ -124,12 +124,12 @@ const path = require('path');
 const projectRoot = path.join(__dirname, '..');
 const isWindows = process.platform === 'win32';
 const workspaceRoot =
-  process.env.QUANTPILOT_WORKSPACE_ROOT || path.resolve(projectRoot, '../../..');
+  process.env.SIGNALFORGE_WORKSPACE_ROOT || path.resolve(projectRoot, '../../..');
 
 const buildEnv = {
   ...process.env,
   NODE_ENV: 'production',
-  QUANTPILOT_WORKSPACE_ROOT: workspaceRoot,
+  SIGNALFORGE_WORKSPACE_ROOT: workspaceRoot,
   NEXT_PRIVATE_BUILD_WORKER: '1',
   NEXT_TELEMETRY_DISABLED: '1',
 };
@@ -236,8 +236,8 @@ async function ensureNextConfig(filePath: string) {
 const path = require('path');
 
 const projectRoot = __dirname;
-const workspaceRoot = process.env.QUANTPILOT_WORKSPACE_ROOT
-  ? path.resolve(process.env.QUANTPILOT_WORKSPACE_ROOT)
+const workspaceRoot = process.env.SIGNALFORGE_WORKSPACE_ROOT
+  ? path.resolve(process.env.SIGNALFORGE_WORKSPACE_ROOT)
   : path.resolve(projectRoot, '../../..');
 
 const nextConfig = {
@@ -296,8 +296,8 @@ module.exports = nextConfig;
     nextContent = nextContent.replace(
       /const projectRoot = __dirname;\n/,
       `const projectRoot = __dirname;
-const workspaceRoot = process.env.QUANTPILOT_WORKSPACE_ROOT
-  ? path.resolve(process.env.QUANTPILOT_WORKSPACE_ROOT)
+const workspaceRoot = process.env.SIGNALFORGE_WORKSPACE_ROOT
+  ? path.resolve(process.env.SIGNALFORGE_WORKSPACE_ROOT)
   : path.resolve(projectRoot, '../../..');
 `
     );
@@ -412,8 +412,8 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 }
 
 async function upsertGeneratedCssBlock(cssPath: string, marker: string, block: string) {
-  const start = `/* quantpilot-${marker}:start */`;
-  const end = `/* quantpilot-${marker}:end */`;
+  const start = `/* signalforge-${marker}:start */`;
+  const end = `/* signalforge-${marker}:end */`;
   const raw = await fs.readFile(cssPath, 'utf8').catch(() => '');
   const normalizedBlock = `${start}\n${block.trim()}\n${end}`;
   const blockWithNewline = `${normalizedBlock}\n`;

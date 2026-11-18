@@ -90,7 +90,7 @@ const RESEARCH_STARTERS: Array<{
   prompt: string;
 }> = [
   {
-    capabilityId: "stock_diagnosis",
+    capabilityId: "backtest_review",
     label: "510300 均线回测",
     prompt: "用最近一年的 20/60 日均线规则回测 510300，并生成带风险指标的策略看板。",
   },
@@ -104,6 +104,13 @@ const RESEARCH_STARTERS: Array<{
     label: "贵州茅台基本面",
     prompt: "评估贵州茅台最近四个报告期的盈利质量、现金流、估值位置和主要风险。",
   },
+];
+
+const HOME_RESEARCH_TYPES: QuantCapabilityId[] = [
+  DEFAULT_QUANT_CAPABILITY_ID,
+  "technical_analysis",
+  "backtest_review",
+  "fundamental_analysis",
 ];
 
 const ACTIVE_PROJECT_STATUSES = new Set(["running", "building", "initializing"]);
@@ -254,7 +261,7 @@ export default function HomePage() {
     );
     return needsAttention ?? currentlyRunning ?? null;
   }, [projects]);
-  const readyCapabilities = QUANT_CAPABILITIES.filter((capability) => capability.status === "ready");
+  const readyCapabilities = HOME_RESEARCH_TYPES.map(getQuantCapability);
   const accountName = user?.name || user?.email || "策略分析师";
   const accountInitial = accountName.slice(0, 1).toUpperCase();
   const normalizedPrompt = prompt.trim();
@@ -295,13 +302,13 @@ export default function HomePage() {
   useEffect(() => {
     const currentHour = new Date().getHours();
     setGreeting(currentHour < 11 ? "早上好" : currentHour < 14 ? "中午好" : currentHour < 18 ? "下午好" : "晚上好");
-    const storedMode = window.localStorage.getItem("quantpilot-question-mode");
+    const storedMode = window.localStorage.getItem("signalforge-question-mode");
     if (storedMode === "act" || storedMode === "chat") setOutputMode(storedMode);
   }, []);
 
   const handleOutputModeChange = useCallback((mode: QuestionMode) => {
     setOutputMode(mode);
-    window.localStorage.setItem("quantpilot-question-mode", mode);
+    window.localStorage.setItem("signalforge-question-mode", mode);
   }, []);
 
   useEffect(() => {
@@ -686,7 +693,7 @@ export default function HomePage() {
   ) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
-    const visibleCapabilities = readyCapabilities.slice(0, 4);
+    const visibleCapabilities = readyCapabilities;
     const nextIndex = event.key === "Home"
       ? 0
       : event.key === "End"
@@ -836,7 +843,7 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
-              className="relative isolate overflow-hidden border-b border-border/55 py-6 sm:py-9"
+              className="relative isolate overflow-hidden border-b border-border/55 py-4 sm:py-6"
             >
               <div className="pointer-events-none absolute inset-0 -z-30 bg-[linear-gradient(145deg,hsl(var(--background)),hsl(var(--primary)/0.04)_52%,hsl(var(--background)))]" />
               <div className="pointer-events-none absolute left-1/2 top-2 -z-20 h-64 w-[58rem] max-w-[94vw] -translate-x-1/2 rounded-full bg-primary/[0.075] blur-3xl" />
@@ -855,13 +862,12 @@ export default function HomePage() {
                 />
               </div>
 
-              <div className="relative z-10 grid gap-8 lg:grid-cols-[minmax(16rem,0.72fr)_minmax(0,1.28fr)] lg:items-start">
-                <div className="min-w-0">
-                  <div className="text-center lg:text-left">
-                    <h1 className="text-[1.9rem] font-bold tracking-normal sm:text-[2.45rem]">今天先验证哪条假设？</h1>
+              <div className="relative z-10 grid gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(15rem,0.85fr)] lg:items-start lg:gap-x-9">
+                <div className="min-w-0 lg:col-span-2">
+                  <div>
+                    <h1 className="text-2xl font-bold sm:text-3xl">新建量化研究</h1>
                     <p className="mx-auto mt-1.5 max-w-2xl text-xs leading-5 text-muted-foreground sm:text-sm lg:mx-0">
-                      <span className="sm:hidden">输入标的、区间和规则。</span>
-                      <span className="hidden sm:inline">输入标的、时间区间和策略规则，系统会串起行情、指标、证据与回测结果。</span>
+                      <span>行情分析、策略回测与研究看板</span>
                     </p>
                     <Link
                       href="/skills"
@@ -879,42 +885,18 @@ export default function HomePage() {
                     </Link>
                   </div>
 
-                  <div className="mt-7 border-t border-border/60 pt-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground"><Sparkles className="h-3.5 w-3.5 text-primary" />快捷研究</span>
-                      <span className="text-[10px] text-muted-foreground">一键带入完整问题</span>
-                    </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
-                      {RESEARCH_STARTERS.map((starter, index) => {
-                        const StarterIcon = index === 0 ? BarChart3 : index === 1 ? TrendingUp : LineChart;
-                        return (
-                          <button
-                            key={starter.label}
-                            type="button"
-                            aria-label={`使用示例：${starter.label}`}
-                            onClick={() => handleStarterClick(starter)}
-                            className="group flex min-h-14 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/[0.045] hover:shadow-sm"
-                          >
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><StarterIcon className="h-4 w-4" /></span>
-                            <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-foreground">{starter.label}</span><span className="mt-0.5 block text-[10px] text-muted-foreground">填充到任务编辑器</span></span>
-                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
                 </div>
-
-                <div className="min-w-0">
+                <div className="min-w-0 lg:col-start-1 lg:row-start-2">
                   <div className="mb-3">
-                    <div className="mb-2 flex items-center justify-between gap-3"><span className="text-xs font-semibold text-foreground">研究类型</span><span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">WORKBENCH</span></div>
+                    <div className="mb-2 text-xs font-semibold text-foreground">研究类型</div>
                     <div role="tablist" aria-label="研究类型" className="flex max-w-full snap-x snap-mandatory justify-start gap-3 overflow-x-auto overscroll-x-contain px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                      {readyCapabilities.slice(0, 4).map((capability, index) => (
+                      {readyCapabilities.map((capability, index) => (
                         <button
                           key={capability.id}
                           type="button"
                           role="tab"
                           aria-selected={selectedCapability === capability.id}
+                          tabIndex={selectedCapability === capability.id ? 0 : -1}
                           data-home-capability-index={index}
                           onClick={() => handleCapabilityCardClick(capability.id)}
                           onKeyDown={(event) => handleCapabilityKeyDown(event, index)}
@@ -958,9 +940,6 @@ export default function HomePage() {
                     </p>
                   ) : normalizedPrompt ? (
                     <div aria-live="polite" className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                      <span className="mr-1 inline-flex items-center gap-1 font-semibold text-muted-foreground"><Sparkles className="h-3 w-3 text-primary" />提交后由所选大模型解析</span>
-                      <span className="inline-flex min-h-7 items-center rounded-full border border-border/70 bg-background/75 px-2.5 text-foreground">标的原文保真</span>
-                      <span className="inline-flex min-h-7 items-center rounded-full border border-border/70 bg-background/75 px-2.5 text-foreground">Resolver 校验证券代码</span>
                       <span className="inline-flex min-h-7 items-center gap-1 rounded-full border border-border/70 bg-background/75 px-2.5 text-foreground">{outputMode === "act" ? <LayoutDashboard className="h-3 w-3 text-primary" /> : <MessageSquare className="h-3 w-3 text-primary" />}{questionOutputLabel(outputMode)}</span>
                     </div>
                   ) : null}
@@ -971,6 +950,32 @@ export default function HomePage() {
                     </p>
                   ) : null}
                 </div>
+                <div className="min-w-0 border-t border-border/60 pt-3 lg:col-start-2 lg:row-start-2 lg:border-t-0 lg:pt-0">
+                  <div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground"><Sparkles className="h-3.5 w-3.5 text-primary" />快捷研究</span>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                      {RESEARCH_STARTERS.map((starter, index) => {
+                        const StarterIcon = index === 0 ? BarChart3 : index === 1 ? TrendingUp : LineChart;
+                        return (
+                          <button
+                            key={starter.label}
+                            type="button"
+                            aria-label={`使用示例：${starter.label}`}
+                            onClick={() => handleStarterClick(starter)}
+                            className="group flex min-h-14 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/[0.045] hover:shadow-sm"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><StarterIcon className="h-4 w-4" /></span>
+                            <span className="min-w-0 flex-1 text-xs font-semibold text-foreground">{starter.label}</span>
+                            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </motion.article>
           </section>

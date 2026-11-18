@@ -88,7 +88,7 @@ describe('strategy market transport', () => {
   });
 
   it('retains administrator authorization and control payloads across the new client boundary', async () => {
-    vi.stubEnv('QUANTPILOT_MARKET_ADMIN_TOKEN', 'unit-fixture-admin');
+    vi.stubEnv('SIGNALFORGE_MARKET_ADMIN_TOKEN', 'unit-fixture-admin');
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(Response.json({ job_id: 'job/1', action: 'pause', status: 'paused' }));
@@ -96,7 +96,7 @@ describe('strategy market transport', () => {
     await controlStrategyIngestionJob({ jobId: 'job/1', action: 'pause', reason: 'review' });
     const [url, init] = fetcher.mock.calls[0];
     expect(String(url)).toContain('/job%2F1/control');
-    expect(init).toMatchObject({ method: 'POST', headers: { 'X-QuantPilot-Admin-Token': 'unit-fixture-admin' } });
+    expect(init).toMatchObject({ method: 'POST', headers: { 'X-SignalForge-Admin-Token': 'unit-fixture-admin' } });
     expect(JSON.parse(String(init?.body))).toEqual({ action: 'pause', reason: 'review' });
   });
 });

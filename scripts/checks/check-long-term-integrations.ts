@@ -294,7 +294,7 @@ async function checkQwen() {
   assert(advertised, `ModelPort does not advertise the configured model ${llm.model}.`);
 
   const rejectedResponse = await fetchWithTimeout(modelCatalogUrl(llm.baseUrl), {
-    headers: { Authorization: 'Bearer quantpilot-deliberately-invalid-integration-key' },
+    headers: { Authorization: 'Bearer signalforge-deliberately-invalid-integration-key' },
   });
   assert(rejectedResponse.status === 401, 'ModelPort did not reject an invalid API key.');
 
@@ -407,7 +407,7 @@ async function checkMemoryClosedLoop(params: {
   provider: PiAgentModelProvider;
   model: string;
 }) {
-  const actorUserId = option('subject') || 'quantpilot-long-term-integration-check-v1';
+  const actorUserId = option('subject') || 'signalforge-long-term-integration-check-v1';
   const runId = randomUUID();
   const service = await import('../../src/lib/platform/memory/service');
   const { prisma } = await import('../../src/lib/db/client');
@@ -496,7 +496,7 @@ async function checkMemoryClosedLoop(params: {
 }
 
 async function main() {
-  const requestedModel = option('model') || process.env.QUANTPILOT_EVAL_MODEL?.trim() || null;
+  const requestedModel = option('model') || process.env.SIGNALFORGE_EVAL_MODEL?.trim() || null;
   const directDeepSeek = requestedModel && getProjectLlmConfig(requestedModel).provider === 'deepseek'
     ? await checkDirectDeepSeek(requestedModel)
     : null;
@@ -518,7 +518,7 @@ async function main() {
   console.log(JSON.stringify({
     status: 'ok',
     checkedAt: new Date().toISOString(),
-    quantpilot: {
+    signalforge: {
       defaultModel: qwen?.llm.model ?? null,
       selectedModel: directDeepSeek?.llm.model ?? qwen?.llm.model ?? null,
       providerBoundary: 'openai-compatible',

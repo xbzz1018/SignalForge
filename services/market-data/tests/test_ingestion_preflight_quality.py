@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from quantpilot_market_data.repositories import ingestion as ingestion_repository
-from quantpilot_market_data.services.ingestion_support import missing_preflight_fields
+from signalforge_market_data.repositories import ingestion as ingestion_repository
+from signalforge_market_data.services.ingestion_support import missing_preflight_fields
 
 
 class FakeCursor:

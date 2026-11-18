@@ -1,0 +1,28 @@
+[Unit]
+Description=SignalForge market data API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=signalforge
+Group=signalforge
+WorkingDirectory=/opt/signalforge/current
+EnvironmentFile=/etc/signalforge/signalforge.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=UV_CACHE_DIR=/var/cache/signalforge/uv
+ExecStart=/usr/bin/env uv run --frozen --extra baostock --extra akshare --project services/market-data signalforge-market-api
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillMode=mixed
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/signalforge /var/cache/signalforge
+LimitNOFILE=32768
+
+[Install]
+WantedBy=multi-user.target

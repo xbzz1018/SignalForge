@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from quantpilot_market_data.routers.lifecycle import create_lifecycle_router
+from signalforge_market_data.routers.lifecycle import create_lifecycle_router
 
 
 async def passing_database_probe() -> None:
@@ -34,13 +34,13 @@ def test_health_is_a_cache_safe_liveness_contract() -> None:
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store, max-age=0"
-    assert response.json() == {"status": "ok", "service": "quantpilot-market-data"}
+    assert response.json() == {"status": "ok", "service": "signalforge-market-data"}
 
 
 def test_ready_blocks_on_required_database_without_leaking_details(monkeypatch) -> None:
-    monkeypatch.setenv("QUANTPILOT_DEGRADATION_MODE", "strict")
-    monkeypatch.setenv("QUANTPILOT_DATABASE_ENABLED", "1")
-    monkeypatch.setenv("QUANTPILOT_DATABASE_REQUIRED", "1")
+    monkeypatch.setenv("SIGNALFORGE_DEGRADATION_MODE", "strict")
+    monkeypatch.setenv("SIGNALFORGE_DATABASE_ENABLED", "1")
+    monkeypatch.setenv("SIGNALFORGE_DATABASE_REQUIRED", "1")
     response = client(failing_database=True).get("/ready")
 
     assert response.status_code == 503

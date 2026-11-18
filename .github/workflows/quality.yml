@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      MARKET_TEST_DATABASE_URL: postgresql://quantpilot_test:quality_test_local@127.0.0.1:35434/quantpilot_financial_history_test
+      MARKET_TEST_DATABASE_URL: postgresql://signalforge_test:quality_test_local@127.0.0.1:35434/signalforge_financial_history_test
       MARKET_TEST_REDIS_URL: redis://127.0.0.1:36381/0
     services:
       redis:
@@ -129,13 +129,13 @@ jobs:
       postgres:
         image: postgres:18.4-alpine
         env:
-          POSTGRES_DB: quantpilot_financial_history_test
-          POSTGRES_USER: quantpilot_test
+          POSTGRES_DB: signalforge_financial_history_test
+          POSTGRES_USER: signalforge_test
           POSTGRES_PASSWORD: quality_test_local
         ports:
           - 35434:5432
         options: >-
-          --health-cmd "pg_isready -U quantpilot_test -d quantpilot_financial_history_test"
+          --health-cmd "pg_isready -U signalforge_test -d signalforge_financial_history_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 30
@@ -171,35 +171,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      DATABASE_URL: postgresql://quantpilot:quantpilot_dev_password@127.0.0.1:35433/quantpilot?schema=public
+      DATABASE_URL: postgresql://signalforge:signalforge_dev_password@127.0.0.1:35433/signalforge?schema=public
       REDIS_URL: redis://127.0.0.1:36380/0
       PROJECTS_DIR: ./tmp/auth-projects
-      QUANTPILOT_AUTH_MODE: local
-      QUANTPILOT_AUTH_SECRET: ci-auth-secret-with-at-least-thirty-two-random-characters
+      SIGNALFORGE_AUTH_MODE: local
+      SIGNALFORGE_AUTH_SECRET: ci-auth-secret-with-at-least-thirty-two-random-characters
       BETTER_AUTH_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
-      QUANTPILOT_AUTH_TRUSTED_ORIGINS: http://127.0.0.1:3000
-      QUANTPILOT_AUTH_SECURE_COOKIES: 0
-      QUANTPILOT_AUTH_ALLOW_SIGNUP: 0
-      QUANTPILOT_AUTH_ADMIN_EMAIL: auth-smoke-admin@quantpilot.local
-      QUANTPILOT_AUTH_ADMIN_PASSWORD: AuthSmokeAdministrator!2026
-      QUANTPILOT_AUTH_ADMIN_NAME: SignalForge CI Administrator
-      QUANTPILOT_DEGRADATION_MODE: auto
-      QUANTPILOT_MARKET_API_ENABLED: 0
-      QUANTPILOT_REDIS_CACHE_ENABLED: 1
-      QUANTPILOT_REDIS_REQUIRED: 0
-      QUANTPILOT_OBSERVABILITY_ENABLED: 0
+      SIGNALFORGE_AUTH_TRUSTED_ORIGINS: http://127.0.0.1:3000
+      SIGNALFORGE_AUTH_SECURE_COOKIES: 0
+      SIGNALFORGE_AUTH_ALLOW_SIGNUP: 0
+      SIGNALFORGE_AUTH_ADMIN_EMAIL: auth-smoke-admin@signalforge.local
+      SIGNALFORGE_AUTH_ADMIN_PASSWORD: AuthSmokeAdministrator!2026
+      SIGNALFORGE_AUTH_ADMIN_NAME: SignalForge CI Administrator
+      SIGNALFORGE_DEGRADATION_MODE: auto
+      SIGNALFORGE_MARKET_API_ENABLED: 0
+      SIGNALFORGE_REDIS_CACHE_ENABLED: 1
+      SIGNALFORGE_REDIS_REQUIRED: 0
+      SIGNALFORGE_OBSERVABILITY_ENABLED: 0
     services:
       timescaledb:
         image: timescale/timescaledb:2.27.1-pg18
         env:
-          POSTGRES_DB: quantpilot
-          POSTGRES_USER: quantpilot
-          POSTGRES_PASSWORD: quantpilot_dev_password
+          POSTGRES_DB: signalforge
+          POSTGRES_USER: signalforge
+          POSTGRES_PASSWORD: signalforge_dev_password
         ports:
           - 35433:5432
         options: >-
-          --health-cmd "pg_isready -h 127.0.0.1 -U quantpilot -d quantpilot"
+          --health-cmd "pg_isready -h 127.0.0.1 -U signalforge -d signalforge"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 30
@@ -261,28 +261,28 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      DATABASE_URL: postgresql://quantpilot:quantpilot_dev_password@127.0.0.1:35433/quantpilot?schema=public
+      DATABASE_URL: postgresql://signalforge:signalforge_dev_password@127.0.0.1:35433/signalforge?schema=public
       REDIS_URL: redis://127.0.0.1:36380/0
-      QUANTPILOT_MARKET_API_URL: http://127.0.0.1:8000
+      SIGNALFORGE_MARKET_API_URL: http://127.0.0.1:8000
       PROJECTS_DIR: ./tmp/contract-projects
-      QUANTPILOT_EVAL_MODE: contract
-      QUANTPILOT_EVAL_TRIGGER: ci
+      SIGNALFORGE_EVAL_MODE: contract
+      SIGNALFORGE_EVAL_TRIGGER: ci
       # GitHub-hosted runners reject user-namespace uid_map writes. Contract
       # mode executes only repository-owned deterministic templates after the
       # artifact policy gate; live/model-generated work remains fail-closed.
-      QUANTPILOT_GENERATED_SANDBOX: 0
-      QUANTPILOT_ALLOW_UNSANDBOXED_GENERATED_CODE: 1
+      SIGNALFORGE_GENERATED_SANDBOX: 0
+      SIGNALFORGE_ALLOW_UNSANDBOXED_GENERATED_CODE: 1
     services:
       timescaledb:
         image: timescale/timescaledb:2.27.1-pg18
         env:
-          POSTGRES_DB: quantpilot
-          POSTGRES_USER: quantpilot
-          POSTGRES_PASSWORD: quantpilot_dev_password
+          POSTGRES_DB: signalforge
+          POSTGRES_USER: signalforge
+          POSTGRES_PASSWORD: signalforge_dev_password
         ports:
           - 35433:5432
         options: >-
-          --health-cmd "pg_isready -h 127.0.0.1 -U quantpilot -d quantpilot"
+          --health-cmd "pg_isready -h 127.0.0.1 -U signalforge -d signalforge"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 30
@@ -332,9 +332,9 @@ jobs:
 
       - name: PiAgent PostgreSQL fencing integration
         env:
-          PI_AGENT_TEST_DATABASE_URL: postgresql://quantpilot:quantpilot_dev_password@127.0.0.1:35433/quantpilot_integration?schema=public
+          PI_AGENT_TEST_DATABASE_URL: postgresql://signalforge:signalforge_dev_password@127.0.0.1:35433/signalforge_integration?schema=public
         run: |
-          docker exec ${{ job.services.timescaledb.id }} psql -U quantpilot -d quantpilot -v ON_ERROR_STOP=1 -c 'CREATE DATABASE quantpilot_integration;'
+          docker exec ${{ job.services.timescaledb.id }} psql -U signalforge -d signalforge -v ON_ERROR_STOP=1 -c 'CREATE DATABASE signalforge_integration;'
           npm run test:pi-agent:postgres
 
       - name: Enforce contract gate
@@ -348,8 +348,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
           path: |
-            tmp/quantpilot-benchmark-reports/
-            tmp/quantpilot-benchmark-screenshots/
-            tmp/quantpilot-eval-mutations/
+            tmp/signalforge-benchmark-reports/
+            tmp/signalforge-benchmark-screenshots/
+            tmp/signalforge-eval-mutations/
             tmp/contract-market.log
             tmp/contract-benchmark.log

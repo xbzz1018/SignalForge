@@ -5,8 +5,8 @@ import respx
 from fastapi.testclient import TestClient
 from httpx import Response
 
-from quantpilot_market_data.api import create_app
-from quantpilot_market_data.provider_candidates import (
+from signalforge_market_data.api import create_app
+from signalforge_market_data.provider_candidates import (
     get_candidate_provider,
     probe_candidate_provider,
 )

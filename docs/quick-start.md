@@ -11,8 +11,8 @@
 - 可用的模型服务端凭据。下面以仓库配置中已有的 DeepSeek 官方直连 profile 为例。
 
 ```bash
-git clone https://github.com/xbzz1018/SignalForge.git
-cd SignalForge
+git clone https://github.com/xbzz1018/SignalForge-Python.git
+cd SignalForge-Python
 npm ci
 uv sync --project services/market-data --extra baostock --extra akshare --locked
 ```
@@ -25,9 +25,9 @@ uv sync --project services/market-data --extra baostock --extra akshare --locked
 
 ```dotenv
 DEEPSEEK_API_KEY="your-official-api-key"
-QUANTPILOT_MODELPORT_ENABLED=0
-QUANTPILOT_MEMORY_ENABLED=0
-QUANTPILOT_KNOWLEDGE_ENABLED=0
+SIGNALFORGE_MODELPORT_ENABLED=0
+SIGNALFORGE_MEMORY_ENABLED=0
+SIGNALFORGE_KNOWLEDGE_ENABLED=0
 ```
 
 ```bash

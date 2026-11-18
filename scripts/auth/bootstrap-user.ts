@@ -18,7 +18,7 @@ const prisma = new PrismaClient();
 async function main() {
   const config = getProjectAuthConfig();
   if (!config.enabled) {
-    throw new Error('请先设置 QUANTPILOT_AUTH_MODE=local，再初始化管理员。');
+    throw new Error('请先设置 SIGNALFORGE_AUTH_MODE=local，再初始化管理员。');
   }
   getProjectAuthSecret(config);
 

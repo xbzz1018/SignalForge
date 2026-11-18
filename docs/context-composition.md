@@ -30,9 +30,9 @@ ModelPort、Memory 与 AKEP 是共享基础设施，不代表接入它们的产�
 
 | 资源 | SignalForge 示例 | 新产品要求 |
 | --- | --- | --- |
-| Consumer ID | `quantpilot` | 全局稳定且不复用，用于本地证据命名和审计 |
-| ModelPort | `prj_quantpilot` + 独立 API Key | 管理员创建独立 project/environment、Key、预算与模型策略，再绑定 Key；请求头只是绑定断言 |
-| Memory | `quantpilot-local` tenant | 独立 tenant、服务凭据和 subject token grant；不能只靠 `context.product` 隔离互不信任产品 |
+| Consumer ID | `signalforge` | 全局稳定且不复用，用于本地证据命名和审计 |
+| ModelPort | `prj_signalforge` + 独立 API Key | 管理员创建独立 project/environment、Key、预算与模型策略，再绑定 Key；请求头只是绑定断言 |
+| Memory | `signalforge-local` tenant | 独立 tenant、服务凭据和 subject token grant；不能只靠 `context.product` 隔离互不信任产品 |
 | AKEP | SignalForge Tenant/shared Spaces/project-Space base | 独立 Tenant 或明确授权的 Space 集合；每个 workspace 只追加自己的确定性 project Space |
 | 本地数据库 | `Project.id` + scope digest | 保存完整作用域摘要；所有 Exposure、Usage、Feedback 必须带可追溯的 project 外键 |
 
@@ -104,7 +104,7 @@ npm run check:task-e2e -- --campaign=20260719a
 
 这些 service-level case 不创建 Project，不能用任务抽屉数量证明执行过。`check:task-e2e` 才走和首页一致的认证后端入口：创建带 `[E2E <campaign>/<case>]` 前缀的 Project，提交 `/api/chat/:projectId/act`，轮询权威 generation terminal snapshot，并核对当前 run 的 Validation、Mission accepted receipt、Workspace 核心产物、持久预览 HTTP 200 和任务抽屉可见性。固定数据集有 30 个任务，默认并发 2、单任务最长 20 分钟；可先用 `--limit=2` 校准，再用同一 campaign 继续全量，已有 Project 会被恢复而不是复制。失败子集使用 `--only=Cxx,Cyy --retry-failed=N` 在原任务记录内重试；运行中或自动修复中的 generation 保持非终态，不能被中间 Validation 失败抢先判死。报告写入 `tmp/task-e2e-<campaign>-latest.json`。部分运行或存在失败时保留 Project，便于复查和重试；完整 30 题全部通过后，脚本在验证任务抽屉后自动删除该批测试 Project 与 Workspace，避免污染真实任务记录。需要人工长期复核时显式传 `--retain-projects`；需要清理失败/部分批次时传 `--cleanup`。`latest` 反映最后一次命令选择的 case，正式留档前必须再跑一次完整 30 题。
 
-AKEP 的验收记录位于隔离 Space `https://knowledge.local/spaces/quantpilot-acceptance`；若本地长期运行也要使用这些已发布规则，需要把该 Space 显式加入 `QUANTPILOT_KNOWLEDGE_SPACES`，不能用空的默认 Space 假装知识接入有效。
+AKEP 的验收记录位于隔离 Space `https://knowledge.local/spaces/signalforge-acceptance`；若本地长期运行也要使用这些已发布规则，需要把该 Space 显式加入 `SIGNALFORGE_KNOWLEDGE_SPACES`，不能用空的默认 Space 假装知识接入有效。
 
 ## 50 题持久闭环验收
 
@@ -114,8 +114,8 @@ AKEP 的验收记录位于隔离 Space `https://knowledge.local/spaces/quantpilo
 
 ```bash
 cd /home/tiammomo/projects/dev/agent-knowledge-platform
-pnpm seed:quantpilot-acceptance-50 -- \
-  --output=/home/tiammomo/projects/dev/SignalForge/tmp/quantpilot-acceptance-50-v1-manifest.json
+pnpm seed:signalforge-acceptance-50 -- \
+  --output=/home/tiammomo/projects/dev/SignalForge/tmp/signalforge-acceptance-50-v1-manifest.json
 ```
 
 再由 SignalForge 对清单逐条执行完整链路：
@@ -123,7 +123,7 @@ pnpm seed:quantpilot-acceptance-50 -- \
 ```bash
 cd /home/tiammomo/projects/dev/SignalForge
 npm run check:memory-knowledge-50 -- \
-  --manifest=/home/tiammomo/projects/dev/SignalForge/tmp/quantpilot-acceptance-50-v1-manifest.json
+  --manifest=/home/tiammomo/projects/dev/SignalForge/tmp/signalforge-acceptance-50-v1-manifest.json
 ```
 
 每个 case 必须同时通过以下门禁：
@@ -137,12 +137,12 @@ npm run check:memory-knowledge-50 -- \
 
 默认作用域是：
 
-- Memory tenant：当前 `QUANTPILOT_MEMORY_TENANT_ID`；
-- Memory subject：`quantpilot-acceptance-50-v1`；
-- AKEP Space：`https://knowledge.local/spaces/quantpilot-acceptance-50-v1`；
-- 数据集：`quantpilot-memory-knowledge-acceptance-50-v1`；
+- Memory tenant：当前 `SIGNALFORGE_MEMORY_TENANT_ID`；
+- Memory subject：`signalforge-acceptance-50-v1`；
+- AKEP Space：`https://knowledge.local/spaces/signalforge-acceptance-50-v1`；
+- 数据集：`signalforge-memory-knowledge-acceptance-50-v1`；
 - 模型：`local_qwen:qwen3.5-9b-q5km`。
 
-这是一套**有意保留数据**的长期复核批次，不会像完整通过的 Workspace E2E 那样自动清理。清单和最新报告分别写入 `tmp/quantpilot-acceptance-50-v1-manifest.json` 与 `tmp/memory-knowledge-acceptance-50-latest.json`；报告包含每题的 record/revision/usage/outcome、ContextPack/exposure/usage/feedback、模型 citation 和 token 用量。发布脚本与 Memory event 都可幂等重跑；如需清理，必须按 [数据生命周期与安全清理](data-lifecycle.md) 先备份并按精确 subject/Space 操作，不能按时间范围或模糊名称批量删除。
+这是一套**有意保留数据**的长期复核批次，不会像完整通过的 Workspace E2E 那样自动清理。清单和最新报告分别写入 `tmp/signalforge-acceptance-50-v1-manifest.json` 与 `tmp/memory-knowledge-acceptance-50-latest.json`；报告包含每题的 record/revision/usage/outcome、ContextPack/exposure/usage/feedback、模型 citation 和 token 用量。发布脚本与 Memory event 都可幂等重跑；如需清理，必须按 [数据生命周期与安全清理](data-lifecycle.md) 先备份并按精确 subject/Space 操作，不能按时间范围或模糊名称批量删除。
 
 批量发布结束后可能短暂占满 AKEP 查询限额；验收脚本会对 readiness 的 HTTP 429/503 做有限指数退避，其他认证、契约或作用域错误立即失败，不会用无限重试掩盖真实故障。
