@@ -124,7 +124,7 @@ SIGNALFORGE_KNOWLEDGE_ENABLED=0
 ```
 
 ```bash
-docker compose up -d timescaledb redis
+docker compose up -d --wait timescaledb redis
 npm run db:init
 npm run dev
 ```

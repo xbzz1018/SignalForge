@@ -3,7 +3,7 @@ import path from 'path';
 import { prefetchQuantDataForRunPlan } from "@/lib/quant/data-prefetch";
 import { ensureQuantWorkspace } from '@/lib/domains/finance/workspace';
 import type { QuantRunPlan } from '@/lib/domains/finance/workspace';
-import { generatedBuildScriptContents, scaffoldBasicNextApp } from '@/lib/utils/scaffold';
+import { ensureGeneratedNextConfig, generatedBuildScriptContents, scaffoldBasicNextApp } from '@/lib/utils/scaffold';
 import { type PrepareQuantProjectForValidationParams, VALIDATION_STALE_ARTIFACT_PATHS } from './contracts';
 import { readTextFile } from './files';
 import {
@@ -56,7 +56,7 @@ async function waitForValidationArtifactsToSettle(projectPath: string) {
 export async function normalizeGeneratedProjectForValidation(projectPath: string) {
   await normalizePostCssConfig(projectPath);
   await normalizeBuildScript(projectPath);
-  await normalizeNextConfig(projectPath);
+  await ensureGeneratedNextConfig(path.join(projectPath, 'next.config.js'));
 }
 
 async function normalizePostCssConfig(projectPath: string) {
@@ -153,99 +153,6 @@ async function normalizeBuildScript(projectPath: string) {
 
   if (changed) {
     await fs.writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
-  }
-}
-
-async function normalizeNextConfig(projectPath: string) {
-  const configPath = path.join(projectPath, 'next.config.js');
-  const content = await readTextFile(configPath);
-  const defaultConfig = `/** @type {import('next').NextConfig} */
-const path = require('path');
-
-const projectRoot = __dirname;
-const workspaceRoot = process.env.SIGNALFORGE_WORKSPACE_ROOT
-  ? path.resolve(process.env.SIGNALFORGE_WORKSPACE_ROOT)
-  : path.resolve(projectRoot, '../../..');
-
-const nextConfig = {
-  turbopack: {
-    root: projectRoot,
-  },
-  allowedDevOrigins: ['localhost', '127.0.0.1'],
-  typedRoutes: true,
-  outputFileTracingRoot: projectRoot,
-};
-
-module.exports = nextConfig;
-`;
-
-  if (content === null || content.trim().length === 0) {
-    await fs.writeFile(configPath, defaultConfig, 'utf8');
-    return;
-  }
-
-  let nextContent = content;
-  nextContent = nextContent.replace(
-    /(?:const|var|let)\s+withRspack\s*=\s*require\(['"]next-rspack['"]\);\n?/g,
-    ''
-  );
-  nextContent = nextContent.replace(
-    /const\s+shouldUseRspack\s*=.*?;\n?/g,
-    ''
-  );
-  nextContent = nextContent.replace(
-    /module\.exports\s*=\s*shouldUseRspack\s*\?\s*withRspack\(nextConfig\)\s*:\s*nextConfig\s*;?/g,
-    'module.exports = nextConfig;'
-  );
-  nextContent = nextContent.replace(
-    /module\.exports\s*=\s*withRspack\(nextConfig\)\s*;?/g,
-    'module.exports = nextConfig;'
-  );
-  if (!nextContent.includes('const projectRoot = __dirname;')) {
-    nextContent = nextContent.replace(
-      /\/\*\* @type \{import\(['"]next['"]\)\.NextConfig\} \*\/\n/,
-      "/** @type {import('next').NextConfig} */\nconst projectRoot = __dirname;\n"
-    );
-  }
-  if (!nextContent.includes("const path = require('path');")) {
-    nextContent = nextContent.replace(
-      /\/\*\* @type \{import\(['"]next['"]\)\.NextConfig\} \*\/\n/,
-      "/** @type {import('next').NextConfig} */\nconst path = require('path');\n\n"
-    );
-  }
-  if (!nextContent.includes('const workspaceRoot =')) {
-    nextContent = nextContent.replace(
-      /const projectRoot = __dirname;\n/,
-      `const projectRoot = __dirname;
-const workspaceRoot = process.env.SIGNALFORGE_WORKSPACE_ROOT
-  ? path.resolve(process.env.SIGNALFORGE_WORKSPACE_ROOT)
-  : path.resolve(projectRoot, '../../..');
-`
-    );
-  }
-  nextContent = nextContent.replace(/outputFileTracingRoot:\s*workspaceRoot/g, 'outputFileTracingRoot: projectRoot');
-  nextContent = nextContent.replace(/root:\s*workspaceRoot/g, 'root: projectRoot');
-  if (!nextContent.includes('turbopack:')) {
-    nextContent = nextContent.replace(
-      /const nextConfig = \{\n/,
-      `const nextConfig = {
-  turbopack: {
-    root: projectRoot,
-  },
-`
-    );
-  }
-  if (!nextContent.includes('allowedDevOrigins')) {
-    nextContent = nextContent.replace(
-      /const nextConfig = \{\n/,
-      `const nextConfig = {
-  allowedDevOrigins: ['localhost', '127.0.0.1'],
-`
-    );
-  }
-
-  if (nextContent !== content) {
-    await fs.writeFile(configPath, nextContent, 'utf8');
   }
 }
 

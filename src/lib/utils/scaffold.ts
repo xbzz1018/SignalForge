@@ -231,7 +231,7 @@ async function mergePackageJson(filePath: string, defaults: PackageJsonShape & R
   await fs.writeFile(filePath, nextContents, 'utf8');
 }
 
-async function ensureNextConfig(filePath: string) {
+export async function ensureGeneratedNextConfig(filePath: string) {
   const fallback = `/** @type {import('next').NextConfig} */
 const path = require('path');
 
@@ -258,7 +258,12 @@ module.exports = nextConfig;
   let content: string;
   try {
     content = await fs.readFile(filePath, 'utf8');
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    content = '';
+  }
+
+  if (!content.trim()) {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, fallback, 'utf8');
     return;
@@ -605,7 +610,7 @@ export async function scaffoldBasicNextApp(
   );
   await ensureSharedNodeModules(projectPath);
 
-  await ensureNextConfig(
+  await ensureGeneratedNextConfig(
     path.join(projectPath, 'next.config.js')
   );
 
