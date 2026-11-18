@@ -390,8 +390,9 @@ async function ensureSharedNodeModules(projectPath: string) {
     // node_modules 不存在时创建共享依赖桥接。
   }
 
-  const relativeTarget = path.relative(projectPath, sharedNodeModules);
-  await fs.symlink(relativeTarget || sharedNodeModules, projectNodeModules, 'dir');
+  const isWindows = process.platform === 'win32';
+  const target = isWindows ? sharedNodeModules : path.relative(projectPath, sharedNodeModules);
+  await fs.symlink(target, projectNodeModules, isWindows ? 'junction' : 'dir');
 }
 
 async function readJsonRecord(filePath: string): Promise<Record<string, unknown> | null> {

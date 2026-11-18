@@ -1,11 +1,12 @@
-import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+import type { ViteUserConfig } from 'vitest/config';
 
-export default defineConfig({
+export default {
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
+    alias: [
+      { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      { find: /^vitest$/, replacement: fileURLToPath(new URL('./scripts/testing/node_modules/vitest/dist/index.js', import.meta.url)) },
+    ],
   },
   test: {
     environment: 'node',
@@ -26,4 +27,4 @@ export default defineConfig({
       },
     },
   },
-});
+} satisfies ViteUserConfig;

@@ -25,6 +25,8 @@
       }
     ],
     "paths": {
+      "vitest": ["./scripts/testing/node_modules/vitest"],
+      "vitest/*": ["./scripts/testing/node_modules/vitest/*"],
       "@/*": [
         "./src/*"
       ],
@@ -51,6 +53,9 @@
   ],
   "exclude": [
     "node_modules",
+    "scripts/testing/node_modules",
+    "src/**/*.test.ts",
+    "vitest.config.mts",
     "data/projects",
     "tmp"
   ]

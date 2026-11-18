@@ -27,13 +27,15 @@ function inspectDependencySources(lock) {
 }
 
 if (require.main === module) {
-  const lock = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package-lock.json'), 'utf8'));
-  const result = inspectDependencySources(lock);
-  if (result.failures.length) {
-    result.failures.forEach((failure) => console.error(`[dependency-sources] ${failure}`));
-    process.exitCode = 1;
-  } else {
-    console.log(`[dependency-sources] ${result.packages} packages use npm registry tarballs with SHA-512 integrity.`);
+  for (const file of ['package-lock.json', 'scripts/testing/package-lock.json']) {
+    const lock = JSON.parse(fs.readFileSync(path.join(__dirname, '../..', file), 'utf8'));
+    const result = inspectDependencySources(lock);
+    if (result.failures.length) {
+      result.failures.forEach((failure) => console.error(`[dependency-sources] ${file}: ${failure}`));
+      process.exitCode = 1;
+    } else {
+      console.log(`[dependency-sources] ${file}: ${result.packages} packages use registry tarballs with SHA-512 integrity.`);
+    }
   }
 }
 

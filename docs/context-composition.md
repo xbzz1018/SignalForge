@@ -92,7 +92,7 @@ SignalForge 在 Agent 真正收到上下文前写入 `evidence/context-uses/<req
 验证命令：
 
 ```bash
-npx vitest run src/lib/platform/memory src/lib/platform/knowledge src/lib/platform/context
+npm run test:unit -- src/lib/platform/memory src/lib/platform/knowledge src/lib/platform/context
 npm run type-check
 npm run check:integrations
 npm run check:triad-experience

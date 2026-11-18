@@ -508,7 +508,7 @@ npm run check:integrations -- \
 ```bash
 npm run prisma:deploy
 npm run type-check
-npx vitest run src/lib/platform/memory src/lib/services/pi-agent-prompts.test.ts
+npm run test:unit -- src/lib/platform/memory src/lib/services/pi-agent-prompts.test.ts
 npm run check:integrations
 npm run check:service-catalog
 npm run check:docs

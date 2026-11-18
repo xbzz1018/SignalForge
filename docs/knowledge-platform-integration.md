@@ -100,7 +100,7 @@ Readiness 会分别展示 `knowledge` 与 `modelPort`，不能用顶层 `ok=true
 curl --fail http://localhost:33005/.well-known/akep
 curl --fail http://localhost:33005/health/ready
 curl --fail http://127.0.0.1:38082/livez
-npx vitest run src/lib/platform/knowledge src/lib/services/pi-agent-prompts.test.ts
+npm run test:unit -- src/lib/platform/knowledge src/lib/services/pi-agent-prompts.test.ts
 npm run check:service-catalog
 npm run type-check
 ```

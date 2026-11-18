@@ -17,7 +17,7 @@ npm ci
 uv sync --project services/market-data --extra baostock --extra akshare --locked
 ```
 
-`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。
+`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。 开发安装会另外安装 `scripts/testing` 内的测试工具。生产安装使用 `npm ci --omit=dev`，不安装测试工具。
 
 ## 配置与启动
 
