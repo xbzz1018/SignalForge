@@ -74,6 +74,8 @@ async function applyBootstrapSql() {
 }
 
 async function main() {
+  console.log('[db:init] generating Prisma client');
+  await run('npx', ['prisma', 'generate']);
   await applyBootstrapSql();
   console.log('[db:init] applying versioned Prisma migrations');
   await run('npx', ['prisma', 'migrate', 'deploy'], {

@@ -17,7 +17,7 @@ npm ci
 uv sync --project services/market-data --extra baostock --extra akshare --locked
 ```
 
-`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。 开发安装会另外安装 `scripts/testing` 内的测试工具。生产安装使用 `npm ci --omit=dev`，不安装测试工具。
+`npm ci` 的 postinstall 创建缺失的 `.env`、`.env.local` 和本地目录。开发安装会另外安装 `scripts/testing` 内的测试工具。生产安装使用 `npm ci --omit=dev`，不安装测试工具。
 
 ## 配置与启动
 
@@ -31,10 +31,12 @@ SIGNALFORGE_KNOWLEDGE_ENABLED=0
 ```
 
 ```bash
-docker compose up -d timescaledb redis
+docker compose up -d --wait timescaledb redis
 npm run db:init
 npm run dev
 ```
+
+`db:init` 会生成 Prisma 客户端、应用数据库迁移并初始化权限。
 
 浏览器打开 `http://localhost:3000`；占用时以启动器输出的端口为准。**在模型菜单中显式选择 `deepseek-v4-flash` 官方直连。** 填入 Key 不会改变 `config/llm.json` 中默认的本地 Qwen/ModelPort profile。
 
