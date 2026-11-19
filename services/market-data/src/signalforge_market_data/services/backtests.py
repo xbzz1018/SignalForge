@@ -12,6 +12,7 @@ from signalforge_market_data.backtest_parameters import (
     finite_decimal,
     normalize_strategy_parameters,
     periods_per_year,
+    strategy_warmup_bars,
 )
 from signalforge_market_data.cache import MarketDataCache
 from signalforge_market_data.contracts.analysis import BacktestResponse
@@ -23,6 +24,9 @@ from signalforge_market_data.services.kline_gateway import (
     get_kline_local_first,
     get_local_kline_if_ready,
 )
+
+
+MAX_HISTORY_BARS = 1500
 
 
 def _read_cached_backtest(cache: MarketDataCache, cache_key: str) -> BacktestResponse | None:
@@ -40,57 +44,44 @@ def _history_request(
     *,
     limit: int,
     start: str | None,
-    end: str,
+    end: str | None,
     period: KlinePeriod,
-    parameters: dict[str, object],
+    warmup: int,
     initial_cash: Decimal,
 ) -> tuple[int, str | None, str | None]:
     periods_per_year(period)
     cash = finite_decimal(initial_cash, "initial_cash")
     if cash <= 0:
         raise ValueError("initial_cash 必须为大于 0 的有限数值。")
-    if not 1 <= limit <= 1500:
-        raise ValueError("limit 必须在 1 到 1500 之间。")
+    if not 1 <= limit <= MAX_HISTORY_BARS:
+        raise ValueError(f"limit 必须在 1 到 {MAX_HISTORY_BARS} 之间。")
     start_date = backtest_date(start)
     end_date = None if end == "20500101" else backtest_date(end)
-    warmup = (
-        max(
-            (int(value) for key, value in parameters.items() if key.endswith("_window")), default=60
-        )
-        + 5
-    )
-    required = warmup + 1
     if start_date is None:
-        if limit <= warmup - 5:
-            raise ValueError('limit 必须大于策略指标窗口，不能自动扩大研究样本。')
+        if limit <= warmup:
+            raise ValueError("limit 不足以覆盖策略预热与至少一根评估行情。")
         return limit, start_date, end_date
-    if start_date:
-        cutoff = (
-            date.fromisoformat(end_date)
-            if end_date
-            else datetime.now(ZoneInfo("Asia/Shanghai")).date()
-        )
-        first = date.fromisoformat(start_date)
-        if first > cutoff:
-            raise ValueError("回测开始日期不能晚于结束日期。")
-        days = (cutoff - first).days
-        bars = days + 1 if period == "daily" else days // 7 + 2
-        if period == "monthly":
-            bars = (cutoff.year - first.year) * 12 + cutoff.month - first.month + 2
-        required += bars
-    if required > 1500:
-        raise ValueError("回测区间及指标预热超过 1500 根行情上限，请缩短区间。")
-    return max(limit, required), start_date, end_date
+
+    cutoff = date.fromisoformat(end_date) if end_date else datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    first = date.fromisoformat(start_date)
+    if first > cutoff:
+        raise ValueError("回测开始日期不能晚于结束日期。")
+    days = (cutoff - first).days
+    bars = days + 1 if period == "daily" else days // 7 + 2
+    if period == "monthly":
+        bars = (cutoff.year - first.year) * 12 + cutoff.month - first.month + 2
+    # Calendar days are an upper estimate. Cap the fetch and validate the bars actually supplied.
+    requested = min(MAX_HISTORY_BARS, max(limit, bars + warmup))
+    return requested, start_date, end_date
 
 
 def _check_coverage(
-    kline: KlineResponse, start: str | None, parameters: dict[str, object], limit: int,
+    kline: KlineResponse, start: str | None, warmup: int, limit: int,
 ) -> KlineResponse:
     if start:
-        warmup = max(
-            (int(value) for key, value in parameters.items() if key.endswith("_window")), default=0
-        )
         if sum(backtest_date(bar.date) < start for bar in kline.bars) < warmup:
+            if len(kline.bars) >= MAX_HISTORY_BARS:
+                raise ValueError(f"{MAX_HISTORY_BARS} 根行情无法覆盖指定区间及指标预热，请缩短区间。")
             raise ValueError("指定回测区间的指标预热行情不足，不能按默认样本替代。")
     else:
         if len(kline.bars) < limit:
@@ -128,7 +119,7 @@ async def get_ma_crossover_backtest(
     period: KlinePeriod,
     adjustment: Adjustment,
     limit: int,
-    end: str,
+    end: str | None,
     initial_cash: Decimal,
     fee_bps: Decimal,
     ttl_seconds: int,
@@ -163,7 +154,7 @@ async def get_strategy_backtest(
     period: KlinePeriod,
     adjustment: Adjustment,
     limit: int,
-    end: str,
+    end: str | None,
     initial_cash: Decimal,
     fee_bps: Decimal,
     ttl_seconds: int,
@@ -173,20 +164,21 @@ async def get_strategy_backtest(
     slippage_bps = _slippage(slippage_bps)
     strategy_id = canonical_strategy_id(strategy_id)
     normalized_parameters = normalize_strategy_parameters(strategy_id, dict(parameters), fee_bps)
+    warmup = strategy_warmup_bars(strategy_id, normalized_parameters)
     normalized_limit, start_date, end_date = _history_request(
         limit=limit,
         start=start,
         end=end,
         period=period,
-        parameters=normalized_parameters,
+        warmup=warmup,
         initial_cash=initial_cash,
     )
-    history_end = (end_date or "2050-01-01").replace("-", "")
+    history_end = end_date.replace("-", "") if end_date else None
 
     def compute(kline: KlineResponse) -> BacktestResponse:
         _check_identity(kline, symbol, period, adjustment, end_date)
         return build_strategy_backtest(
-            _check_coverage(kline, start_date, normalized_parameters, limit),
+            _check_coverage(kline, start_date, warmup, limit),
             strategy_id=strategy_id,
             parameters=normalized_parameters,
             initial_cash=initial_cash,
@@ -209,7 +201,7 @@ async def get_strategy_backtest(
     cache_key = cache.build_key(
         "backtest-strategy",
         {
-            "history_contract": 3,
+            "history_contract": 4,
             "engine": current_engine_identity().model_dump(mode="json"),
             "strategy_id": strategy_id,
             "symbol": symbol,
@@ -217,7 +209,7 @@ async def get_strategy_backtest(
             "period": period,
             "adjustment": adjustment,
             "limit": normalized_limit,
-            "end": end,
+            "end": end_date,
             "start": start_date,
             "initial_cash": str(initial_cash),
             "fee_bps": str(fee_bps),

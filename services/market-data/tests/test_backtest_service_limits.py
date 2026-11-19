@@ -88,4 +88,4 @@ def test_compact_dates_count_towards_pre_evaluation_warmup():
     data = history()
     for bar in data.bars:
         bar.date = bar.date.replace('-', '')
-    assert backtests._check_coverage(data, '2025-01-25', {'slow_window': 20}, 21) is data
+    assert backtests._check_coverage(data, '2025-01-25', 20, 21) is data

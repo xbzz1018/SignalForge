@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal, Self
 
@@ -186,6 +186,18 @@ class BacktestResponse(BaseModel):
         warnings: list[str] = []
         if len(self.equity_curve) < self.slow_window + 5:
             warnings.append("回测样本偏少，均线策略指标解释需谨慎。")
+        if self.evaluation_end and self.equity_curve:
+            requested_end = date.fromisoformat(self.evaluation_end)
+            observed_end = date.fromisoformat(self.equity_curve[-1].date)
+            gap = (requested_end - observed_end).days
+            if self.period == "monthly":
+                short = (observed_end.year, observed_end.month) < (requested_end.year, requested_end.month)
+            elif self.period == "weekly":
+                short = gap >= 7
+            else:
+                short = any((observed_end + timedelta(days=step)).weekday() < 5 for step in range(1, min(gap, 7) + 1))
+            if short:
+                warnings.append(f"回测行情仅到 {observed_end}，早于请求截止日 {requested_end}，区间覆盖可能不足。")
         if not self.trades:
             warnings.append("样本区间内未产生完整交易。")
         self.data_quality = _merge_data_quality(

@@ -670,7 +670,6 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       selectedModel,
       executionEnvelope,
       completeOnTaskSuccess: false,
-      completeOnTaskFailure: false,
       task: () =>
         createApplicationGenerationRuntime().execute({
           jobId: `inline:${requestId}`,

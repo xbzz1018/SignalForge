@@ -57,6 +57,27 @@ STRATEGY_PARAMETERS: dict[str, dict[str, tuple[int | str, int | str, int | str]]
     },
 }
 
+# Number of preceding bars needed for all signals to be evaluable on the first bar.
+# Each offset reflects whether the calculation includes the current bar.
+STRATEGY_LOOKBACKS = {
+    "ma_crossover": (("slow_window", 0),),
+    "donchian_breakout": (("breakout_window", 0), ("exit_window", 0)),
+    "turtle_trend": (("breakout_window", 0), ("exit_window", 0)),
+    "volume_price_breakout": (("breakout_window", 0), ("exit_window", 0), ("volume_window", 0)),
+    "atr_trailing_breakout": (("breakout_window", 0), ("atr_window", 0)),
+    "rsi_reversion": (("rsi_window", 0), ("trend_window", -1)),
+    "bollinger_reversion": (("lookback_window", -1),),
+    "momentum_trend": (("momentum_window", 0), ("trend_window", -1)),
+    "low_volatility_trend": (("trend_window", -1), ("vol_window", 0)),
+    "ma_pullback_reclaim": (("pullback_window", 0), ("trend_window", -1)),
+    "gap_reversal": (),
+}
+
+
+def strategy_warmup_bars(strategy_id: str, parameters: dict[str, Any]) -> int:
+    return max((parameters[key] + offset for key, offset in STRATEGY_LOOKBACKS[strategy_id]), default=1)
+
+
 PERIODS_PER_YEAR = {"daily": 252, "weekly": 52, "monthly": 12}
 
 
@@ -130,33 +151,3 @@ def periods_per_year(period: str) -> int:
     if period not in PERIODS_PER_YEAR:
         raise ValueError("回测仅支持 daily、weekly、monthly 周期。")
     return PERIODS_PER_YEAR[period]
-
-
-def int_param(
-    parameters: dict[str, Any],
-    key: str,
-    default: int,
-    *,
-    minimum: int = 1,
-    maximum: int = 300,
-) -> int:
-    value = finite_decimal(parameters.get(key, default), key)
-    if value != value.to_integral_value() or not minimum <= value <= maximum:
-        raise ValueError(f"{key} 必须为 {minimum} 到 {maximum} 之间的整数。")
-    return int(value)
-
-
-def decimal_param(
-    parameters: dict[str, Any],
-    key: str,
-    default: Decimal | int | str,
-    *,
-    minimum: Decimal | int | str | None = None,
-    maximum: Decimal | int | str | None = None,
-) -> Decimal:
-    value = finite_decimal(parameters.get(key, default), key)
-    if minimum is not None and value < Decimal(str(minimum)):
-        raise ValueError(f"{key} 小于最小值 {minimum}。")
-    if maximum is not None and value > Decimal(str(maximum)):
-        raise ValueError(f"{key} 大于最大值 {maximum}。")
-    return value

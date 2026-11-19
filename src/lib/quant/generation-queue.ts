@@ -1,9 +1,7 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-
 import type { AgentGenerationJob } from "@prisma/client";
 
 import { withPiAgentWorkspaceResourceLock } from "@/lib/agent/runtime/workspace-resource-lock";
+import { writeWorkspaceJsonAtomic } from "@/lib/data-agent/workspace-files";
 import { DATA_AGENT_GENERATION_QUEUE_RELATIVE_PATH } from "@/lib/data-agent/workspace-layout";
 import {
   appendQuantWorkspaceEvent,
@@ -71,10 +69,6 @@ export class QuantGenerationCancelledError extends Error {
   }
 }
 
-function queuePath(projectPath: string) {
-  return path.join(projectPath, DATA_AGENT_GENERATION_QUEUE_RELATIVE_PATH);
-}
-
 function projectionStatus(status: string): QuantGenerationQueueStatus {
   if (status === "pending" || status === "retry_wait") return "queued";
   if (status === "running") return "running";
@@ -104,14 +98,7 @@ async function writeProjection(
   state: QuantGenerationQueueState,
 ): Promise<void> {
   await ensureQuantWorkspace(projectPath);
-  const filePath = queuePath(projectPath);
-  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(
-    temporaryPath,
-    `${JSON.stringify(state, null, 2)}\n`,
-    "utf8",
-  );
-  await fs.rename(temporaryPath, filePath);
+  await writeWorkspaceJsonAtomic(projectPath, DATA_AGENT_GENERATION_QUEUE_RELATIVE_PATH, state);
 }
 
 /**
@@ -140,13 +127,27 @@ async function projectDurableQueue(
     updatedAt: jobs[0]?.updatedAt.toISOString() ?? new Date().toISOString(),
     items,
   };
-  await writeProjection(projectPath, state);
-  if (pendingEvents.length > 0) {
-    await markPiAgentGenerationOutboxEventsPublished(
-      pendingEvents.map((event) => event.id),
-    );
-  }
+  await reportQueueSync(async () => {
+    await writeProjection(projectPath, state);
+    if (pendingEvents.length > 0) {
+      await markPiAgentGenerationOutboxEventsPublished(pendingEvents.map((event) => event.id));
+    }
+  });
   return state;
+}
+
+async function reportQueueSync(sync: () => Promise<unknown>): Promise<void> {
+  try {
+    await sync();
+  } catch (error) {
+    if (process.env.NODE_ENV !== "test") {
+      console.warn("[GenerationDispatch] Queue status sync failed:", error);
+    }
+  }
+}
+
+async function syncQueueAfterTransition(projectPath: string, projectId: string) {
+  await reportQueueSync(() => projectDurableQueue(projectPath, projectId, { reconcileExpired: false }));
 }
 
 async function appendLifecycleEvent(params: {
@@ -156,15 +157,16 @@ async function appendLifecycleEvent(params: {
   status: "pending" | "success" | "warning" | "error";
   summary: string;
 }): Promise<void> {
-  await appendQuantWorkspaceEvent(params.projectPath, {
-    event_type: params.eventType,
-    stage: "queue",
-    status: params.status,
-    run_id: params.requestId,
-    artifact_path: DATA_AGENT_GENERATION_QUEUE_RELATIVE_PATH,
-    summary: params.summary,
-    created_at: new Date().toISOString(),
-  });
+  await reportQueueSync(() =>
+    appendQuantWorkspaceEvent(params.projectPath, {
+      event_type: params.eventType,
+      stage: "queue",
+      status: params.status,
+      run_id: params.requestId,
+      artifact_path: DATA_AGENT_GENERATION_QUEUE_RELATIVE_PATH,
+      summary: params.summary,
+    }),
+  );
 }
 
 export async function runQuantGenerationStage<T>(params: {
@@ -208,7 +210,6 @@ interface QuantGenerationQueuedParams<T> {
   executionEnvelope?: unknown;
   maxAttempts?: number;
   completeOnTaskSuccess?: boolean;
-  completeOnTaskFailure?: boolean;
   task: QueueTask<T>;
 }
 
@@ -231,49 +232,32 @@ async function prepareQuantGenerationDispatch<T>(
       error instanceof PiAgentGenerationDispatchError &&
       error.code === "GENERATION_DISPATCH_CANCELLED"
     ) {
-      await projectDurableQueue(params.projectPath, params.projectId, {
-        reconcileExpired: false,
-      }).catch(() => undefined);
+      await syncQueueAfterTransition(params.projectPath, params.projectId);
       throw new QuantGenerationCancelledError(error.message);
     }
     throw error;
   }
-  try {
-    await projectDurableQueue(params.projectPath, params.projectId, {
-      reconcileExpired: false,
-    });
-    await appendLifecycleEvent({
-      projectPath: params.projectPath,
-      requestId: params.requestId,
-      eventType: "generation_queued",
-      status: "pending",
-      summary: "生成任务已进入 PostgreSQL durable dispatch。",
-    });
-    await appendLifecycleEvent({
-      projectPath: params.projectPath,
-      requestId: params.requestId,
-      eventType: "generation_queue_started",
-      status: "pending",
-      summary: `生成任务由 durable worker claim（attempt ${dispatch.claim.attemptCount}）。`,
-    });
-    return dispatch;
-  } catch (error) {
-    await finishPiAgentGenerationJob({
-      projectId: params.projectId,
-      requestId: params.requestId,
-      status: "failed",
-      errorCode: "GENERATION_DISPATCH_ACCEPTANCE_FAILED",
-      errorMessage: error instanceof Error ? error.message : String(error),
-      fence: dispatch.fence,
-    }).catch(() => undefined);
-    dispatch.dispose();
-    throw error;
-  }
+  await syncQueueAfterTransition(params.projectPath, params.projectId);
+  await appendLifecycleEvent({
+    projectPath: params.projectPath,
+    requestId: params.requestId,
+    eventType: "generation_queued",
+    status: "pending",
+    summary: "生成任务已进入 PostgreSQL durable dispatch。",
+  });
+  await appendLifecycleEvent({
+    projectPath: params.projectPath,
+    requestId: params.requestId,
+    eventType: "generation_queue_started",
+    status: "pending",
+    summary: `生成任务由 durable worker claim（attempt ${dispatch.claim.attemptCount}）。`,
+  });
+  return dispatch;
 }
 
 export async function enqueueQuantGeneration(params: Omit<
   QuantGenerationQueuedParams<never>,
-  "task" | "completeOnTaskSuccess" | "completeOnTaskFailure"
+  "task" | "completeOnTaskSuccess"
 >): Promise<void> {
   await enqueuePiAgentGenerationJob({
     projectId: params.projectId,
@@ -284,9 +268,7 @@ export async function enqueueQuantGeneration(params: Omit<
     executionEnvelope: params.executionEnvelope,
     maxAttempts: params.maxAttempts,
   });
-  await projectDurableQueue(params.projectPath, params.projectId, {
-    reconcileExpired: false,
-  });
+  await syncQueueAfterTransition(params.projectPath, params.projectId);
   await appendLifecycleEvent({
     projectPath: params.projectPath,
     requestId: params.requestId,
@@ -331,10 +313,7 @@ async function executeQuantGenerationDispatch<T>(
         }),
       )
       .catch((finishError) => {
-        if (
-          params.completeOnTaskFailure !== false &&
-          process.env.NODE_ENV !== "test"
-        ) {
+        if (process.env.NODE_ENV !== "test") {
           console.error(
             "[GenerationDispatch] Failed to persist task failure:",
             finishError,
@@ -392,9 +371,9 @@ export async function finishQuantGenerationQueueItem(params: {
     errorMessage: params.errorMessage,
     fence: currentPiAgentGenerationDispatchFence(),
   });
-  await projectDurableQueue(params.projectPath, params.projectId, {
-    reconcileExpired: false,
-  });
+  currentPiAgentGenerationDispatchSession()?.markTerminal();
+  await syncQueueAfterTransition(params.projectPath, params.projectId);
+  if (job.status !== params.status) return job;
   await appendLifecycleEvent({
     projectPath: params.projectPath,
     requestId: params.requestId,
@@ -405,7 +384,6 @@ export async function finishQuantGenerationQueueItem(params: {
         ? "生成任务执行完成。"
         : `生成任务失败：${params.errorMessage ?? "未知错误"}`,
   });
-  currentPiAgentGenerationDispatchSession()?.markTerminal();
   return job;
 }
 
@@ -421,9 +399,8 @@ export async function markQuantGenerationQueueCancelled(params: {
     reason: params.reason,
   });
   if (!job) return null;
-  await projectDurableQueue(params.projectPath, params.projectId, {
-    reconcileExpired: false,
-  });
+  currentPiAgentGenerationDispatchSession()?.markTerminal();
+  await syncQueueAfterTransition(params.projectPath, params.projectId);
   await appendLifecycleEvent({
     projectPath: params.projectPath,
     requestId: params.requestId,
@@ -431,7 +408,6 @@ export async function markQuantGenerationQueueCancelled(params: {
     status: "warning",
     summary: "生成任务已取消。",
   });
-  currentPiAgentGenerationDispatchSession()?.markTerminal();
   return job;
 }
 

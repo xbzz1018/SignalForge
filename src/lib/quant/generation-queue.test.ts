@@ -101,6 +101,7 @@ vi.mock("@/lib/services/pi-agent-generation-dispatch-store", () => {
       }) => {
         const key = jobKey(input.projectId, input.requestId);
         const current = mocks.jobs.get(key)!;
+        if (current.status === "cancelled") return current;
         const next = {
           ...current,
           status: input.status,
@@ -193,6 +194,7 @@ vi.mock("@/lib/services/pi-agent-generation-dispatch-session", async () => {
   };
 });
 
+import { DATA_AGENT_GENERATION_QUEUE_RELATIVE_PATH } from "@/lib/data-agent/workspace-layout";
 import {
   markQuantGenerationQueueCancelled,
   QuantGenerationCancelledError,
@@ -260,6 +262,24 @@ describe("generation durable dispatch projection", () => {
         fence: expect.objectContaining({ fencingToken: 1 }),
       }),
     );
+  });
+
+  it.each([false, true])("keeps inline failure durable with a broken projection (cancelled: %s)", async (cancelled) => {
+    const projectPath = await createProject();
+    const params = { projectPath, projectId: "project", requestId: "request", instruction: "test" };
+    await fs.mkdir(path.join(projectPath, DATA_AGENT_GENERATION_QUEUE_RELATIVE_PATH), { recursive: true });
+
+    const failure = new Error("execution failed before agent startup");
+    await expect(runQuantGenerationQueued({
+      ...params,
+      task: async () => {
+        if (cancelled) await markQuantGenerationQueueCancelled(params);
+        throw failure;
+      },
+    })).rejects.toBe(failure);
+    const queue = await readQuantGenerationQueue(projectPath, params.projectId);
+    expect(queue.items).toHaveLength(1);
+    expect(queue.items[0].status).toBe(cancelled ? "cancelled" : "failed");
   });
 
   it("does not start a request cancelled before the worker claim", async () => {

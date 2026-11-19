@@ -15,12 +15,6 @@ from signalforge_market_data.backtest_parameters import (
     normalize_strategy_parameters,
     periods_per_year,
 )
-from signalforge_market_data.backtest_parameters import (
-    decimal_param as _decimal_param,
-)
-from signalforge_market_data.backtest_parameters import (
-    int_param as _int_param,
-)
 from signalforge_market_data.contracts.analysis import (
     BacktestEquityPoint,
     BacktestResponse,
@@ -298,37 +292,18 @@ def build_strategy_backtest(
     if start_date and end_date and start_date > end_date:
         raise ValueError("回测开始日期不能晚于结束日期。")
 
-    if normalized_strategy_id == "ma_crossover":
-        fast_window = _int_param(params, "fast_window", 20, minimum=2, maximum=120)
-        slow_window = _int_param(params, "slow_window", 60, minimum=3, maximum=250)
-        if fast_window >= slow_window:
-            raise ValueError("fast_window 必须小于 slow_window。")
-    elif normalized_strategy_id == "turtle_trend":
-        fast_window = _int_param(params, "breakout_window", 55, minimum=5, maximum=250)
-        slow_window = _int_param(params, "exit_window", 20, minimum=3, maximum=120)
+    if normalized_strategy_id == "turtle_trend":
+        fast_window, slow_window = params["breakout_window"], params["exit_window"]
     else:
-        fast_window = _int_param(
-            params,
-            "fast_window",
-            _int_param(params, "lookback_window", _int_param(params, "breakout_window", 20)),
-            minimum=2,
-            maximum=250,
-        )
-        slow_window = _int_param(
-            params,
-            "slow_window",
-            _int_param(params, "trend_window", _int_param(params, "exit_window", 60)),
-            minimum=2,
-            maximum=300,
-        )
+        fast_window = params.get("fast_window", params.get("lookback_window", params.get("breakout_window", 20)))
+        slow_window = params.get("slow_window", params.get("trend_window", params.get("exit_window", 60)))
 
     params["fee_bps"] = str(fee_bps)
+    decimal_params = {key: Decimal(value) for key, value in params.items() if isinstance(value, str)}
     cash = finite_decimal(initial_cash, "initial_cash")
     if not cash.is_finite() or cash <= 0:
         raise ValueError("initial_cash 必须为大于 0 的有限数值。")
-    fee = finite_decimal(fee_bps, "fee_bps")
-    if not fee.is_finite() or fee < 0 or fee > 10000:
-        raise ValueError("fee_bps 必须为 0 到 10000 之间的有限数值。")
+    fee = decimal_params["fee_bps"]
     slippage = finite_decimal(slippage_bps, "slippage_bps")
     if not 0 <= slippage < 10000:
         raise ValueError("slippage_bps 必须为 0 到小于 10000 的有限数值。")
@@ -431,20 +406,8 @@ def build_strategy_backtest(
                 and primary_indicator < secondary_indicator
             )
         elif normalized_strategy_id in {"donchian_breakout", "turtle_trend"}:
-            breakout_window = _int_param(
-                params,
-                "breakout_window",
-                55 if normalized_strategy_id == "turtle_trend" else 20,
-                minimum=5,
-                maximum=250,
-            )
-            exit_window = _int_param(
-                params,
-                "exit_window",
-                20 if normalized_strategy_id == "turtle_trend" else 10,
-                minimum=3,
-                maximum=120,
-            )
+            breakout_window = params["breakout_window"]
+            exit_window = params["exit_window"]
             primary_indicator = _rolling_high(highs, index - 1, breakout_window)
             secondary_indicator = _rolling_low(lows, index - 1, exit_window)
             enter_signal = (
@@ -456,10 +419,10 @@ def build_strategy_backtest(
                 and close < secondary_indicator
             )
         elif normalized_strategy_id == "rsi_reversion":
-            rsi_window = _int_param(params, "rsi_window", 14, minimum=3, maximum=60)
-            trend_window = _int_param(params, "trend_window", 60, minimum=10, maximum=250)
-            entry_rsi = _decimal_param(params, "entry_rsi", 35, minimum=5, maximum=60)
-            exit_rsi = _decimal_param(params, "exit_rsi", 55, minimum=40, maximum=95)
+            rsi_window = params["rsi_window"]
+            trend_window = params["trend_window"]
+            entry_rsi = decimal_params["entry_rsi"]
+            exit_rsi = decimal_params["exit_rsi"]
             rsi_value = _rsi(closes, index, rsi_window)
             trend_ma = _rolling_mean(closes, index, trend_window)
             primary_indicator = rsi_value
@@ -477,9 +440,9 @@ def build_strategy_backtest(
                 and (rsi_value >= exit_rsi or (trend_ma is not None and close < trend_ma))
             )
         elif normalized_strategy_id == "bollinger_reversion":
-            lookback_window = _int_param(params, "lookback_window", 20, minimum=10, maximum=120)
-            entry_z = _decimal_param(params, "entry_z", 2, minimum=0.5, maximum=4)
-            exit_z = _decimal_param(params, "exit_z", 0, minimum=-1, maximum=2)
+            lookback_window = params["lookback_window"]
+            entry_z = decimal_params["entry_z"]
+            exit_z = decimal_params["exit_z"]
             middle = _rolling_mean(closes, index, lookback_window)
             std = _rolling_std(closes, index, lookback_window)
             z_score = None
@@ -492,22 +455,10 @@ def build_strategy_backtest(
             enter_signal = z_score is not None and z_score <= -entry_z
             exit_signal = z_score is not None and z_score >= exit_z
         elif normalized_strategy_id == "momentum_trend":
-            momentum_window = _int_param(params, "momentum_window", 60, minimum=10, maximum=250)
-            trend_window = _int_param(params, "trend_window", 120, minimum=20, maximum=300)
-            min_momentum_pct = _decimal_param(
-                params,
-                "min_momentum_pct",
-                8,
-                minimum=-20,
-                maximum=80,
-            )
-            exit_momentum_pct = _decimal_param(
-                params,
-                "exit_momentum_pct",
-                0,
-                minimum=-30,
-                maximum=30,
-            )
+            momentum_window = params["momentum_window"]
+            trend_window = params["trend_window"]
+            min_momentum_pct = decimal_params["min_momentum_pct"]
+            exit_momentum_pct = decimal_params["exit_momentum_pct"]
             momentum = _rolling_return_pct(closes, index, momentum_window)
             trend_ma = _rolling_mean(closes, index, trend_window)
             primary_indicator = momentum
@@ -526,10 +477,10 @@ def build_strategy_backtest(
                 and (momentum <= exit_momentum_pct or close < trend_ma)
             )
         elif normalized_strategy_id == "volume_price_breakout":
-            breakout_window = _int_param(params, "breakout_window", 20, minimum=5, maximum=120)
-            exit_window = _int_param(params, "exit_window", 10, minimum=3, maximum=80)
-            volume_window = _int_param(params, "volume_window", 20, minimum=5, maximum=120)
-            volume_ratio = _decimal_param(params, "volume_ratio", "1.4", minimum="1", maximum="5")
+            breakout_window = params["breakout_window"]
+            exit_window = params["exit_window"]
+            volume_window = params["volume_window"]
+            volume_ratio = decimal_params["volume_ratio"]
             channel_high = _rolling_high(highs, index - 1, breakout_window)
             channel_low = _rolling_low(lows, index - 1, exit_window)
             volume_mean = _rolling_volume_mean(volumes, index - 1, volume_window)
@@ -546,15 +497,9 @@ def build_strategy_backtest(
             )
             exit_signal = close is not None and channel_low is not None and close < channel_low
         elif normalized_strategy_id == "atr_trailing_breakout":
-            breakout_window = _int_param(params, "breakout_window", 20, minimum=5, maximum=120)
-            atr_window = _int_param(params, "atr_window", 14, minimum=5, maximum=60)
-            atr_multiplier = _decimal_param(
-                params,
-                "atr_multiplier",
-                "2.5",
-                minimum="0.5",
-                maximum="8",
-            )
+            breakout_window = params["breakout_window"]
+            atr_window = params["atr_window"]
+            atr_multiplier = decimal_params["atr_multiplier"]
             channel_high = _rolling_high(highs, index - 1, breakout_window)
             atr_value = _atr(highs, lows, closes, index, atr_window)
             trailing_stop = (
@@ -567,22 +512,10 @@ def build_strategy_backtest(
             enter_signal = close is not None and channel_high is not None and close > channel_high
             exit_signal = close is not None and trailing_stop is not None and close < trailing_stop
         elif normalized_strategy_id == "low_volatility_trend":
-            trend_window = _int_param(params, "trend_window", 60, minimum=20, maximum=250)
-            vol_window = _int_param(params, "vol_window", 20, minimum=10, maximum=120)
-            max_volatility_pct = _decimal_param(
-                params,
-                "max_volatility_pct",
-                35,
-                minimum=5,
-                maximum=120,
-            )
-            exit_volatility_pct = _decimal_param(
-                params,
-                "exit_volatility_pct",
-                max_volatility_pct * Decimal("1.25"),
-                minimum=5,
-                maximum=150,
-            )
+            trend_window = params["trend_window"]
+            vol_window = params["vol_window"]
+            max_volatility_pct = decimal_params["max_volatility_pct"]
+            exit_volatility_pct = decimal_params["exit_volatility_pct"]
             trend_ma = _rolling_mean(closes, index, trend_window)
             volatility = _annualized_price_volatility_pct(closes, index, vol_window, annual_periods)
             primary_indicator = trend_ma
@@ -601,9 +534,9 @@ def build_strategy_backtest(
                 and (close < trend_ma or volatility > exit_volatility_pct)
             )
         elif normalized_strategy_id == "ma_pullback_reclaim":
-            pullback_window = _int_param(params, "pullback_window", 20, minimum=5, maximum=80)
-            trend_window = _int_param(params, "trend_window", 60, minimum=20, maximum=250)
-            stop_loss_pct = _decimal_param(params, "stop_loss_pct", 8, minimum=1, maximum=30)
+            pullback_window = params["pullback_window"]
+            trend_window = params["trend_window"]
+            stop_loss_pct = decimal_params["stop_loss_pct"]
             pullback_ma = _rolling_mean(closes, index, pullback_window)
             previous_pullback_ma = (
                 _rolling_mean(closes, index - 1, pullback_window) if index > 0 else None
@@ -631,9 +564,9 @@ def build_strategy_backtest(
                 close is not None and trend_ma is not None and (close < trend_ma or stop_triggered)
             )
         elif normalized_strategy_id == "gap_reversal":
-            gap_down_pct = _decimal_param(params, "gap_down_pct", 3, minimum=0.5, maximum=12)
-            max_holding_days = _int_param(params, "max_holding_days", 5, minimum=1, maximum=30)
-            stop_loss_pct = _decimal_param(params, "stop_loss_pct", 6, minimum=1, maximum=30)
+            gap_down_pct = decimal_params["gap_down_pct"]
+            max_holding_days = params["max_holding_days"]
+            stop_loss_pct = decimal_params["stop_loss_pct"]
             open_price = opens[index]
             gap_pct = _return_pct(open_price, previous_close)
             holding_days = index - entry_index if entry_index is not None else 0

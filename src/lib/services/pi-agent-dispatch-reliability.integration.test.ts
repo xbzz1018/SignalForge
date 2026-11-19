@@ -1,4 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { DATA_AGENT_GENERATION_QUEUE_RELATIVE_PATH } from '@/lib/data-agent/workspace-layout';
+import { enqueueQuantGeneration, readQuantGenerationQueue } from '@/lib/quant/generation-queue';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -44,6 +49,26 @@ describe.skipIf(!databaseUrl)('dispatch reliability on PostgreSQL', () => {
     // JSON object key order does not alter the execution contract.
     await expect(enqueuePiAgentGenerationJob({ ...input,
       executionEnvelope: { version: 1, symbol: '510300' } })).resolves.toMatchObject({ id: results[0].id });
+  });
+
+  it('accepts and claims one job despite a failed workspace projection, then repairs it', async () => {
+    const input = await request();
+    const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'signalforge-dispatch-projection-'));
+    const projection = path.join(projectPath, DATA_AGENT_GENERATION_QUEUE_RELATIVE_PATH);
+    try {
+      await fs.mkdir(projection, { recursive: true });
+      await enqueueQuantGeneration({ ...input, projectPath });
+      await enqueueQuantGeneration({ ...input, projectPath });
+      expect(await client.agentGenerationJob.count({ where: { projectId: input.projectId } })).toBe(1);
+      const claim = await claimPiAgentGenerationJob({ ...input, leaseOwner: 'worker-projection', leaseTtlMs: 120000 });
+      expect(claim.attemptCount).toBe(1);
+      await fs.rmdir(projection);
+      await readQuantGenerationQueue(projectPath, input.projectId);
+      expect(JSON.parse(await fs.readFile(projection, 'utf8')).items)
+        .toEqual([expect.objectContaining({ requestId: input.requestId, status: 'running' })]);
+    } finally {
+      await fs.rm(projectPath, { recursive: true, force: true });
+    }
   });
 
   it('same request ID rejects changed data/model/retry contracts without partial writes', async () => {

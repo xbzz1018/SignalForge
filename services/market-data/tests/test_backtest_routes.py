@@ -96,6 +96,58 @@ def test_routes_preserve_replayable_responses_across_cache_and_engine_changes(
             replay_backtest(second.json())
 
 
+@pytest.mark.parametrize("count", [20, 1371])
+def test_gap_strategy_uses_actual_history_and_reports_short_coverage(count, monkeypatch):
+    cutoff = date(2024, 12, 3)
+    dates = []
+    day = cutoff
+    while len(dates) < count:
+        if day.weekday() < 5:
+            dates.append(day)
+        day -= timedelta(days=1)
+    data = KlineResponse(
+        symbol="fixture", secid="fixture:1", period="daily", adjustment="none",
+        fetched_at="2026-01-01T00:00:00Z",
+        bars=[{"date": day.isoformat(), "open": 10, "close": 10} for day in reversed(dates)],
+    )
+    requests = []
+
+    async def no_local(**kwargs):
+        return None
+
+    async def fetch(*args, **kwargs):
+        requests.append(kwargs)
+        return data
+
+    monkeypatch.setattr(backtests, "get_local_kline_if_ready", no_local)
+    monkeypatch.setattr(backtests, "get_kline_local_first", fetch)
+    app = FastAPI()
+    app.include_router(create_backtest_router(
+        client=object(), cache=MarketDataCache(enabled=False), kline_cache_ttl_seconds=300,
+    ))
+    url = "/api/v1/backtests/strategies"
+    with TestClient(app) as client:
+        if count == 20:
+            for end in ({}, {"end": "20500101"}):
+                result = client.get(f"{url}/gap_reversal/fixture", params={"limit": 20, "adjustment": "none", **end})
+                assert result.status_code == 200, result.text
+                assert result.json()["summary"]["sample_count"] == 20
+                assert requests[-1]["end"] is None
+            result = client.get(f"{url}/ma_crossover/fixture?limit=20&adjustment=none")
+            assert result.status_code == 400
+            assert len(requests) == 2
+        else:
+            result = client.get(f"{url}/gap_reversal/fixture", params={
+                "start": dates[-2].isoformat(), "end": "2024-12-31", "adjustment": "none",
+            })
+            assert result.status_code == 200, result.text
+            body = result.json()
+            assert requests[-1]["limit"] == 1500
+            assert body["summary"]["sample_count"] == 1370
+            assert any("区间覆盖可能不足" in warning for warning in body["data_quality"]["warnings"])
+            replay_backtest(body)
+
+
 def test_requested_interval_parameters_and_fees_reach_the_engine(monkeypatch):
     calls = []
     data = KlineResponse(

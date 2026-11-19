@@ -29,8 +29,8 @@ def _shanghai_date(value: datetime) -> date:
     return value.astimezone(SHANGHAI_TZ).date()
 
 
-def _end_datetime(value: str) -> datetime | None:
-    raw = value.strip()
+def _end_datetime(value: str | None) -> datetime | None:
+    raw = value.strip() if value else ""
     if not raw:
         return None
     parsed = (
@@ -147,7 +147,7 @@ async def get_local_kline_if_ready(
     period: KlinePeriod,
     adjustment: Adjustment,
     limit: int,
-    end: str,
+    end: str | None,
 ) -> KlineResponse | None:
     """Read the canonical database first and return only complete, current coverage."""
     if period not in LOCAL_KLINE_PERIODS:
@@ -252,7 +252,7 @@ async def get_kline_local_first(
     period: KlinePeriod,
     adjustment: Adjustment,
     limit: int,
-    end: str,
+    end: str | None,
     bypass_local: bool = False,
 ) -> KlineResponse:
     if not bypass_local:
@@ -270,6 +270,6 @@ async def get_kline_local_first(
         period=period,
         adjustment=adjustment,
         limit=limit,
-        end=end,
+        **({"end": end} if end is not None else {}),
     )
     return with_provider_basis(response, client.id)
