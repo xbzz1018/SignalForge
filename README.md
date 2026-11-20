@@ -10,8 +10,6 @@
 
 [项目案例](docs/project-case.md) · [架构设计](docs/architecture.md) · [本地运行](#本地运行) · [配置指南](docs/configuration.md)
 
-[查看交互示例](https://kukup.xbzz.cloud/projects/signalforge)
-
 ![沪深 300 研究看板中的 K 线、均线、成交量与风险摘要](docs/assets/hs300-research.png)
 
 <sub>沪深 300 研究看板节选：日线、均线、成交量和风险摘要。[案例与数据说明](docs/project-case.md)</sub>
